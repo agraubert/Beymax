@@ -164,7 +164,7 @@ class Beymax(discord.Client):
                 rating = get_mmr(username)
                 state[username] = [message.author, 0]
                 handle.seek(0)
-                for (k,v) in state:
+                for (k,v) in state.items():
                     handle.write(
                         '\t'.join([
                             k,
