@@ -12,7 +12,7 @@ def get_mmr(user):
         base_url + user,
         timeout = 3
     )
-    result = re.match(
+    result = re.search(
         r'<span.*?class=\"[^\"]*mmr[^\"]*\"></span>\"?\s*\"?([0-9,]+)\s*\"?',
         response.text
     )
@@ -163,6 +163,14 @@ class Beymax(discord.Client):
                     state[line[0]] = line[1:]
                 rating = get_mmr(username)
                 state[username] = [message.author, 0]
+                handle.seek(0)
+                for (k,v) in state:
+                    handle.write(
+                        '\t'.join([
+                            k,
+                            *v
+                        ])
+                    )
 
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
