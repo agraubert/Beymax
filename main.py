@@ -24,8 +24,25 @@ class HelpSession:
         elif cmd == 'bots':
             await self.client.send_and_wait(
                 self.user,
-                "First and foremost, is **Octavia**, our DJ.  She's here to make sure everyone always has access to some sweet tunes\n"+
-                "Lastly, I am here to help you out where I can to make sure you have a great time"
+                "First and foremost, is **Octavia**, our DJ.  She's here to "
+                "make sure everyone always has access to some sweet tunes\n"
+                "And obviously there's me, **Beymax**. I'm here to help you "
+                "out and answer any questions you have, as well as some other "
+                "utilities like making polls, or greeting new users\n"
+                "If you have any further questions about the bots, just type "
+                "one of our names!"
+            )
+        elif cmd == "channels":
+            await self.client.send_and_wait(
+                self.user,
+                "On this server, we try to keep different discussions organized "
+                "into separate channels.\n"
+                "There's the `general` text channel and `General` voice channel "
+                "which are for any discussions\n"
+                "The `testing grounds` channels are where bots like myself are "
+                "tested before deployment.\n"
+                "Beyond that, the different channels are mostly just organized "
+                "for different games"
             )
 
 
@@ -63,6 +80,7 @@ class Beymax(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
+        print(message.author)
         content = message.content.strip().split()
         print("Message in channel:", message.channel.name)
         print("Content:", content)
