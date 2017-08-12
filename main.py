@@ -156,7 +156,7 @@ class Beymax(discord.Client):
             await self.on_member_join(message.author)
         elif re.match(r'!ow', content[0]):
             username = content[1].replace('#', '-')
-            with open('stats.txt', 'r+w') as handle:
+            with open('stats.txt', 'r+') as handle:
                 state={}
                 for line in handle:
                     line = line.split('\t')
