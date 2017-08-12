@@ -6,6 +6,18 @@ from pyemojify import emojify
 
 numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 
+def get_mmr(user):
+    base_url = 'https://masteroverwatch.com/profile/pc/us/'
+    response = requests.get(
+        base_url + user,
+        timeout = 3
+    )
+    result = re.match(
+        r'<span.*?class=\"[^\"]*mmr[^\"]*\"></span>\"?\s*\"?([0-9,]+)\s*\"?',
+        response.text
+    )
+    return int(result.group(1).replace(',',''))
+
 class HelpSession:
     def __init__(self, client, user):
         self.client = client
@@ -142,6 +154,16 @@ class Beymax(discord.Client):
             await self.close()
         elif re.match(r'!_greet', content[0]):
             await self.on_member_join(message.author)
+        elif re.match(r'!ow', content[0]):
+            username = content[1].replace('#', '-')
+            with open('stats.txt', 'r+w') as handle:
+                state={}
+                for line in handle:
+                    line = line.split('\t')
+                    state[line[0]] = line[1:]
+                rating = get_mmr(username)
+                state[username] = [message.author, 0]
+
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
 
