@@ -140,3 +140,5 @@ class Beymax(discord.Client):
 
 
 if __name__ == '__main__':
+    with open("token.txt") as r:
+        Beymax().run(r.read().strip())
