@@ -140,4 +140,3 @@ class Beymax(discord.Client):
 
 
 if __name__ == '__main__':
-    Beymax().run('MzEwMjgzOTMyMzQxODk1MTY5.C-7uwg.fP8bYdDv0Vj44-ZvzJx0FFh3muE')
