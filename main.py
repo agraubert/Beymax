@@ -97,15 +97,16 @@ class Beymax(discord.Client):
                     "I've found your Overwatch stats and I'm linking them to your discord account here"
                 )
         elif re.match(r'!poll', content[0]):
-            opts = ' '.join(content[2:]).split('|')
+            opts = ' '.join(content[1:]).split('|')
+            title = opts.pop(0)
             body = self.getname(message.author)+" has started a poll:\n"
             print(body)
-            body+=content[1]+"\n"
+            body+=title+"\n"
             print(body)
             body+="\n".join((
                     "%d) %s"%(num, opt)
                     for (num, opt) in
-                    zip(range(1, len(opts)+1), opts)
+                    zip(range(1,len(opts)+1), opts)
                 ))
             print(body)
             body+="\nReact with your vote"
@@ -114,10 +115,10 @@ class Beymax(discord.Client):
                 message.channel,
                 body
             )
-            for i in range(len(opts)):
+            for i in range(1,len(opts)+1):
                 await self.add_reaction(
                     target,
-                    '👍'#emojify(':%s:'%numnames[i])
+                    (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
                 )
         elif re.match(r'!kill-devbot', content[0]):
             await self.close()
@@ -139,4 +140,3 @@ class Beymax(discord.Client):
 
 
 if __name__ == '__main__':
-    Beymax().run('MzEwMjgzOTMyMzQxODk1MTY5.C-7uwg.fP8bYdDv0Vj44-ZvzJx0FFh3muE')
