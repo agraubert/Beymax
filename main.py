@@ -150,7 +150,7 @@ class Beymax(discord.Client):
                     target,
                     (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
                 )
-        elif re.match(r'!kill-devbot', content[0]):
+        elif re.match(r'!kill-beymax', content[0]):
             await self.close()
         elif re.match(r'!_greet', content[0]):
             await self.on_member_join(message.author)
@@ -162,7 +162,7 @@ class Beymax(discord.Client):
                     line = line.split('\t')
                     state[line[0]] = line[1:]
                 rating = get_mmr(username)
-                state[username] = [message.author, 0]
+                state[username] = [message.author, rating]
                 handle.seek(0)
                 for (k,v) in state.items():
                     handle.write(
@@ -181,9 +181,6 @@ class Beymax(discord.Client):
             "Welcome, @"+member.name+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
-
-    async def on_reaction_add(self, reaction, user):
-        print(reaction.emoji.encode('utf8'), dir(reaction.emoji))
 
 
 
