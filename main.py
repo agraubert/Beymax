@@ -130,17 +130,13 @@ class Beymax(discord.Client):
             opts = ' '.join(content[1:]).split('|')
             title = opts.pop(0)
             body = self.getname(message.author)+" has started a poll:\n"
-            print(body)
             body+=title+"\n"
-            print(body)
             body+="\n".join((
                     "%d) %s"%(num, opt)
                     for (num, opt) in
                     zip(range(1,len(opts)+1), opts)
                 ))
-            print(body)
             body+="\nReact with your vote"
-            print(body)
             target = await self.send_message(
                 message.channel,
                 body
