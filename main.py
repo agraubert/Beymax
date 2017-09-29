@@ -3,6 +3,8 @@ import re
 import asyncio
 import requests
 from pyemojify import emojify
+import random
+random.seed()
 
 numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 
@@ -17,6 +19,56 @@ def get_mmr(user):
         response.text
     )
     return int(result.group(1).replace(',',''))
+
+def rank(rating):
+    if rating <=1499:
+        return (1,'Bronze')
+    elif rating <=1999:
+        return (2,'Silver')
+    elif rating <=2499:
+        return (3,'Gold')
+    elif rating <=2999:
+        return (4,'Platinum')
+    elif rating <=3499:
+        return (5,'Diamond')
+    elif rating <=3999:
+        return (6,'Master')
+    return (7,'Grand Master')
+def encourage(n):
+    if n <=2:
+        pool = [
+            "Good show! You gave it your all, and that's is an achivement in itself",
+            "Well done! You certainly did better than I could have",
+            "Meh."
+        ]
+    elif n<=4:
+        pool = [
+            "Excellent! That's no small feat!",
+            "Very well done! I'm sure I could learn something from you",
+            "Fantastic job! I'm proud of you!",
+            "That's like, okay, I guess"
+        ]
+    elif n<=6:
+        pool = [
+            "Incredible! Advancing beyond Platinum is a monumental achivement!",
+            "Wow! You climbed out of the masses and found yourself at the very peak!",
+            "I've seen better"
+        ]
+    else:
+        pool = [
+            "Holy shit! You put your skills to the test, and came out on the very top!  Nicely, done!"
+        ]
+    return random.sample(pool,1)[0]
+
+
+def postfix(n):
+    if n[-1] == '1':
+        return n+'st'
+    elif n[-1] == '2':
+        return n+'nd'
+    elif n[-1] == '3':
+        return n+'rd'
+    return n+'th'
 
 class HelpSession:
     def __init__(self, client, user):
@@ -80,6 +132,11 @@ class Beymax(discord.Client):
         self.general = discord.utils.get(
             self.get_all_channels(),
             name='general',
+            type=discord.ChannelType.text
+        )
+        self.testing_grounds = discord.utils.get(
+            self.get_all_channels(),
+            name='testing_grounds',
             type=discord.ChannelType.text
         )
         print("Ready to serve!")
@@ -146,27 +203,129 @@ class Beymax(discord.Client):
                     target,
                     (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
                 )
-        elif re.match(r'!kill-beymax', content[0]):
+        elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
             await self.close()
         elif re.match(r'!_greet', content[0]):
             await self.on_member_join(message.author)
-        elif re.match(r'!ow', content[0]):
-            username = content[1].replace('#', '-')
-            with open('stats.txt', 'r+') as handle:
-                state={}
-                for line in handle:
-                    line = line.split('\t')
-                    state[line[0]] = line[1:]
-                rating = get_mmr(username)
-                state[username] = [message.author, rating]
-                handle.seek(0)
+        elif re.match(r'!_announce', content[0]):
+            await self.send_message(message.channel, message.content.strip().replace('!_announce', ''))
+        elif re.match(r'!_owreset', content[0]):
+            try:
+                with open('stats.txt', 'r') as handle:
+                    state={}
+                    for line in handle:
+                        line = line.split('\t')
+                        state[line[0]] = line[1:]
+            except FileNotFoundError:
+                pass
+            if len(state):
+                for user, (member, rating) in state.items():
+                    try:
+                        current = get_mmr(user)
+                        state[user] = [member, str(rating)]
+                    except:
+                        pass
+                ranked = sorted(
+                    ,
+                    key= lambda x:int(x[-1])
+                )
+                ranked = [(user, member, int(rating), rank(int(rating))) for user, (member, rating) in state.items()]
+                ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
+                await self.send_message(
+                    self.testing_grounds, # for now
+                    "It's that time again, folks!\n"
+                    "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
+                )
+                index = {
+                    ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
+                }
+                for user,member,rating,(rn,rclass) in ranked:
+                    await self.send_message(
+                        self.testing_grounds,
+                        "In "+index[user]+" place, @"+member+" with a rating of "+str(rating)+"\n"
+                        +encourage(rn)
+                    )
+                await self.send_message(
+                    self.testing_grounds,
+                    "Let's give everyone a round of applause.  Great show from everybody!\n"
+                    "I can't wait to see how you all do next time! [Competitive ranks reset]"
+                )
+            with open('stats.txt', 'w') as handle:
                 for (k,v) in state.items():
                     handle.write(
                         '\t'.join([
                             k,
-                            *v
+                            v[0],
+                            '0'
                         ])
                     )
+
+        elif re.match(r'!owupdate', content[0]):
+            try:
+                with open('stats.txt', 'r') as handle:
+                    state={}
+                    for line in handle:
+                        line = line.split('\t')
+                        state[line[0]] = line[1:]
+                for user, (member, rating) in state.items():
+                    try:
+                        current = get_mmr(user)
+                        state[user] = [member, str(current)]
+                        currentRank = rank(current)
+                        oldRank = rank(int(rating))
+                        if currentRank[0] > oldRank[0]:
+                            body = "Everyone put your hands together for @"
+                            body += member
+                            body += " who just reached "
+                            body += currentRank[1]
+                            body += " in Overwatch!"
+                            if currentRank[0] >= 4:
+                                # Ping the channel for anyone who reached platinum or above
+                                body = body.replace('Everyone', '@everyone')
+                            await self.send_message(
+                                self.testing_grounds, #for now
+                                body
+                            )
+                    except:
+                        pass
+                with open('stats.txt', 'w') as handle:
+                    for (k,v) in state.items():
+                        handle.write(
+                            '\t'.join([
+                                k,
+                                *v
+                            ])
+                        )
+            except FileNotFoundError:
+                pass
+        elif re.match(r'!ow', content[0]):
+            username = content[1].replace('#', '-')
+            try:
+                rating = get_mmr(username)
+                with open('stats.txt', 'r') as handle:
+                    state={}
+                    for line in handle:
+                        line = line.split('\t')
+                        state[line[0]] = line[1:]
+                    state[username] = [message.author.name, str(rating)]
+                with open('stats.txt', 'w') as handle:
+                    for (k,v) in state.items():
+                        handle.write(
+                            '\t'.join([
+                                k,
+                                *v
+                            ])
+                        )
+                await self.send_message(
+                    message.channel,
+                    "Alright! I'll keep "
+                )
+            except:
+                await self.send_message(
+                    message.channel,
+                    "I wasn't able to find your Overwatch ranking on Master Overwatch.\n"
+                    "Are you sure you're ranked this season?"
+                )
 
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
