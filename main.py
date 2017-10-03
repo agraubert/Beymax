@@ -314,7 +314,7 @@ class Beymax(discord.Client):
                         )
                 await self.send_message(
                     message.channel,
-                    "Alright! I'll keep "
+                    "Alright! I'll keep track of your stats"
                 )
             except:
                 await self.send_message(
