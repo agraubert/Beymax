@@ -225,10 +225,6 @@ class Beymax(discord.Client):
                         state[user] = [member, str(rating)]
                     except:
                         pass
-                ranked = sorted(
-                    ,
-                    key= lambda x:int(x[-1])
-                )
                 ranked = [(user, member, int(rating), rank(int(rating))) for user, (member, rating) in state.items()]
                 ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
                 await self.send_message(
