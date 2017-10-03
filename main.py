@@ -4,6 +4,7 @@ import asyncio
 import requests
 from pyemojify import emojify
 import random
+import threading
 random.seed()
 
 numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
@@ -113,10 +114,18 @@ class HelpSession:
 class Beymax(discord.Client):
     help_sessions={}
     general=None
+    users={}
 
     async def send_and_wait(self, *args, **kwargs):
         await self.send_message(*args, **kwargs)
         #await self.wait_for_message(author = self.user)
+
+    def update_and_schedule(self):
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.update_overwatch())
+        loop.close()
+        self.timer = threading.Timer(self.update_interval, self.update_overwatch)
+        self.timer.start()
 
     async def on_ready(self):
         print('Logged in as')
@@ -129,17 +138,22 @@ class Beymax(discord.Client):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name)
-        self.general = discord.utils.get(
+        self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
             type=discord.ChannelType.text
         )
-        self.testing_grounds = discord.utils.get(
+        self._testing_grounds = discord.utils.get(
             self.get_all_channels(),
             name='testing_grounds',
             type=discord.ChannelType.text
         )
+        self.general = self._general
+        self.timer = threading.Timer(self.update_interval, self.update_overwatch)
+        self.timer.start()
         print("Ready to serve!")
+
+
 
     def getname(self, user):
         if 'nick' in dir(user) and type(user.nick) is str and len(user.nick):
@@ -149,6 +163,7 @@ class Beymax(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
+        self.users[message.author.name] = message.author
         print(message.author)
         content = message.content.strip().split()
         print("Message in channel:", message.channel.name)
@@ -239,7 +254,9 @@ class Beymax(discord.Client):
                 for user,member,rating,(rn,rclass) in ranked:
                     await self.send_message(
                         self.general,
-                        "In "+index[user]+" place, @"+member+" with a rating of "+str(rating)+"\n"
+                        "In "+index[user]+" place, "+
+                        (self.users[member].mention if member in self.users else member)+
+                        " with a rating of "+str(rating)+"\n"
                         +encourage(rn)
                     )
                 await self.send_message(
@@ -258,57 +275,18 @@ class Beymax(discord.Client):
                     )
 
         elif re.match(r'!owupdate', content[0]):
-            try:
-                with open('stats.txt', 'r') as handle:
-                    state={}
-                    for line in handle:
-                        if len(line.strip()):
-                            line = line.split('\t')
-                            state[line[0]] = line[1:]
-                print(state)
-                for user, (member, rating) in state.items():
-                    try:
-                        current = get_mmr(user)
-                        state[user] = [member, str(current)]
-                        currentRank = rank(current)
-                        oldRank = rank(int(rating))
-                        if currentRank[0] > oldRank[0]:
-                            body = "Everyone put your hands together for @"
-                            body += member
-                            body += " who just reached "
-                            body += currentRank[1]
-                            body += " in Overwatch!"
-                            if currentRank[0] >= 4:
-                                # Ping the channel for anyone who reached platinum or above
-                                body = body.replace('Everyone', '@everyone')
-                            await self.send_message(
-                                self.general, #for now
-                                body
-                            )
-                    except:
-                        pass
-                print(state)
-                with open('stats.txt', 'w') as handle:
-                    for (k,v) in state.items():
-                        handle.write(
-                            '\t'.join([
-                                k,
-                                *v
-                            ])
-                        )
-            except FileNotFoundError:
-                pass
+            await self.update_overwatch()
         elif re.match(r'!ow', content[0]):
             username = content[1].replace('#', '-')
             try:
-                rating = get_mmr(username)
+                # rating = get_mmr(username)
                 with open('stats.txt', 'r') as handle:
                     state={}
                     for line in handle:
                         if len(line.strip()):
                             line = line.split('\t')
                             state[line[0]] = line[1:]
-                    state[username] = [message.author.name, str(rating)]
+                    state[username] = [message.author.name, '1']#str(rating)]
                 with open('stats.txt', 'w') as handle:
                     for (k,v) in state.items():
                         handle.write(
@@ -321,13 +299,25 @@ class Beymax(discord.Client):
                     message.channel,
                     "Alright! I'll keep track of your stats"
                 )
+                threading.Timer(120, self.update_overwatch).start()
             except:
                 await self.send_message(
                     message.channel,
                     "I wasn't able to find your Overwatch ranking on Master Overwatch.\n"
                     "Are you sure you're ranked this season?"
                 )
-
+        elif re.match(r'!output-dev', content[0]):
+            self.general = self._testing_grounds
+            await self.send_message(
+                self._testing_grounds,
+                "Development mode enabled. All messages will be sent to testing grounds"
+            )
+        elif re.match(r'!output-prod', content[0]):
+            self.general = self._general
+            await self.send_message(
+                self._testing_grounds,
+                "Production mode enabled. All messages will be sent to general"
+            )
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
 
@@ -337,6 +327,48 @@ class Beymax(discord.Client):
             "Welcome, @"+member.name+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
+
+    async def update_overwatch(self):
+        try:
+            with open('stats.txt', 'r') as handle:
+                state={}
+                for line in handle:
+                    if len(line.strip()):
+                        line = line.split('\t')
+                        state[line[0]] = line[1:]
+            print(state)
+            for user, (member, rating) in state.items():
+                try:
+                    current = get_mmr(user)
+                    state[user] = [member, str(current)]
+                    currentRank = rank(current)
+                    oldRank = rank(int(rating))
+                    if currentRank[0] > oldRank[0]:
+                        body = "Everyone put your hands together for "
+                        body += self.users[member].mention if member in self.users else member
+                        body += " who just reached "
+                        body += currentRank[1]
+                        body += " in Overwatch!"
+                        if currentRank[0] >= 4:
+                            # Ping the channel for anyone who reached platinum or above
+                            body = body.replace('Everyone', '@everyone')
+                        await self.send_message(
+                            self.general, #for now
+                            body
+                        )
+                except:
+                    pass
+            print(state)
+            with open('stats.txt', 'w') as handle:
+                for (k,v) in state.items():
+                    handle.write(
+                        '\t'.join([
+                            k,
+                            *v
+                        ])
+                    )
+        except FileNotFoundError:
+            pass
 
 
 
