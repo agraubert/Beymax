@@ -214,8 +214,9 @@ class Beymax(discord.Client):
                 with open('stats.txt', 'r') as handle:
                     state={}
                     for line in handle:
-                        line = line.split('\t')
-                        state[line[0]] = line[1:]
+                        if len(line.strip()):
+                            line = line.split('\t')
+                            state[line[0]] = line[1:]
             except FileNotFoundError:
                 pass
             if len(state):
@@ -261,8 +262,9 @@ class Beymax(discord.Client):
                 with open('stats.txt', 'r') as handle:
                     state={}
                     for line in handle:
-                        line = line.split('\t')
-                        state[line[0]] = line[1:]
+                        if len(line.strip()):
+                            line = line.split('\t')
+                            state[line[0]] = line[1:]
                 print(state)
                 for user, (member, rating) in state.items():
                     try:
@@ -303,8 +305,9 @@ class Beymax(discord.Client):
                 with open('stats.txt', 'r') as handle:
                     state={}
                     for line in handle:
-                        line = line.split('\t')
-                        state[line[0]] = line[1:]
+                        if len(line.strip()):
+                            line = line.split('\t')
+                            state[line[0]] = line[1:]
                     state[username] = [message.author.name, str(rating)]
                 with open('stats.txt', 'w') as handle:
                     for (k,v) in state.items():
