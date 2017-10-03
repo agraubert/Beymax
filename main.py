@@ -208,7 +208,7 @@ class Beymax(discord.Client):
                     for (num, opt) in
                     zip(range(1,len(opts)+1), opts)
                 ))
-            body+="\nReact with your vote"
+            body+="\n\nReact with your vote"
             target = await self.send_message(
                 message.channel,
                 body
@@ -324,7 +324,7 @@ class Beymax(discord.Client):
     async def on_member_join(self, member):
         await self.send_message(
             self.general,
-            "Welcome, @"+member.name+"!\n"+
+            "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
 
