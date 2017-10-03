@@ -228,7 +228,7 @@ class Beymax(discord.Client):
                 ranked = [(user, member, int(rating), rank(int(rating))) for user, (member, rating) in state.items()]
                 ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
                 await self.send_message(
-                    self.testing_grounds, # for now
+                    self.general, # for now
                     "It's that time again, folks!\n"
                     "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
                 )
@@ -237,12 +237,12 @@ class Beymax(discord.Client):
                 }
                 for user,member,rating,(rn,rclass) in ranked:
                     await self.send_message(
-                        self.testing_grounds,
+                        self.general,
                         "In "+index[user]+" place, @"+member+" with a rating of "+str(rating)+"\n"
                         +encourage(rn)
                     )
                 await self.send_message(
-                    self.testing_grounds,
+                    self.general,
                     "Let's give everyone a round of applause.  Great show from everybody!\n"
                     "I can't wait to see how you all do next time! [Competitive ranks reset]"
                 )
@@ -279,7 +279,7 @@ class Beymax(discord.Client):
                                 # Ping the channel for anyone who reached platinum or above
                                 body = body.replace('Everyone', '@everyone')
                             await self.send_message(
-                                self.testing_grounds, #for now
+                                self.general, #for now
                                 body
                             )
                     except:
