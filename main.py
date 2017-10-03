@@ -263,6 +263,7 @@ class Beymax(discord.Client):
                     for line in handle:
                         line = line.split('\t')
                         state[line[0]] = line[1:]
+                print(state)
                 for user, (member, rating) in state.items():
                     try:
                         current = get_mmr(user)
@@ -284,6 +285,7 @@ class Beymax(discord.Client):
                             )
                     except:
                         pass
+                print(state)
                 with open('stats.txt', 'w') as handle:
                     for (k,v) in state.items():
                         handle.write(
