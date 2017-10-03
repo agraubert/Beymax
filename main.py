@@ -115,6 +115,7 @@ class Beymax(discord.Client):
     help_sessions={}
     general=None
     users={}
+    update_interval = 3600
 
     async def send_and_wait(self, *args, **kwargs):
         await self.send_message(*args, **kwargs)
