@@ -224,7 +224,7 @@ class Beymax(discord.Client):
         elif re.match(r'!_greet', content[0]):
             await self.on_member_join(message.author)
         elif re.match(r'!_announce', content[0]):
-            await self.send_message(message.channel, message.content.strip().replace('!_announce', ''))
+            await self.send_message(self.general, message.content.strip().replace('!_announce', ''))
         elif re.match(r'!_owreset', content[0]):
             try:
                 with open('stats.txt', 'r') as handle:
