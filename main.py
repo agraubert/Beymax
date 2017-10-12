@@ -302,35 +302,42 @@ class Beymax(discord.Client):
         elif re.match(r'!owupdate', content[0]):
             await self.update_overwatch()
         elif re.match(r'!ow', content[0]):
-            username = content[1].replace('#', '-')
-            try:
-                # rating = get_mmr(username)
-                with open('stats.txt', 'r') as handle:
-                    state={}
-                    for line in handle:
-                        if len(line.strip()):
-                            line = line.split('\t')
-                            state[line[0]] = line[1:]
-                    state[username] = [message.author.name, '1']#str(rating)]
-                with open('stats.txt', 'w') as handle:
-                    for (k,v) in state.items():
-                        handle.write(
-                            '\t'.join([
-                                k,
-                                *v
-                            ])
-                        )
+            if len(content) != 2:
                 await self.send_message(
                     message.channel,
-                    "Alright! I'll keep track of your stats"
+                    "I need you to provide your battle tag\n"
+                    "For example, `!ow beymax#1234`"
                 )
-                threading.Timer(120, self.update_overwatch).start()
-            except:
-                await self.send_message(
-                    message.channel,
-                    "I wasn't able to find your Overwatch ranking on Master Overwatch.\n"
-                    "Are you sure you're ranked this season?"
-                )
+            else:
+                username = content[1].replace('#', '-')
+                try:
+                    # rating = get_mmr(username)
+                    with open('stats.txt', 'r') as handle:
+                        state={}
+                        for line in handle:
+                            if len(line.strip()):
+                                line = line.split('\t')
+                                state[line[0]] = line[1:]
+                        state[username] = [message.author.name, '1']#str(rating)]
+                    with open('stats.txt', 'w') as handle:
+                        for (k,v) in state.items():
+                            handle.write(
+                                '\t'.join([
+                                    k,
+                                    *v
+                                ])
+                            )
+                    await self.send_message(
+                        message.channel,
+                        "Alright! I'll keep track of your stats"
+                    )
+                    threading.Timer(120, self.update_overwatch).start()
+                except:
+                    await self.send_message(
+                        message.channel,
+                        "I wasn't able to find your Overwatch ranking on Master Overwatch.\n"
+                        "Are you sure you're ranked this season?"
+                    )
         elif re.match(r'!output-dev', content[0]):
             self.general = self._testing_grounds
             await self.send_message(
