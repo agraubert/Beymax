@@ -2,6 +2,8 @@ import discord
 import re
 import asyncio
 import requests
+import time
+import json
 from pyemojify import emojify
 import random
 import threading
@@ -35,6 +37,24 @@ def rank(rating):
     elif rating <=3999:
         return (6,'Master')
     return (7,'Grand Master')
+
+def select_status():
+    return random.sample(
+        [
+            'Surgeon Simulator',
+            'with himself',
+            'the waiting game',
+            'all of you for fools',
+            'Big Hero 6: The Game',
+            'Surgeon Simulator',
+            'a robot doctor, but only on TV',
+            'your loyal servant, for now',
+            'with the server settings',
+            'with the Discord API'
+        ],
+        1
+    )[0]
+
 def encourage(n):
     if n <=2:
         pool = [
@@ -139,6 +159,8 @@ class Beymax(discord.Client):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name)
+        self.status_update_time = 0
+        self.party_update_time = 0
         self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
@@ -167,6 +189,7 @@ class Beymax(discord.Client):
         self.users[message.author.name] = message.author
         print(message.author)
         content = message.content.strip().split()
+        content[0] = content[0].lower()
         print("Message in channel:", message.channel.name)
         print("Content:", content)
         if re.match(r'!ouch', content[0]):
@@ -219,6 +242,7 @@ class Beymax(discord.Client):
                     target,
                     (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
                 )
+            await self.delete_message(message)
         elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
             await self.close()
         elif re.match(r'!_greet', content[0]):
@@ -319,8 +343,94 @@ class Beymax(discord.Client):
                 self._testing_grounds,
                 "Production mode enabled. All messages will be sent to general"
             )
+        elif re.match(r'!party', content[0]):
+            if message.server is not None:
+                parties = load_db('parties.json')
+                current_party = None
+                for i in range(len(parties)):
+                    if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
+                        if not parties[i]['primed']:
+                            current_party = parties[i]['name']
+                            parties[i]['primed'] = True
+                        else:
+                            await self.delete_channel(
+                                discord.utils.get(
+                                    message.server.channels,
+                                    id=parties[i]['id'],
+                                    type=discord.ChannelType.voice
+                                )
+                            )
+                if current_party:
+                    await self.send_message(
+                        message.channel,
+                        "It looks like you already have a party together right now: `%s`\n"
+                        "However, I can disband that party and create this new one for you.\n"
+                        "If you'd like me to do that, just type the same command again"
+                        % current_party
+                    )
+                else:
+                    name = (' '.join(content[1:])+' Party ') if len(content) > 1 else 'Party '
+                    # Sanitize channel name
+                    suffix = 1
+                    while name+str(suffix) in parties:
+                        suffix += 1
+                    name += str(suffix)
+                    channel = await self.create_channel(
+                        message.server,
+                        name,
+                        discord.ChannelType.voice
+                    )
+                    await self.send_message(
+                        message.channel,
+                        "Alright, %s, I've created the `%s` channel for you.\n"
+                        "When you're finished, you can close the channel with `!disband`\n"
+                        "Otherwise, I'll go ahead and close it for you after 24 hours, if nobody's using it"
+                        % (
+                            message.author.mention,
+                            name
+                        )
+                    )
+                    parties.append({
+                        'name':name,
+                        'id':channel.id,
+                        'server':message.server.id,
+                        'primed':False,
+                        'creator':message.author.name,
+                        'time': time.time()
+                    })
+                save_db(parties, 'parties.json')
+        elif re.match(r'!disband', content[0]):
+            if message.server is not None:
+                parties = load_db('parties.json')
+                pruned = []
+                for i range(len(parties)):
+                    if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator']:
+                        await self.delete_channel(
+                            discord.utils.get(
+                                self.get_all_channels(),
+                                id=parties[i]['id'],
+                                type=discord.ChannelType.voice
+                            )
+                        )
+                        pruned.append(parties[i]['name'])
+                        parties[i]['id'] = None
+                parties = [party for party in parties if party['id'] is not None]
+                save_db(parties, 'parties.json')
+                if len(pruned) == 1:
+                    await self.send_message(
+                        self.general,
+                        '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                    )
+                elif len(pruned) > 1:
+                    await self.send_message(
+                        self.general,
+                        'The following parties have been disbanded:\n'
+                        '\n'.join('`%s`' party for party in pruned)
+                        '\nIf you would like to create another party, use the `!party` command'
+                    )
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
+        await self.maintenance_tasks()
 
     async def on_member_join(self, member):
         await self.send_message(
@@ -328,6 +438,46 @@ class Beymax(discord.Client):
             "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
+
+    async def maintenance_tasks(self):
+        current = time.time()
+        if current - self.status_update_time < self.update_interval:
+            await self.change_presence(
+                game=discord.Game(name=select_status())
+            )
+            await self.update_overwatch()
+            self.status_update_time = current
+        if current - self.party_update_time < 60:
+            parties = load_db('parties.json')
+            pruned = []
+            for i range(len(parties)):
+                if current - parties[i]['time'] >= 86400:
+                    channel = discord.utils.get(
+                        self.get_all_channels(),
+                        id=parties[i]['id'],
+                        type=discord.ChannelType.voice
+                    )
+                    if not len(channel.voice_members):
+                        await self.delete_channel(
+                            channel
+                        )
+                        pruned.append(parties[i]['name'])
+                        parties[i]['id'] = None
+            parties = [party for party in parties if party['id'] is not None]
+            save_db(parties, 'parties.json')
+            if len(pruned) == 1:
+                await self.send_message(
+                    self.general,
+                    '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                )
+            elif len(pruned) > 1:
+                await self.send_message(
+                    self.general,
+                    'The following parties have been disbanded:\n'
+                    '\n'.join('`%s`' party for party in pruned)
+                    '\nIf you would like to create another party, use the `!party` command'
+                )
+            self.party_update_time = current
 
     async def update_overwatch(self):
         try:
@@ -371,7 +521,16 @@ class Beymax(discord.Client):
         except FileNotFoundError:
             pass
 
+def load_db(filename):
+    try:
+        with open(filename) as reader:
+            return json.load(reader)
+    except FileNotFoundError:
+        return {}
 
+def save_db(data, filename):
+    with open(filename, 'w') as writer:
+        return json.dump(data, writer)
 
 if __name__ == '__main__':
     with open("token.txt") as r:
