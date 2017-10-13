@@ -250,23 +250,17 @@ class Beymax(discord.Client):
         elif re.match(r'!_announce', content[0]):
             await self.send_message(self.general, message.content.strip().replace('!_announce', ''))
         elif re.match(r'!_owreset', content[0]):
-            try:
-                with open('stats.txt', 'r') as handle:
-                    state={}
-                    for line in handle:
-                        if len(line.strip()):
-                            line = line.split('\t')
-                            state[line[0]] = line[1:]
-            except FileNotFoundError:
-                pass
+            state = load_db('stats.json')
             if len(state):
-                for user, (member, rating) in state.items():
+                for user, data in state.items():
+                    member = data['member']
+                    rating = data['rating']
                     try:
                         current = get_mmr(user)
-                        state[user] = [member, str(rating)]
+                        state[user]['rating'] = current
                     except:
                         pass
-                ranked = [(user, member, int(rating), rank(int(rating))) for user, (member, rating) in state.items()]
+                ranked = [(user, data['member'], int(data['rating']), rank(int(data['rating']))) for user, data in state.items()]
                 ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
                 await self.send_message(
                     self.general, # for now
@@ -289,15 +283,9 @@ class Beymax(discord.Client):
                     "Let's give everyone a round of applause.  Great show from everybody!\n"
                     "I can't wait to see how you all do next time! [Competitive ranks reset]"
                 )
-            with open('stats.txt', 'w') as handle:
-                for (k,v) in state.items():
-                    handle.write(
-                        '\t'.join([
-                            k,
-                            v[0],
-                            '0'
-                        ])
-                    )
+            for user in state:
+                state[user]['rating'] = 0
+            save_db(state, 'stats.json')
 
         elif re.match(r'!owupdate', content[0]):
             await self.update_overwatch()
@@ -311,22 +299,12 @@ class Beymax(discord.Client):
             else:
                 username = content[1].replace('#', '-')
                 try:
-                    # rating = get_mmr(username)
-                    with open('stats.txt', 'r') as handle:
-                        state={}
-                        for line in handle:
-                            if len(line.strip()):
-                                line = line.split('\t')
-                                state[line[0]] = line[1:]
-                        state[username] = [message.author.name, '1']#str(rating)]
-                    with open('stats.txt', 'w') as handle:
-                        for (k,v) in state.items():
-                            handle.write(
-                                '\t'.join([
-                                    k,
-                                    *v
-                                ])
-                            )
+                    state = load_db('stats.json')
+                    state[username] = {
+                        'member': message.author.name,
+                        'rating': 0
+                    }
+                    save_db(state, 'stats.json')
                     await self.send_message(
                         message.channel,
                         "Alright! I'll keep track of your stats"
@@ -493,46 +471,31 @@ class Beymax(discord.Client):
             self.party_update_time = current
 
     async def update_overwatch(self):
-        try:
-            with open('stats.txt', 'r') as handle:
-                state={}
-                for line in handle:
-                    if len(line.strip()):
-                        line = line.split('\t')
-                        state[line[0]] = line[1:]
-            print(state)
-            for user, (member, rating) in state.items():
-                try:
-                    current = get_mmr(user)
-                    state[user] = [member, str(current)]
-                    currentRank = rank(current)
-                    oldRank = rank(int(rating))
-                    if currentRank[0] > oldRank[0]:
-                        body = "Everyone put your hands together for "
-                        body += self.users[member].mention if member in self.users else member
-                        body += " who just reached "
-                        body += currentRank[1]
-                        body += " in Overwatch!"
-                        if currentRank[0] >= 4:
-                            # Ping the channel for anyone who reached platinum or above
-                            body = body.replace('Everyone', '@everyone')
-                        await self.send_message(
-                            self.general, #for now
-                            body
-                        )
-                except:
-                    pass
-            print(state)
-            with open('stats.txt', 'w') as handle:
-                for (k,v) in state.items():
-                    handle.write(
-                        '\t'.join([
-                            k,
-                            *v
-                        ])
+        state = load_db('stats.json')
+        for user, data in state.items():
+            member = data['member']
+            rating = data['rating']
+            try:
+                current = get_mmr(user)
+                state[user]['rating'] = current
+                currentRank = rank(current)
+                oldRank = rank(int(rating))
+                if currentRank[0] > oldRank[0]:
+                    body = "Everyone put your hands together for "
+                    body += self.users[member].mention if member in self.users else member
+                    body += " who just reached "
+                    body += currentRank[1]
+                    body += " in Overwatch!"
+                    if currentRank[0] >= 4:
+                        # Ping the channel for anyone who reached platinum or above
+                        body = body.replace('Everyone', '@everyone')
+                    await self.send_message(
+                        self.general, #for now
+                        body
                     )
-        except FileNotFoundError:
-            pass
+            except:
+                pass
+        save_db(state, 'stats.json')
 
 def load_db(filename, default=None):
     try:
