@@ -134,7 +134,6 @@ class HelpSession:
 class Beymax(discord.Client):
     help_sessions={}
     general=None
-    users={}
     update_interval = 3600
 
     async def send_and_wait(self, *args, **kwargs):
@@ -159,6 +158,7 @@ class Beymax(discord.Client):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name)
+        self.mentions = load_db('mentions.json')
         self.status_update_time = 0
         self.party_update_time = 0
         self._general = discord.utils.get(
@@ -186,7 +186,7 @@ class Beymax(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
-        self.users[message.author.name] = message.author
+        self.mentions[message.author.name] = message.author.mention
         print(message.author)
         content = message.content.strip().split()
         content[0] = content[0].lower()
@@ -244,6 +244,7 @@ class Beymax(discord.Client):
                 )
             await self.delete_message(message)
         elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
+            save_db(self.mentions, 'mentions.json')
             await self.close()
         elif re.match(r'!_greet', content[0]):
             await self.on_member_join(message.author)
@@ -274,7 +275,7 @@ class Beymax(discord.Client):
                     await self.send_message(
                         self.general,
                         "In "+index[user]+" place, "+
-                        (self.users[member].mention if member in self.users else member)+
+                        (self.mentions[member] if member in self.mentions else member)+
                         " with a rating of "+str(rating)+"\n"
                         +encourage(rn)
                     )
@@ -482,7 +483,7 @@ class Beymax(discord.Client):
                 oldRank = rank(int(rating))
                 if currentRank[0] > oldRank[0]:
                     body = "Everyone put your hands together for "
-                    body += self.users[member].mention if member in self.users else member
+                    body += self.mentions[member] if member in self.mentions else member
                     body += " who just reached "
                     body += currentRank[1]
                     body += " in Overwatch!"
