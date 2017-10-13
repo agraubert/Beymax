@@ -358,7 +358,7 @@ class Beymax(discord.Client):
                     )
                 else:
                     name = (' '.join(content[1:])+' Party ') if len(content) > 1 else 'Party '
-                    # Sanitize channel name
+                    name = sanitize_channel(name)
                     suffix = 1
                     while name+str(suffix) in parties:
                         suffix += 1
@@ -508,6 +508,9 @@ def load_db(filename, default=None):
 def save_db(data, filename):
     with open(filename, 'w') as writer:
         return json.dump(data, writer)
+
+def sanitize_channel(name):
+    return name.replace('~!@#$%^&*()-', '_')
 
 if __name__ == '__main__':
     with open("token.txt") as r:
