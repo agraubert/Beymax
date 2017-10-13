@@ -427,6 +427,7 @@ class Beymax(discord.Client):
                     await self.send_message(
                         self.general,
                         '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                        % pruned[0]
                     )
                 elif len(pruned) > 1:
                     await self.send_message(
@@ -475,8 +476,8 @@ class Beymax(discord.Client):
             if len(pruned) == 1:
                 await self.send_message(
                     self.general,
-                    '`%s`has been disbanded. If you would like to create another party, use the `!party` command'
-                    %pruned[0]
+                    '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                     % pruned[0]
                 )
             elif len(pruned) > 1:
                 await self.send_message(
