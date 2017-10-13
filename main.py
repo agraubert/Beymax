@@ -367,6 +367,8 @@ class Beymax(discord.Client):
                                     type=discord.ChannelType.voice
                                 )
                             )
+                            parties[i] = None
+                parties = [party for party in parties if party is not None]
                 if current_party:
                     await self.send_message(
                         message.channel,
@@ -420,8 +422,8 @@ class Beymax(discord.Client):
                             )
                         )
                         pruned.append(parties[i]['name'])
-                        parties[i]['id'] = None
-                parties = [party for party in parties if party['id'] is not None]
+                        parties[i] = None
+                parties = [party for party in parties if party is not None]
                 save_db(parties, 'parties.json')
                 if len(pruned) == 1:
                     await self.send_message(
@@ -470,8 +472,8 @@ class Beymax(discord.Client):
                             channel
                         )
                         pruned.append(parties[i]['name'])
-                        parties[i]['id'] = None
-            parties = [party for party in parties if party['id'] is not None]
+                        parties[i] = None
+            parties = [party for party in parties if party is not None]
             save_db(parties, 'parties.json')
             if len(pruned) == 1:
                 await self.send_message(
