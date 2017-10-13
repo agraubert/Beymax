@@ -385,7 +385,7 @@ class Beymax(discord.Client):
                     channel = await self.create_channel(
                         message.server,
                         name,
-                        discord.ChannelType.voice
+                        type=discord.ChannelType.voice
                     )
                     await self.send_message(
                         message.channel,
