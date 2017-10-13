@@ -352,7 +352,7 @@ class Beymax(discord.Client):
             )
         elif re.match(r'!party', content[0]):
             if message.server is not None:
-                parties = load_db('parties.json')
+                parties = load_db('parties.json', [])
                 current_party = None
                 for i in range(len(parties)):
                     if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
@@ -408,7 +408,7 @@ class Beymax(discord.Client):
                 save_db(parties, 'parties.json')
         elif re.match(r'!disband', content[0]):
             if message.server is not None:
-                parties = load_db('parties.json')
+                parties = load_db('parties.json', [])
                 pruned = []
                 for i in range(len(parties)):
                     if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator']:
@@ -455,7 +455,7 @@ class Beymax(discord.Client):
             await self.update_overwatch()
             self.status_update_time = current
         if current - self.party_update_time < 60:
-            parties = load_db('parties.json')
+            parties = load_db('parties.json', [])
             pruned = []
             for i in range(len(parties)):
                 if current - parties[i]['time'] >= 86400:
@@ -528,12 +528,12 @@ class Beymax(discord.Client):
         except FileNotFoundError:
             pass
 
-def load_db(filename):
+def load_db(filename, default=None):
     try:
         with open(filename) as reader:
             return json.load(reader)
     except FileNotFoundError:
-        return {}
+        return {} if default is None else default
 
 def save_db(data, filename):
     with open(filename, 'w') as writer:
