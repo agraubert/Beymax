@@ -410,7 +410,7 @@ class Beymax(discord.Client):
             if message.server is not None:
                 parties = load_db('parties.json')
                 pruned = []
-                for i range(len(parties)):
+                for i in range(len(parties)):
                     if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator']:
                         await self.delete_channel(
                             discord.utils.get(
@@ -432,7 +432,7 @@ class Beymax(discord.Client):
                     await self.send_message(
                         self.general,
                         'The following parties have been disbanded:\n'
-                        '\n'.join('`%s`' party for party in pruned)
+                        '\n'.join('`%s`'% party for party in pruned)+
                         '\nIf you would like to create another party, use the `!party` command'
                     )
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
@@ -457,7 +457,7 @@ class Beymax(discord.Client):
         if current - self.party_update_time < 60:
             parties = load_db('parties.json')
             pruned = []
-            for i range(len(parties)):
+            for i in range(len(parties)):
                 if current - parties[i]['time'] >= 86400:
                     channel = discord.utils.get(
                         self.get_all_channels(),
@@ -481,7 +481,7 @@ class Beymax(discord.Client):
                 await self.send_message(
                     self.general,
                     'The following parties have been disbanded:\n'
-                    '\n'.join('`%s`' party for party in pruned)
+                    '\n'.join('`%s`'% party for party in pruned)+
                     '\nIf you would like to create another party, use the `!party` command'
                 )
             self.party_update_time = current
