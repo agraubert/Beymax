@@ -451,13 +451,15 @@ class Beymax(discord.Client):
 
     async def maintenance_tasks(self):
         current = time.time()
-        if current - self.status_update_time < self.update_interval:
+        if current - self.status_update_time > self.update_interval:
+            name = select_status()
+            print("CHANGING STATUS:", name)
             await self.change_presence(
-                game=discord.Game(name=select_status())
+                game=discord.Game(name=name)
             )
             await self.update_overwatch()
             self.status_update_time = current
-        if current - self.party_update_time < 60:
+        if current - self.party_update_time > 60:
             parties = load_db('parties.json', [])
             pruned = []
             for i in range(len(parties)):
