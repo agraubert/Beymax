@@ -417,6 +417,11 @@ class Beymax(discord.Client):
                         '\n'.join('`%s`'% party for party in pruned)+
                         '\nIf you would like to create another party, use the `!party` command'
                     )
+                else:
+                    await self.send_message(
+                        message.channel,
+                        "You don't have an active party"
+                    )
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
         await self.maintenance_tasks()
