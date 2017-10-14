@@ -311,12 +311,14 @@ class Beymax(discord.Client):
                         "Alright! I'll keep track of your stats"
                     )
                     #the timer is prolly going to have to wait for now
-                    threading.Timer(
-                        120,
-                        lambda :self.loop.run_until_complete(
-                            self.update_overwatch()
-                        )
-                    ).start()
+                    # threading.Timer(
+                    #     120,
+                    #     lambda :self.loop.run_until_complete(
+                    #         self.update_overwatch()
+                    #     )
+                    # ).start()
+                    await asyncio.sleep(15)
+                    await self.update_overwatch()
                 except:
                     await self.send_message(
                         message.channel,
