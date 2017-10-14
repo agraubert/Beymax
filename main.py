@@ -313,7 +313,7 @@ class Beymax(discord.Client):
                     #the timer is prolly going to have to wait for now
                     threading.Timer(
                         120,
-                        lambda :asyncio.get_event_loop().run_until_complete(
+                        lambda :self.loop.run_until_complete(
                             self.update_overwatch()
                         )
                     ).start()
