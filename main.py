@@ -91,15 +91,153 @@ def postfix(n):
         return n+'rd'
     return n+'th'
 
+def binwords(message, **bings):
+    pass
+
 class HelpSession:
     def __init__(self, client, user):
         self.client = client
         self.user = user
-        self.stage = None
+        self.stage = 'default'
+        self.aux = None
+
+    async def stage_default(self):
+        await self.client.send_message(
+            self.user,
+            "You can ask me for help with the bots, or the channels, but "+
+            "if you're not sure what sort of things I can do, just say `help`\n"+
+            "What seems to be the problem?"
+        )
+        self.stage='default'
+
+    async def stage_help(self):
+        await self.client.send_message(
+            self.user,
+            "Over the course of this conversation, I'll do my best to answer any "+
+            "questions you may have regarding this server and its features.\n"+
+            "You can respond to these messages in normal English, and I'll "+
+            "do my best to determine what you want. However, if you're having "+
+            "trouble getting your point across to me, you can try using single "+
+            "word responses, like you're talking to a computer."
+        )
+        self.stage = 'default'
+
+    async def stage_bots(self):
+        await self.client.send_message(
+            self.user,
+            "Right now, there are two bots on this server:\n"+
+            "First and foremost, is **Octavia**, our DJ.  She's here to "
+            "make sure everyone always has access to some sweet tunes.\n"
+            "And then obviously there's me, **Beymax**. I'm here to help you "
+            "out and answer any questions you have, as well as some other "
+            "utilities like making polls or creating parties.\n"
+            "If you have any further questions about the bots, just type "
+            "one of our names. Or, if you'd like to go back, just say so."
+        )
+        self.stage = 'bots'
+
+    async def stage_channels(self):
+        await self.client.send_message(
+            self.user,
+            "On this server, we try to keep different discussions organized "
+            "into separate channels.\n"
+            "There's the `general` text channel and `General` voice channel "
+            "which are pretty much for whatever you want (first come, first served).\n"
+            "The `testing grounds` channels are where bots like myself are "
+            "tested before deployment.\n"
+            "The `rpg` text and `RPG` voice channels are for discussions related "
+            "to the various tabletop games in progress. If you'd like to join "
+            "rpg group, reach out to *Brightfire* or *GarethDen*.\n"
+            "There's also the `AFK` voice channel, which is where we put you "
+            "if you're silent in a voice channel for 30 minutes or so.\n"
+            "Additionally, you may see various voice channels with `Party` in "
+            "the name. These channels are temporary voice channels used when "
+            "`General` is already claimed. You can create one with the `!party` "
+            "command.\n"
+            "If you'd like to know about any channel in particular, just say "
+            "it's name. Otherwise, you can tell me to go back, if you want."
+        )
+        self.stage = 'channels'
+
+    async def stage_explain_bot(self):
+        self.stage = 'explain-bot'
+        if self.aux == 'beymax':
+            await self.client.send_message(
+                self.user,
+                "I am Beymax, your personal ~~healthcare~~ **server** companion.\n"
+                "I'm here to help in situations like this, where someone wans "
+                "to know a bit more about how this server works\n"
+                "I can do lots of things like create polls, track overwatch rank, "
+                "create voice channels, and even greet people as they join the server!\n"
+                "Would you like to know about the commands that I respond to?"
+            )
+        elif self.aux == 'octavia':
+            await self.client.send_message(
+                self.user,
+                "Octavia is a single-purpose bot. She sits politely in whichever "
+                "voice channel she's been summoned to and will play music at "
+                "anyone's request. Please note that there is only one of her, so "
+                "you'll have to share. If someone else is already using Octavia "
+                "please don't summon her into another voice channel.\n"
+                "Would you like to know about the commands that she responds to?"
+            )
 
     async def digest(self, message):
         print("Digest content:", message)
         cmd = message[0].replace('`', '').lower()
+        if self.stage == 'default':
+            choice = binwords(
+                cmd,
+                bots=['bots', 'apps', 'robots'],
+                channels=['channels', 'groups', 'messages'],
+                help=['help'],
+            )
+            if choice is None:
+                await self.client.send_message(
+                    self.user,
+                    "I didn't quite understand what you meant by that"
+                )
+                # await self.stage_default()
+            elif choice == 'bots':
+                await self.stage_bots()
+            elif choice == 'channels':
+                await self.stage_channels()
+            elif choice == 'help':
+                await self.stage_help()
+        elif self.stage == 'bots':
+            choice = binwords(
+                cmd,
+                octavia=['octavia', 'tenno', 'dj', 'music'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper'],
+                back=['go', 'back']
+            )
+            if choice is None:
+                await self.client.send_message(
+                    self.user,
+                    "I didn't quite understand what you meant by that"
+                )
+            elif choice == 'back':
+                await self.stage_default()
+            elif choice in {'octavia', 'beymax'}:
+                self.aux = choice
+                await self.stage_explain_bot()
+        elif self.stage == 'explain-bot':
+            choice = binwords(
+                cmd,
+                yes=['yes', 'sure', 'ok', 'yep', 'please'],
+                no=['no', 'nope', 'na', 'thanks']
+            )
+            if choice is None:
+                await self.client.send_message(
+                    self.user,
+                    "I didn't quite understand what you meant by that"
+                )
+            elif choice == 'yes':
+                await self.stage_commands()
+            else:
+                await self.stage_terminal()
+
+        ##
         if cmd == 'help':
             await self.client.send_and_wait(
                 self.user,
@@ -193,11 +331,12 @@ class Beymax(discord.Client):
         print("Message in channel:", message.channel.name)
         print("Content:", content)
         if re.match(r'!ouch', content[0]):
-            await self.send_and_wait(
+            await self.send_message(
                 message.author,
                 "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"+
                 "It's my job to make sure you have a good time and understand the various tools at your disposal in this server\n"+
-                "If you're not sure what sort of things I can do, just say `help`\n"+
+                "You can ask me for help with the bots, or the channels, but\n"+
+                "if you're not sure what sort of things I can do, just say `help`\n"+
                 "What seems to be the problem?"
             )
             self.help_sessions[message.author] = HelpSession(self, message.author)
