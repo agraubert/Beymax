@@ -3,6 +3,7 @@ import re
 import asyncio
 import requests
 import time
+import datetime
 import json
 from pyemojify import emojify
 import random
@@ -100,6 +101,7 @@ class HelpSession:
         self.user = user
         self.stage = 'default'
         self.aux = None
+        self.active = True
 
     async def stage_default(self):
         await self.client.send_message(
@@ -182,6 +184,53 @@ class HelpSession:
                 "Would you like to know about the commands that she responds to?"
             )
 
+    async def stage_commands(self):
+        self.stage = 'stage-commands'
+        if self.aux == 'beymax':
+            await self.client.send_message(
+                self.user,
+                "Here is the list of commands I currently support:\n"
+                "`!ow <battle#tag>` : Tells me to track your overwatch rank using"
+                " that battle tag. Example: `!ow fakename#1234`\n"
+                "`!party [party name]` : Tells me to create a temporary party for"
+                " you. The party name part is optional. Example: `!party Test`\n"
+                "`!disband` : Disbands your party, if you have one\n"
+                "`!poll <poll title> | [poll option 1] | [poll option 2] | etc...`"
+                " : Creates a reaction based poll. Use `|` to separate the title"
+                " and each option (up to ten options). Example: `!poll Is beymax"
+                " cool? | Yes | Absolutely`\n"
+                "`!ouch` : Asks for my help, but you already knew how to use this one"
+            )
+        elif self.aux == 'octavia':
+            await self.client.send_message(
+                self.user,
+                "Here are the common commands that Octavia supports:\n"
+                "`!np` : Asks Octavia about the current song\n"
+                "`!pause` : Asks Octavia to pause the song. Some users may not "
+                "have permission to do this.\n"
+                "`!play <song>` : Asks Octavia to play a song. You can give her"
+                " specific URLs to play (youtube, soundcloud, etc) or you can "
+                "give her some search terms and she'll figure it out (she's pretty"
+                " smart). Example: `!play never gonna give you up`\n"
+                "`!queue` : Asks Octavia about the current playlist\n"
+                "`!skip` : Asks Octavia to skip the current song. Some users may"
+                " not have permission to do this, and will instead vote to skip\n"
+                "`!summon` : Brings Octavia into your current voice channel. "
+                "Please be curteous and don't steal her from another channel if "
+                "she's already plying music for someone else\n"
+                "If you would like more help with Octavia's commands, go to the"
+                " #jukebox channel and say `!help`. You can ask for specific help"
+                " with `!help <command>` (for example: `!help play`)"
+            )
+        await self.stage_terminal()
+
+    async def self.stage_terminal():
+        self.stage = 'terminal'
+        await self.client.send_message(
+            self.user,
+            "Is there anything else I can help you with?"
+        )
+
     async def digest(self, message):
         print("Digest content:", message)
         cmd = message[0].replace('`', '').lower()
@@ -236,37 +285,45 @@ class HelpSession:
                 await self.stage_commands()
             else:
                 await self.stage_terminal()
-
-        ##
-        if cmd == 'help':
-            await self.client.send_and_wait(
-                self.user,
-                "There are several bots in the server.  If you would like to know about the bots, just say `bots`\n"+
-                "Each channel serves a different purpose.  If you would like to know about the channels, just say `channels`"
+        elif self.stage == 'terminal':
+            choice = binwords(
+                cmd,
+                yes=['yes', 'sure', 'ok', 'yep', 'please'],
+                no=['no', 'nope', 'na', 'thanks']
             )
-        elif cmd == 'bots':
-            await self.client.send_and_wait(
-                self.user,
-                "First and foremost, is **Octavia**, our DJ.  She's here to "
-                "make sure everyone always has access to some sweet tunes\n"
-                "And obviously there's me, **Beymax**. I'm here to help you "
-                "out and answer any questions you have, as well as some other "
-                "utilities like making polls, or greeting new users\n"
-                "If you have any further questions about the bots, just type "
-                "one of our names!"
+            if choice is None:
+                await self.client.send_message(
+                    self.user,
+                    "I didn't quite understand what you meant by that"
+                )
+            elif choice == 'yes':
+                await self.stage_default()
+            else:
+                self.active = False
+                await self.send_message(
+                    self.user,
+                    "Okay. Glad to be of servie"
+                )
+        elif self.stage == 'channels':
+            choice = binwords(
+                cmd,
+                general=['general'],
+                jukebox=['jukebox'],
+                testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                rpgs=['rpgs', 'rpg'],
+                afk=['afk'],
+                party=['party'] + [
+                    party['name'].split() for party in load_db('parties.json', [])
+                ]
             )
-        elif cmd == "channels":
-            await self.client.send_and_wait(
-                self.user,
-                "On this server, we try to keep different discussions organized "
-                "into separate channels.\n"
-                "There's the `general` text channel and `General` voice channel "
-                "which are for any discussions\n"
-                "The `testing grounds` channels are where bots like myself are "
-                "tested before deployment.\n"
-                "Beyond that, the different channels are mostly just organized "
-                "for different games"
-            )
+            if choice is None:
+                await self.client.send_message(
+                    self.user,
+                    "I didn't quite understand what you meant by that"
+                )
+            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
+                self.aux = choice
+                await self.stage_explain_channel()
 
 
 class Beymax(discord.Client):
@@ -299,6 +356,8 @@ class Beymax(discord.Client):
         self.mentions = load_db('mentions.json')
         self.status_update_time = 0
         self.party_update_time = 0
+        self.invite_update_time = 0
+        self.invite_update_interval = 604800 # 7 days
         self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
@@ -572,6 +631,7 @@ class Beymax(discord.Client):
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
         await self.maintenance_tasks()
+        self.help_sessions = {user:session for user,session in self.help_sessions if session.active}
 
     async def on_member_join(self, member):
         await self.send_message(
@@ -590,6 +650,47 @@ class Beymax(discord.Client):
             )
             await self.update_overwatch()
             self.status_update_time = current
+        # if current - self.invite_update_time > self.invite_update_interval:
+        #     stale_invites = load_db('invites.json')
+        #     active_invites = await self.invites_from(self._general.server)
+        #     inviters = {}
+        #     for invite in active_invites:
+        #         select = invite.max_age == 0 or (datetime.now() - invite.created_at).days >= 7
+        #         select &= invite.max_uses - invite.uses > 5 or invite.max_uses == invite.uses
+        #         select &= not invite.temporary
+        #         select |= (datetime.now() - invite.created_at).days >= 30
+        #         select &= invite.id not in stale_invites or current - stale_invites[invite.id] < self.invite_update_interval
+        #         if select:
+        #             if invite.inviter not in inviters:
+        #                 inviters[invite.inviter] = [invite]
+        #             else:
+        #                 inviters[invite.inviter].append(invite)
+        #     for inviter, invites in inviters:
+        #         body = (
+        #             "Hello, %s, I was looking through the server's active invites"
+        #             " and I noticed that you have %d stale invite%s lying"
+        #             " around:\n" % (
+        #                 self.mentions[inviter.name],
+        #                 len(invites),
+        #                 's' if len(invites) > 1 else ''
+        #             )
+        #         )
+        #         for invite in invites:
+        #             body+="`%s`, created %s\n" % (
+        #                 invite.url,
+        #                 invite.created_at.strftime(
+        #                     '%A %m/%d/%y at %I:%M %p'
+        #                 )
+        #             )
+        #         if len(invites) > 1:
+        #             body += (
+        #                 "Do you mind deleting any of those that you don't need?\n"
+        #                 "Thanks for helping to keep the server safe!"
+        #             )
+        #     stale_invites = {
+        #         invite.id:current for invite in active_invites
+        #     }
+        #     save_db(stale_invites, 'invites.json')
         if current - self.party_update_time > 60:
             parties = load_db('parties.json', [])
             pruned = []
