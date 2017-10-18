@@ -278,12 +278,12 @@ class Beymax(discord.Client):
         await self.send_message(*args, **kwargs)
         #await self.wait_for_message(author = self.user)
 
-    def update_and_schedule(self):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.update_overwatch())
-        loop.close()
-        self.timer = threading.Timer(self.update_interval, self.update_overwatch)
-        self.timer.start()
+    # def update_and_schedule(self):
+    #     loop = asyncio.get_event_loop()
+    #     loop.run_until_complete(self.update_overwatch())
+    #     loop.close()
+    #     self.timer = threading.Timer(self.update_interval, self.update_overwatch)
+    #     self.timer.start()
 
     async def on_ready(self):
         print('Logged in as')
@@ -310,7 +310,7 @@ class Beymax(discord.Client):
             type=discord.ChannelType.text
         )
         self.general = self._general
-        self.timer = threading.Timer(self.update_interval, self.update_overwatch)
+        # self.timer = threading.Timer(self.update_interval, self.update_overwatch)
         self.timer.start()
         print("Ready to serve!")
 
