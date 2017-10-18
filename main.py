@@ -311,7 +311,7 @@ class Beymax(discord.Client):
         )
         self.general = self._general
         # self.timer = threading.Timer(self.update_interval, self.update_overwatch)
-        self.timer.start()
+        # self.timer.start()
         print("Ready to serve!")
 
 
