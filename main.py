@@ -364,7 +364,7 @@ class HelpSession:
                 await self.stage_default()
             else:
                 self.active = False
-                await self.send_message(
+                await self.client.send_message(
                     self.user,
                     "Okay. Glad to be of servie"
                 )
