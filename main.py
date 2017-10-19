@@ -460,7 +460,7 @@ class Beymax(discord.Client):
         # print("Message in channel:", message.channel.name)
         # print("Content:", content)
         if re.match(r'!ouch', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.send_message(
                 message.author,
                 "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"+
@@ -471,7 +471,7 @@ class Beymax(discord.Client):
             )
             self.help_sessions[message.author] = HelpSession(self, message.author)
         elif re.match(r'!poll', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             opts = ' '.join(content[1:]).split('|')
             title = opts.pop(0)
             body = self.getname(message.author)+" has started a poll:\n"
@@ -493,17 +493,17 @@ class Beymax(discord.Client):
                 )
             await self.delete_message(message)
         elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             save_db(self.mentions, 'mentions.json')
             await self.close()
         elif re.match(r'!_greet', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.on_member_join(message.author)
         elif re.match(r'!_announce', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.send_message(self.general, message.content.strip().replace('!_announce', ''))
         elif re.match(r'!_owreset', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             state = load_db('stats.json')
             if len(state):
                 for user, data in state.items():
@@ -542,10 +542,10 @@ class Beymax(discord.Client):
             save_db(state, 'stats.json')
 
         elif re.match(r'!owupdate', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.update_overwatch()
         elif re.match(r'!ow', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             if len(content) != 2:
                 await self.send_message(
                     message.channel,
@@ -581,21 +581,21 @@ class Beymax(discord.Client):
                         "Are you sure you're ranked this season?"
                     )
         elif re.match(r'!output-dev', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._testing_grounds
             await self.send_message(
                 self._testing_grounds,
                 "Development mode enabled. All messages will be sent to testing grounds"
             )
         elif re.match(r'!output-prod', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._general
             await self.send_message(
                 self._testing_grounds,
                 "Production mode enabled. All messages will be sent to general"
             )
         elif re.match(r'!party', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             if message.server is not None:
                 parties = load_db('parties.json', [])
                 current_party = None
@@ -654,7 +654,7 @@ class Beymax(discord.Client):
                     })
                 save_db(parties, 'parties.json')
         elif re.match(r'!disband', content[0]):
-            print("Command from", message.author, content)
+            print("Command in channel", message.channel, "from", message.author, ":", content)
             if message.server is not None:
                 parties = load_db('parties.json', [])
                 pruned = []
