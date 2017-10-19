@@ -224,12 +224,65 @@ class HelpSession:
             )
         await self.stage_terminal()
 
-    async def self.stage_terminal():
+    async def stage_terminal(self):
         self.stage = 'terminal'
         await self.client.send_message(
             self.user,
             "Is there anything else I can help you with?"
         )
+    async def stage_explain_channel(self):
+        self.stage='explain-channel'
+        if self.aux == 'general':
+            await self.client.send_message(
+                self.user,
+                "The general channels are for whatever you want.\n"
+                "Talk about games, talk about life, talk about work, talk about "
+                "talking -- it's up to you. The General voice channel is first-come"
+                " first-serve, so if there's already a group there, you'll need "
+                "to use the `!party` command to create your own channel"
+            )
+        elif self.aux == 'jukebox':
+            await self.client.send_message(
+                self.user,
+                "The jukebox is Octavia's channel. It's the only channel where "
+                "Octavia listens to commands, like `!play` or `!summon`. "
+                "If you're looking to play some tunes, this is the place to go"
+            )
+        elif self.aux == 'testing_grounds':
+            await self.client.send_message(
+                self.user,
+                "The testing ground channels are for development purposes. "
+                "It's where bots, such as myself, are tested out before new features"
+                " make there way out to general use. Locked out? It's nothing "
+                "personal. We just only want you to see us at our best!"
+            )
+        elif self.aux == 'rpgs':
+            await self.client.send_message(
+                self.user,
+                "The RPG channels are for playing RPGs or RPG-related discussion."
+                " It's where people who are part of the various RPGs in our group"
+                "hold RPG discussion so as not to spam the general channels. "
+                "Looking to host or join an RPG? Reach out to Brightfire or "
+                "GarethDen and they'll hook you up."
+            )
+        elif self.aux == 'party':
+            await self.client.send_message(
+                self.user,
+                "Party channels are temporary voice channels used when a group "
+                "doesn't want to use General (or if General's already in use). "
+                "Parties are created with the `!party` command and usually last"
+                " less than a day before I disband them"
+            )
+        elif self.aux == 'afk':
+            await self.client.send_message(
+                self.user,
+                "The AFK channel is where we put people who sit in a voice channel"
+                " without talking or typing for 30 minutes. It's not a punishment"
+                " but it helps keep the voice channels clear if you're not really"
+                " using them"
+            )
+        await self.stage_terminal()
+
 
     async def digest(self, message):
         print("Digest content:", message)
