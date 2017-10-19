@@ -678,7 +678,7 @@ class Beymax(discord.Client):
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
             await self.help_sessions[message.author].digest(content)
         await self.maintenance_tasks()
-        self.help_sessions = {user:session for user,session in self.help_sessions if session.active}
+        self.help_sessions = {user:session for user,session in self.help_sessions.items() if session.active}
 
     async def on_member_join(self, member):
         await self.send_message(
