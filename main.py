@@ -92,8 +92,19 @@ def postfix(n):
         return n+'rd'
     return n+'th'
 
-def binwords(message, **bings):
-    pass
+def binwords(message, **bins):
+    lookup = {member:target for target,members in bins.items() for member in members}
+    results = {}
+    for word in message.split():
+        if word in lookup:
+            key = lookup[word]
+            if key not in results:
+                results[key] = 1
+            else:
+                results[key] += 1
+    return max(
+        (count, item) for item,count in results.items()
+    )[-1]
 
 class HelpSession:
     def __init__(self, client, user):
