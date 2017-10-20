@@ -300,7 +300,7 @@ class HelpSession:
 
     async def digest(self, message):
         print("Digest content:", message)
-        cmd = message[0].replace('`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"', '').lower()
+        cmd = message.replace('`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"', '').lower()
         if self.stage == 'default':
             choice = binwords(
                 cmd,
