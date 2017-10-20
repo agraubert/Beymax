@@ -299,14 +299,14 @@ class HelpSession:
 
 
     async def digest(self, message):
-        print("Digest content:", message)
         cmd = message.replace('`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"', '').lower()
+        print("Digest content:", cmd)
         if self.stage == 'default':
             choice = binwords(
                 cmd,
                 bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you'],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
@@ -340,7 +340,7 @@ class HelpSession:
             choice = binwords(
                 cmd,
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you'],
                 back=['go', 'back']
             )
             if choice is None:
