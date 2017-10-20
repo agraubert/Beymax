@@ -826,7 +826,7 @@ class Beymax(discord.Client):
                     await self.send_message(
                         self.general,
                         "@everyone congratulate %s, for today is their birthday!"
-                        " They turn %d today!" % (
+                        " They are %d!" % (
                             self.users[uid]['mention'] if uid in self.users else "someone",
                             today.year - data['year']
                         )
