@@ -486,7 +486,7 @@ class Beymax(discord.Client):
             return
         struct = {
             'id': message.author.id,
-            'fullname' = str(message.author)
+            'fullname': str(message.author),
             'mention': message.author.mention,
             'name': self.getname(message.author)
         }
@@ -816,7 +816,7 @@ class Beymax(discord.Client):
         #     save_db(stale_invites, 'invites.json')
         if current - self.birthday_update_time > self.birthday_update_interval:
             birthdays = load_db('birthdays.json')
-            today = datetime.today()
+            today = datetime.date.today()
             for uid, data in birthdays.items():
                 month = data['month']
                 day = data['day']
