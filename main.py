@@ -225,6 +225,8 @@ class HelpSession:
                 "`!party [party name]` : Tells me to create a temporary party for"
                 " you. The party name part is optional. Example: `!party Test`\n"
                 "`!disband` : Disbands your party, if you have one\n"
+                "`!birthday <your birthday>` : Informs me of your birthday so I"
+                " can congratulate you when it comes. Example: `!birthday 1/1/1970`\n"
                 "`!poll <poll title> | [poll option 1] | [poll option 2] | etc...`"
                 " : Creates a reaction based poll. Use `|` to separate the title"
                 " and each option (up to ten options). Example: `!poll Is beymax"
