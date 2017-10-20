@@ -324,7 +324,7 @@ class HelpSession:
                 cmd,
                 bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
@@ -358,7 +358,7 @@ class HelpSession:
             choice = binwords(
                 cmd,
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
                 back=['go', 'back']
             )
             if choice is None:
@@ -389,8 +389,21 @@ class HelpSession:
         elif self.stage == 'terminal':
             choice = binwords(
                 cmd,
+                bots=['bots', 'apps', 'robots'],
+                octavia=['octavia', 'tenno', 'dj', 'music'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                channels=['channels', 'groups', 'messages', 'channel'],
+                general=['general'],
+                jukebox=['jukebox'],
+                testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                rpgs=['rpgs', 'rpg'],
+                afk=['afk'],
+                party=['party'] + [
+                    party['name'].split() for party in load_db('parties.json', [])
+                ],
+                help=['help'],
                 yes=['yes', 'sure', 'ok', 'yep', 'please'],
-                no=['no', 'nope', 'na', 'thanks']
+                no=['no', 'nope', 'nah', 'thanks']
             )
             if choice is None:
                 await self.client.send_message(
@@ -399,6 +412,18 @@ class HelpSession:
                 )
             elif choice == 'yes':
                 await self.stage_default()
+            elif choice == 'bots':
+                await self.stage_bots()
+            elif choice in {'octavia', 'beymax'}:
+                self.aux = choice
+                await self.stage_explain_bot()
+            elif choice == 'channels':
+                await self.stage_channels()
+            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
+                self.aux = choice
+                await self.stage_explain_channel()
+            elif choice == 'help':
+                await self.stage_help()
             else:
                 self.active = False
                 await self.client.send_message(
