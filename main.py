@@ -300,12 +300,22 @@ class HelpSession:
 
     async def digest(self, message):
         print("Digest content:", message)
-        cmd = message[0].replace('`', '').lower()
+        cmd = message[0].replace('`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"', '').lower()
         if self.stage == 'default':
             choice = binwords(
                 cmd,
                 bots=['bots', 'apps', 'robots'],
-                channels=['channels', 'groups', 'messages'],
+                octavia=['octavia', 'tenno', 'dj', 'music'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper'],
+                channels=['channels', 'groups', 'messages', 'channel'],
+                general=['general'],
+                jukebox=['jukebox'],
+                testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                rpgs=['rpgs', 'rpg'],
+                afk=['afk'],
+                party=['party'] + [
+                    party['name'].split() for party in load_db('parties.json', [])
+                ],
                 help=['help'],
             )
             if choice is None:
@@ -316,8 +326,14 @@ class HelpSession:
                 # await self.stage_default()
             elif choice == 'bots':
                 await self.stage_bots()
+            elif choice in {'octavia', 'beymax'}:
+                self.aux = choice
+                await self.stage_explain_bot()
             elif choice == 'channels':
                 await self.stage_channels()
+            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
+                self.aux = choice
+                await self.stage_explain_channel()
             elif choice == 'help':
                 await self.stage_help()
         elif self.stage == 'bots':
@@ -690,7 +706,7 @@ class Beymax(discord.Client):
                         "You don't have an active party"
                     )
         elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
-            await self.help_sessions[message.author].digest(content)
+            await self.help_sessions[message.author].digest(message.content)
         await self.maintenance_tasks()
         self.help_sessions = {user:session for user,session in self.help_sessions.items() if session.active}
 
