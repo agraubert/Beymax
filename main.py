@@ -56,6 +56,11 @@ def select_status():
         1
     )[0]
 
+def sanitize(string, illegal, replacement=''):
+    for char in illegal:
+        string = string.replace(char, replacement)
+    return string
+
 def encourage(n):
     if n <=2:
         pool = [
@@ -299,7 +304,7 @@ class HelpSession:
 
 
     async def digest(self, message):
-        cmd = message.replace('`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"', '').lower()
+        cmd = sanitize(message, '`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"').lower()
         print("Digest content:", cmd)
         if self.stage == 'default':
             choice = binwords(
@@ -840,7 +845,7 @@ def save_db(data, filename):
         return json.dump(data, writer)
 
 def sanitize_channel(name):
-    return name.replace('~!@#$%^&*()-', '_')
+    return sanitize(name, '~!@#$%^&*()-', '_')
 
 if __name__ == '__main__':
     with open("token.txt") as r:
