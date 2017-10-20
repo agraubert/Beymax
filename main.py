@@ -11,6 +11,17 @@ import threading
 random.seed()
 
 numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+#schemas:
+#stats: {id: {tag:battletag, rank:last_ranking}}
+#users:
+# struct = {
+#     'id': message.author.id,
+#     'fullname' = str(message.author)
+#     'mention': message.author.mention,
+#     'name': self.getname(message.author)
+# }
+#birthdays = {id:{month, day, year}}
+#parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
 
 def get_mmr(user):
     base_url = 'https://masteroverwatch.com/profile/pc/us/'
@@ -441,11 +452,13 @@ class Beymax(discord.Client):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name)
-        self.mentions = load_db('mentions.json')
+        self.users = load_db('users.json')
         self.status_update_time = 0
         self.party_update_time = 0
         self.invite_update_time = 0
         self.invite_update_interval = 604800 # 7 days
+        self.birthday_update_time = 0
+        self.birthday_update_interval = 43200 # 12 hours
         self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
@@ -471,7 +484,14 @@ class Beymax(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
-        self.mentions[message.author.name] = message.author.mention
+        struct = {
+            'id': message.author.id,
+            'fullname' = str(message.author)
+            'mention': message.author.mention,
+            'name': self.getname(message.author)
+        }
+        self.users[str(message.author)] = struct
+        self.users[message.author.id] = struct
         # print(message.author)
         try:
             content = message.content.strip().split()
@@ -515,7 +535,7 @@ class Beymax(discord.Client):
             await self.delete_message(message)
         elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
-            save_db(self.mentions, 'mentions.json')
+            save_db(self.users, 'users.json')
             await self.close()
         elif re.match(r'!_greet', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
@@ -527,15 +547,15 @@ class Beymax(discord.Client):
             print("Command in channel", message.channel, "from", message.author, ":", content)
             state = load_db('stats.json')
             if len(state):
-                for user, data in state.items():
-                    member = data['member']
+                for uid, data in state.items():
+                    tag = data['tag']
                     rating = data['rating']
                     try:
-                        current = get_mmr(user)
-                        state[user]['rating'] = current
+                        current = get_mmr(tag)
+                        state[uid]['rating'] = current
                     except:
                         pass
-                ranked = [(user, data['member'], int(data['rating']), rank(int(data['rating']))) for user, data in state.items()]
+                ranked = [(data['tag'], uid, int(data['rating']), rank(int(data['rating']))) for uid, data in state.items()]
                 ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
                 await self.send_message(
                     self.general, # for now
@@ -545,11 +565,11 @@ class Beymax(discord.Client):
                 index = {
                     ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
                 }
-                for user,member,rating,(rn,rclass) in ranked:
+                for uid,tag,rating,(rn,rclass) in ranked:
                     await self.send_message(
                         self.general,
                         "In "+index[user]+" place, "+
-                        (self.mentions[member] if member in self.mentions else member)+
+                        (self.users[uid]['mention'] if uid in self.users else tag)+
                         " with a rating of "+str(rating)+"\n"
                         +encourage(rn)
                     )
@@ -558,8 +578,8 @@ class Beymax(discord.Client):
                     "Let's give everyone a round of applause.  Great show from everybody!\n"
                     "I can't wait to see how you all do next time! [Competitive ranks reset]"
                 )
-            for user in state:
-                state[user]['rating'] = 0
+            for uid in state:
+                state[uid]['rating'] = 0
             save_db(state, 'stats.json')
 
         elif re.match(r'!owupdate', content[0]):
@@ -577,8 +597,8 @@ class Beymax(discord.Client):
                 username = content[1].replace('#', '-')
                 try:
                     state = load_db('stats.json')
-                    state[username] = {
-                        'member': message.author.name,
+                    state[message.author.id] = {
+                        'tag': username,
                         'rating': 0
                     }
                     save_db(state, 'stats.json')
@@ -615,13 +635,34 @@ class Beymax(discord.Client):
                 self._testing_grounds,
                 "Production mode enabled. All messages will be sent to general"
             )
+        elif re.match(r'!birthday', content[0]):
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            if len(content) < 2 or not re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1]):
+                await self.send_message(
+                    message.channel,
+                    "Please tell me your birthday in MM/DD/YYYY format. For"
+                    " example: `!birthday 1/1/1970`"
+                )
+            else:
+                result = re.match(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', content[1])
+                birthdays = load_db('birthdays.json')
+                birthdays[message.author.id] = {
+                    'month': int(result.group(1)),
+                    'day': int(result.group(2)),
+                    'year': int(result.group(3))
+                }
+                await self.send_message(
+                    message.channel,
+                    "Okay, I'll remember that"
+                )
+                save_db(birthdays, 'birthdays.json')
         elif re.match(r'!party', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
             if message.server is not None:
                 parties = load_db('parties.json', [])
                 current_party = None
                 for i in range(len(parties)):
-                    if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
+                    if message.server.id == parties[i]['server'] and message.author.id == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
                         if not parties[i]['primed']:
                             current_party = parties[i]['name']
                             parties[i]['primed'] = True
@@ -670,7 +711,7 @@ class Beymax(discord.Client):
                         'id':channel.id,
                         'server':message.server.id,
                         'primed':False,
-                        'creator':message.author.name,
+                        'creator':message.author.id,
                         'time': time.time()
                     })
                 save_db(parties, 'parties.json')
@@ -680,7 +721,7 @@ class Beymax(discord.Client):
                 parties = load_db('parties.json', [])
                 pruned = []
                 for i in range(len(parties)):
-                    if message.server.id == parties[i]['server'] and message.author.name == parties[i]['creator']:
+                    if message.server.id == parties[i]['server'] and message.author.id == parties[i]['creator']:
                         await self.delete_channel(
                             discord.utils.get(
                                 self.get_all_channels(),
@@ -773,6 +814,22 @@ class Beymax(discord.Client):
         #         invite.id:current for invite in active_invites
         #     }
         #     save_db(stale_invites, 'invites.json')
+        if current - self.birthday_update_time > self.birthday_update_interval:
+            birthdays = load_db('birthdays.json')
+            today = datetime.today()
+            for uid, data in birthdays.items():
+                month = data['month']
+                day = data['day']
+                if today.day == day and today.month == month:
+                    await self.send_message(
+                        self.general,
+                        "@everyone congratulate %s, for today is their birthday!"
+                        "They turn %d today!" % (
+                            self.users[uid]['mention'] if uid in self.users else "someone",
+                            today.year - data['year']
+                        )
+                    )
+            self.birthday_update_time = current
         if current - self.party_update_time > 60:
             parties = load_db('parties.json', [])
             pruned = []
@@ -808,17 +865,17 @@ class Beymax(discord.Client):
 
     async def update_overwatch(self):
         state = load_db('stats.json')
-        for user, data in state.items():
-            member = data['member']
+        for uid, data in state.items():
+            tag = data['tag']
             rating = data['rating']
             try:
-                current = get_mmr(user)
-                state[user]['rating'] = current
+                current = get_mmr(tag)
+                state[uid]['rating'] = current
                 currentRank = rank(current)
                 oldRank = rank(int(rating))
                 if currentRank[0] > oldRank[0]:
                     body = "Everyone put your hands together for "
-                    body += self.mentions[member] if member in self.mentions else member
+                    body += self.users[uid]['mention'] if uid in self.users else tag
                     body += " who just reached "
                     body += currentRank[1]
                     body += " in Overwatch!"
