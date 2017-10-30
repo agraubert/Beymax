@@ -677,8 +677,8 @@ class Beymax(discord.Client):
                 except:
                     await self.send_message(
                         message.channel,
-                        "I wasn't able to find your Overwatch ranking on Master Overwatch.\n"
-                        "Are you sure you're ranked this season?"
+                        "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
+                        "Battle-tags are case-sensitive, so make sure you typed everything correctly"
                     )
         elif re.match(r'!output-dev', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
