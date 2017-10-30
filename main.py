@@ -37,6 +37,8 @@ def get_mmr(user):
     #     response.text
     # )
     # return int(result.group(1).replace(',',''))
+    if response.status_code == 404:
+        raise ValueError("Bad Username")
     data = response.json()
     rank = data['us']['stats']['competitive']['overall_stats']['comprank']
     img = data['us']['stats']['competitive']['overall_stats']['avatar']
@@ -646,6 +648,7 @@ class Beymax(discord.Client):
             save_db(stats, 'stats.json')
         elif re.match(r'!ow', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
+            path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
             if len(content) != 2:
                 await self.send_message(
                     message.channel,
@@ -655,12 +658,13 @@ class Beymax(discord.Client):
             else:
                 username = content[1].replace('#', '-')
                 try:
-                    state = load_db('stats.json')
+                    state = load_db(path)
+                    current, img = get_mmr(username)
                     state[message.author.id] = {
                         'tag': username,
                         'rating': 0
                     }
-                    save_db(state, 'stats.json')
+                    save_db(state, path)
                     await self.send_message(
                         message.channel,
                         "Alright! I'll keep track of your stats"
@@ -923,6 +927,8 @@ class Beymax(discord.Client):
             self.party_update_time = current
 
     async def update_overwatch(self):
+        if os.path.isfile('stats_interim.json'):
+            return
         state = load_db('stats.json')
         for uid, data in state.items():
             tag = data['tag']
