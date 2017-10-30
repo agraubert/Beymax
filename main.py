@@ -8,6 +8,8 @@ import json
 from pyemojify import emojify
 import random
 import threading
+import os
+import shutil
 random.seed()
 
 numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
@@ -24,16 +26,21 @@ numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nin
 #parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
 
 def get_mmr(user):
-    base_url = 'https://masteroverwatch.com/profile/pc/us/'
+    # base_url = 'https://masteroverwatch.com/profile/pc/us/'
+    url = 'http://localhost:4444/api/v3/u/%s/stats' % user
     response = requests.get(
-        base_url + user,
+        url,
         timeout = 3
     )
-    result = re.search(
-        r'<span.*?class=\"[^\"]*mmr[^\"]*\"></span>\"?\s*\"?([0-9,]+)\s*\"?',
-        response.text
-    )
-    return int(result.group(1).replace(',',''))
+    # result = re.search(
+    #     r'<span.*?class=\"[^\"]*mmr[^\"]*\"></span>\"?\s*\"?([0-9,]+)\s*\"?',
+    #     response.text
+    # )
+    # return int(result.group(1).replace(',',''))
+    data = response.json()
+    rank = data['us']['stats']['competitive']['overall_stats']['comprank']
+    img = data['us']['stats']['competitive']['overall_stats']['avatar']
+    return (rank if rank is not None else 0, img)
 
 def rank(rating):
     if rating <=1499:
@@ -374,7 +381,7 @@ class HelpSession:
         elif self.stage == 'explain-bot':
             choice = binwords(
                 cmd,
-                yes=['yes', 'sure', 'ok', 'yep', 'please'],
+                yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
                 no=['no', 'nope', 'na', 'thanks']
             )
             if choice is None:
@@ -402,7 +409,7 @@ class HelpSession:
                     party['name'].split() for party in load_db('parties.json', [])
                 ],
                 help=['help'],
-                yes=['yes', 'sure', 'ok', 'yep', 'please'],
+                yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
                 no=['no', 'nope', 'nah', 'thanks']
             )
             if choice is None:
@@ -578,8 +585,9 @@ class Beymax(discord.Client):
                     tag = data['tag']
                     rating = data['rating']
                     try:
-                        current = get_mmr(tag)
+                        current, img = get_mmr(tag)
                         state[uid]['rating'] = current
+                        state[uid]['avatar'] = img
                     except:
                         pass
                 ranked = [(data['tag'], uid, int(data['rating']), rank(int(data['rating']))) for uid, data in state.items()]
@@ -598,7 +606,10 @@ class Beymax(discord.Client):
                         "In "+index[tag]+" place, "+
                         (self.users[uid]['mention'] if uid in self.users else tag)+
                         " with a rating of "+str(rating)+"\n"
-                        +encourage(rn)
+                        +encourage(rn) + (
+                            ('\n'+state[uid]['avatar']) if 'avatar' in state[uid]
+                            else ''
+                        )
                     )
                 await self.send_message(
                     self.general,
@@ -607,11 +618,32 @@ class Beymax(discord.Client):
                 )
             for uid in state:
                 state[uid]['rating'] = 0
-            save_db(state, 'stats.json')
+            save_db(state, 'stats_interim.json')
+            if os.path.isfile('stats.json'):
+                os.remove('stats.json')
 
         elif re.match(r'!owupdate', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.update_overwatch()
+        elif re.match(r'!_owinit', content[0]):
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            shutil.move('stats_interim.json', 'stats.json')
+            body = "The new Overwatch season has started! Here are the users I'm "
+            body += "currently tracking statistics for:\n"
+            stats = load_db('stats.json')
+            for uid in stats:
+                body += '%s as %s\n' % (
+                    self.users[uid]['name'],
+                    stats[uid]['tag']
+                )
+                stats[uid]['rating'] = 0
+            body += "If anyone else would like to be tracked, use the `!ow` command."
+            body += " Good luck to you all!"
+            await self.send_message(
+                self.general,
+                body
+            )
+            save_db(stats, 'stats.json')
         elif re.match(r'!ow', content[0]):
             print("Command in channel", message.channel, "from", message.author, ":", content)
             if len(content) != 2:
@@ -896,8 +928,9 @@ class Beymax(discord.Client):
             tag = data['tag']
             rating = data['rating']
             try:
-                current = get_mmr(tag)
+                current, img = get_mmr(tag)
                 state[uid]['rating'] = current
+                state[uid]['avatar'] = img
                 currentRank = rank(current)
                 oldRank = rank(int(rating))
                 if currentRank[0] > oldRank[0]:
@@ -906,6 +939,8 @@ class Beymax(discord.Client):
                     body += " who just reached "
                     body += currentRank[1]
                     body += " in Overwatch!"
+                    if 'avatar' in state[uid]:
+                        body += '\n'+state[uid]['avatar']
                     if currentRank[0] >= 4:
                         # Ping the channel for anyone who reached platinum or above
                         body = body.replace('Everyone', '@everyone')
