@@ -592,10 +592,10 @@ class Beymax(discord.Client):
                 index = {
                     ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
                 }
-                for uid,tag,rating,(rn,rclass) in ranked:
+                for tag,uid,rating,(rn,rclass) in ranked:
                     await self.send_message(
                         self.general,
-                        "In "+index[user]+" place, "+
+                        "In "+index[tag]+" place, "+
                         (self.users[uid]['mention'] if uid in self.users else tag)+
                         " with a rating of "+str(rating)+"\n"
                         +encourage(rn)
