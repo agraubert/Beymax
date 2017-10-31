@@ -647,7 +647,7 @@ class Beymax(discord.Client):
                         "No bug with that ID"
                     )
                 else:
-                    bugs[bugid]['status'] = content[2]
+                    bugs[bugid]['status'] = ' '.join(content[2:])
                     await self.send_message(
                         self.bots_n_bugs,
                         'Issue status changed:\n'
