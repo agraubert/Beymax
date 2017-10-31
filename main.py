@@ -891,6 +891,7 @@ class Beymax(discord.Client):
         elif content[0] == '!output-dev':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._testing_grounds
+            self.bots_n_bugs = self._testing_grounds
             await self.send_message(
                 self._testing_grounds,
                 "Development mode enabled. All messages will be sent to testing grounds"
@@ -898,6 +899,7 @@ class Beymax(discord.Client):
         elif content[0] == '!output-prod':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._general
+            self.bots_n_bugs = self._bots_n_bugs
             await self.send_message(
                 self._testing_grounds,
                 "Production mode enabled. All messages will be sent to general"
