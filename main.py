@@ -714,6 +714,7 @@ class Beymax(discord.Client):
                 else:
                     try:
                         user = await self.get_user_info(content[2])
+                        bugs[bugid]['users'].append(user.id)
                         await self.send_message(
                             user,
                             "You have been added to the following issue by %s:\n"
