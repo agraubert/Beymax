@@ -505,6 +505,12 @@ class Beymax(discord.Client):
             name='testing_grounds',
             type=discord.ChannelType.text
         )
+        self._bots_n_bugs = discord.utils.get(
+            self.get_all_channels(),
+            name='bots_n_bugs',
+            type=discord.ChannelType.text
+        )
+        self.bots_n_bugs = self._bots_n_bugs
         self.general = self._general
         # self.timer = threading.Timer(self.update_interval, self.update_overwatch)
         # self.timer.start()
@@ -536,7 +542,7 @@ class Beymax(discord.Client):
             return
         # print("Message in channel:", message.channel.name)
         # print("Content:", content)
-        if re.match(r'!ouch', content[0]):
+        if content[0] == '!ouch':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.send_message(
                 message.author,
@@ -547,7 +553,7 @@ class Beymax(discord.Client):
                 "What seems to be the problem?"
             )
             self.help_sessions[message.author] = HelpSession(self, message.author)
-        elif re.match(r'!poll', content[0]):
+        elif content[0] == '!poll':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             opts = ' '.join(content[1:]).split('|')
             title = opts.pop(0)
@@ -569,17 +575,215 @@ class Beymax(discord.Client):
                     (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
                 )
             await self.delete_message(message)
-        elif re.match(r'!kill-beymax', content[0]) or re.match(r'!satisfied', content[0]):
+        elif content[0] in {'!kill-beymax', '!satisfied'}:
             print("Command in channel", message.channel, "from", message.author, ":", content)
             save_db(self.users, 'users.json')
             await self.close()
-        elif re.match(r'!_greet', content[0]):
+        elif content[0] == '!_greet':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.on_member_join(message.author)
-        elif re.match(r'!_announce', content[0]):
+        elif content[0] == '!bug':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            bugs.append({
+                'users': [message.author.id],
+                'status': 'Pending', #pending->investigating->solution in progress->testing solution->closed
+                'content': ' '.join(content[1:]),
+                'comments':[],
+                'label': ' '.join(content[1:])
+            })
+            await self.send_message(
+                self.bots_n_bugs,
+                'New issue reported:\n'
+                '[%d] [pending] %s : %s' % (
+                    len(bugs)-1,
+                    message.author.mention,
+                    bugs[-1]['content']
+                )
+            )
+            save_db(bugs, 'bugs.json')
+        elif content[0] == '!bug:comment':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    bugs[bugid]['comments'].append(' '.join(content[2:]))
+                    await self.send_message(
+                        self.bots_n_bugs,
+                        'New comment on issue:\n'
+                        '[%d] [%s] %s : %s\n'
+                        'Comment: [%s] : %s' % (
+                            bugid,
+                            bugs[bugid]['status'],
+                            ' '.join(
+                                self.users[user]['mention'] for user in
+                                bugs[bugid]['users']
+                            ),
+                            bugs[bugid]['label'],
+                            message.author.mention,
+                            bugs[bugid]['comments'][-1]
+                        )
+                    )
+                    save_db(bugs, 'bugs.json')
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
+        elif content[0] == '!bug:status':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    bugs[bugid]['status'] = content[2]
+                    await self.send_message(
+                        self.bots_n_bugs,
+                        'Issue status changed:\n'
+                        '[%d] [%s] %s : %s' % (
+                            bugid,
+                            bugs[bugid]['status'],
+                            ' '.join(
+                                self.users[user]['mention'] for user in
+                                bugs[bugid]['users']
+                            ),
+                            bugs[bugid]['label'],
+                        )
+                    )
+                    save_db(bugs, 'bugs.json')
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
+        elif content[0] == '!bug:label':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    label = ' '.join(content[2:])
+                    await self.send_message(
+                        self.bots_n_bugs,
+                        'Issue label changed:\n'
+                        '[%d] [%s] %s : %s\n'
+                        'New label: %s' % (
+                            bugid,
+                            bugs[bugid]['status'],
+                            ' '.join(
+                                self.users[user]['mention'] for user in
+                                bugs[bugid]['users']
+                            ),
+                            bugs[bugid]['label'],
+                            label
+                        )
+                    )
+                    bugs[bugid]['label'] = label
+                    save_db(bugs, 'bugs.json')
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
+        elif content[0] == '!bug:user':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    try:
+                        user = await self.get_user_info(content[2])
+                        await self.send_message(
+                            user,
+                            "You have been added to the following issue by %s:\n"
+                            '[%d] [%s] : %s\n'
+                            'If you would like to unsubscribe from this issue, '
+                            'type `!bug:unsubscribe %d`'% (
+                                str(message.author),
+                                bugid,
+                                bugs[bugid]['status'],
+                                bugs[bugid]['label'],
+                                bugid
+                            )
+                        )
+                        await self.send_message(
+                            message.channel,
+                            "Added user to issue"
+                        )
+                        save_db(bugs, 'bugs.json')
+                    except:
+                        await self.send_message(
+                            message.channel,
+                            "No user with that ID"
+                        )
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
+        elif content[0] == '!bug:unsubscribe':
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    if bugs[bugid]['users'][0] == message.author.id:
+                        await self.send_message(
+                            message.channel,
+                            "As the creator of this issue, you cannot unsubscribe"
+                        )
+                    elif message.author.id not in bugs[bugid]['users']:
+                        await self.send_message(
+                            message.channel,
+                            "You are not subscribed to this issue"
+                        )
+                    else:
+                        bugs[bugid]['users'].remove(message.author.id)
+                        await self.send_message(
+                            message.channel,
+                            "You have been unsubscribed from this issue:\n"
+                            '[%d] [%s] : %s' % (
+                                bugid,
+                                bugs[bugid]['status'],
+                                bugs[bugid]['label']
+                            )
+                        )
+                        save_db(bugs, 'bugs.json')
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
+        elif content[0] == '!_announce':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.send_message(self.general, message.content.strip().replace('!_announce', ''))
-        elif re.match(r'!_owreset', content[0]):
+        elif content[0] == '!_owreset':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             state = load_db('stats.json')
             if len(state):
@@ -624,10 +828,10 @@ class Beymax(discord.Client):
             if os.path.isfile('stats.json'):
                 os.remove('stats.json')
 
-        elif re.match(r'!owupdate', content[0]):
+        elif content[0] == '!owupdate':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             await self.update_overwatch()
-        elif re.match(r'!_owinit', content[0]):
+        elif content[0] == '!_owinit':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             shutil.move('stats_interim.json', 'stats.json')
             body = "The new Overwatch season has started! Here are the users I'm "
@@ -646,7 +850,7 @@ class Beymax(discord.Client):
                 body
             )
             save_db(stats, 'stats.json')
-        elif re.match(r'!ow', content[0]):
+        elif content[0] == '!ow':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
             if len(content) != 2:
@@ -659,7 +863,7 @@ class Beymax(discord.Client):
                 username = content[1].replace('#', '-')
                 try:
                     state = load_db(path)
-                    current, img = get_mmr(username)
+                    get_mmr(username)
                     state[message.author.id] = {
                         'tag': username,
                         'rating': 0
@@ -684,21 +888,21 @@ class Beymax(discord.Client):
                         "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
                         "Battle-tags are case-sensitive, so make sure you typed everything correctly"
                     )
-        elif re.match(r'!output-dev', content[0]):
+        elif content[0] == '!output-dev':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._testing_grounds
             await self.send_message(
                 self._testing_grounds,
                 "Development mode enabled. All messages will be sent to testing grounds"
             )
-        elif re.match(r'!output-prod', content[0]):
+        elif content[0] == '!output-prod':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             self.general = self._general
             await self.send_message(
                 self._testing_grounds,
                 "Production mode enabled. All messages will be sent to general"
             )
-        elif re.match(r'!birthday', content[0]):
+        elif content[0] == '!birthday':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             if len(content) < 2 or not re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1]):
                 await self.send_message(
@@ -719,7 +923,7 @@ class Beymax(discord.Client):
                     "Okay, I'll remember that"
                 )
                 save_db(birthdays, 'birthdays.json')
-        elif re.match(r'!party', content[0]):
+        elif content[0] == '!party':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             if message.server is not None:
                 parties = load_db('parties.json', [])
@@ -778,7 +982,7 @@ class Beymax(discord.Client):
                         'time': time.time()
                     })
                 save_db(parties, 'parties.json')
-        elif re.match(r'!disband', content[0]):
+        elif content[0] == '!disband':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             if message.server is not None:
                 parties = load_db('parties.json', [])
