@@ -45,7 +45,7 @@ def EnablePolls(bot):
             if user.id not in reactors:
                 await bot.send_message(
                     creator,
-                    user+" has voted on your poll in "+reaction.message.channel.name
+                    getname(user)+" has voted on your poll in "+reaction.message.channel.name
                 )
                 bot.polls[reaction.message.id][1].add(user.id)
     bot.on_reaction_add = on_reaction_add
