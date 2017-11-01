@@ -5,6 +5,8 @@ from bots.help import EnableHelp
 from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
+import discord
+import asyncio
 
 #schemas:
 #stats: {id: {tag:battletag, rank:last_ranking}}

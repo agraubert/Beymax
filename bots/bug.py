@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import load_db, save_db, getname
+import asyncio
 
 def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
