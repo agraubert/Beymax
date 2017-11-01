@@ -98,6 +98,8 @@ def ConstructBeymax():
         EnablePolls
     )
 
+    return beymax
+
 if __name__ == '__main__':
     with open("token.txt") as r:
         ConstructBeymax().run(r.read().strip())
