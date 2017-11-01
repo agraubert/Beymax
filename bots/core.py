@@ -40,7 +40,7 @@ class CoreBot(discord.Client):
         return self
 
     async def on_ready(self):
-        print("Commands:", self.commands)
+        print("Commands:", [cmd for cmd in self.commands])
         self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
@@ -87,8 +87,6 @@ class CoreBot(discord.Client):
                 print("Running task", task)
                 await task(self)
                 self.update_times[i] = current
-            else:
-                print("Skipping task", task)
 
 def EnableUtils(bot): #prolly move to it's own bot
     if not isinstance(bot, CoreBot):
