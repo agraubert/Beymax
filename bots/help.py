@@ -383,4 +383,15 @@ def EnableHelp(bot):
         await self.help_sessions[message.author.id].digest(message.content)
         self.help_sessions = {user:session for user,session in self.help_sessions.items() if session.active}
 
+    def confused(self, message):
+        return isinstance(message.channel, discord.PrivateChannel) and message.author.id not in self.help_sessions
+
+    @bot.add_special(confused)
+    async def suggest_help(self, message, content):
+        await self.send_message(
+            message.channel,
+            "I can't tell if you're asking for my help or not. If you woul like"
+            " to start a help session, say `!ouch`"
+        )
+
     return bot
