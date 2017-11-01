@@ -594,7 +594,7 @@ class Beymax(discord.Client):
             })
             await self.send_message(
                 self.bots_n_bugs,
-                'New issue reported:\n'
+                'New issue reported: <@&308683717419991043>\n' #@developer
                 '[%d] [pending] %s : %s' % (
                     len(bugs)-1,
                     message.author.mention,
