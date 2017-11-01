@@ -112,7 +112,6 @@ class HelpSession:
     async def stage_commands(self):
         self.stage = 'stage-commands'
         if self.aux == 'beymax':
-            Commands: ['!bug']
             await self.client.send_message( #->generalize from self.commands
                 self.user,
                 "Here is the list of commands I currently support:\n"
