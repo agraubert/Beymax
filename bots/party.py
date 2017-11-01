@@ -114,7 +114,7 @@ def EnableParties(bot):
         parties = load_db('parties.json', [])
         pruned = []
         for i in range(len(parties)):
-            if current - parties[i]['time'] >= 86400:
+            if current - parties[i]['time'] >= 86400: # 24 hours
                 channel = discord.utils.get(
                     self.get_all_channels(),
                     id=parties[i]['id'],

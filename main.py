@@ -5,6 +5,7 @@ from bots.help import EnableHelp
 from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
+from bots.cash import EnableCash
 import discord
 import asyncio
 import random
@@ -99,7 +100,8 @@ def ConstructBeymax():
         EnableHelp,
         EnableOverwatch,
         EnableParties,
-        EnablePolls
+        EnablePolls,
+        EnableCash
     )
 
     return beymax

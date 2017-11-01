@@ -17,7 +17,7 @@ def EnableBirthday(bot):
                 " example: `!birthday 1/1/1970`"
             )
         else:
-            result = re.match(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', content[1])
+            result = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1])
             birthdays = load_db('birthdays.json')
             birthdays[message.author.id] = {
                 'month': int(result.group(1)),
