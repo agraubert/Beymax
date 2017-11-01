@@ -38,7 +38,7 @@ def select_status():
 class Beymax(CoreBot):
 
     async def on_ready(self):
-        await super().on_reader()
+        await super().on_ready()
         print('Logged in as')
         print(self.user.name)
         print(self.user.id)
