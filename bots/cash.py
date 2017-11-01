@@ -47,8 +47,8 @@ def EnableCash(bot):
                     self.general,
                     '@everyone %s has generously donated $%0.2f towards %s, which puts us'
                     ' at %.0f%% of the $%d goal. If you would like to donate, '
-                    'venmo %d and mention %s in the payment' % (
-                        self.users[uid]['fullname'],
+                    'venmo %s and mention %s in the payment' % (
+                        self.users[uid]['mention'],
                         amount,
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
@@ -71,11 +71,12 @@ def EnableCash(bot):
             )
         else:
             cash = load_db('cash.json')
-            full = args[0]
-            short = args[1]
-            end = args[2]
-            goal = args[3]
-            account = args[4]
+            print(args)
+            full = args[0].strip()
+            short = args[1].strip()
+            end = args[2].strip()
+            goal = args[3].strip()
+            account = args[4].strip()
             if len(short.split())>1:
                 await self.send_message(
                     message.channel,
@@ -113,7 +114,7 @@ def EnableCash(bot):
                         'current': 0,
                         'title': full,
                         'contributions': [],
-                        'notified': 0,
+                        'notified': time.time(),
                         'end': {
                             'year': int(end.group(3)),
                             'month': int(end.group(1)),
@@ -139,14 +140,13 @@ def EnableCash(bot):
                         message.author,
                         "You have created the funding project `%s`. Currently, "
                         "you must manually notify me when you get paid. The command"
-                        " for this is `!_project`. For example, if I paid you $10"
-                        ", you would use `!_project %s %s $10` (%s is my user id)."
-                        " To get user IDs, you must be in development mode, then"
+                        " for this is `!_payment`.\nFor example, if I paid you $10"
+                        ", you would use `!_project %s %s $10` (that number is my user id)."
+                        "\nTo get user IDs, you must be in development mode, then"
                         " right click on a user and select 'Copy ID'" % (
                             short,
                             short,
                             self.user.id,
-                            self.user.id
                         )
                     )
                     save_db(cash, 'cash.json')
