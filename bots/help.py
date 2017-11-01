@@ -408,7 +408,7 @@ def EnableHelp(bot):
     async def suggest_help(self, message, content):
         await self.send_message(
             message.channel,
-            "I can't tell if you're asking for my help or not. If you woul like"
+            "I can't tell if you're asking for my help or not. If you would like"
             " to start a help session, say `!ouch`"
         )
 
