@@ -83,8 +83,11 @@ class CoreBot(discord.Client):
         for i, (interval, task) in enumerate(self.tasks):
             last = self.update_times[i]
             if current - last > interval:
+                print("Running task", task)
                 await task(self)
                 self.update_times[i] = current
+            else:
+                print("Skipping task", task)
 
 def EnableUtils(bot): #prolly move to it's own bot
     if not isinstance(bot, CoreBot):
