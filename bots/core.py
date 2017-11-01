@@ -40,6 +40,7 @@ class CoreBot(discord.Client):
         return self
 
     async def on_ready(self):
+        print("Commands:", self.commands)
         self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
