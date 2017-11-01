@@ -27,7 +27,7 @@ class CoreBot(discord.Client):
 
     def add_special(self, check):
         def wrapper(func):
-            self.special.append(check, func)
+            self.special.append((check, func))
             return func
         return wrapper
 
