@@ -112,6 +112,7 @@ class HelpSession:
     async def stage_commands(self):
         self.stage = 'stage-commands'
         if self.aux == 'beymax':
+            Commands: ['!bug']
             await self.client.send_message( #->generalize from self.commands
                 self.user,
                 "Here is the list of commands I currently support:\n"
@@ -126,6 +127,14 @@ class HelpSession:
                 " : Creates a reaction based poll. Use `|` to separate the title"
                 " and each option (up to ten options). Example: `!poll Is beymax"
                 " cool? | Yes | Absolutely`\n"
+                "`!bug [feedback or bug report]` : Opens a new ticket with your"
+                " feedback. Example: `!bug Beymax didn't understand me in a help session`\n"
+                "`!comment <bug ID> [your comment]` : Comments on an open issue."
+                " Example: `!comment 2 The help system is working great!`\n"
+                "`!thread <bug ID>` : Pulls up the full comment thread of an issue. "
+                "Example: `!thread 2`\n"
+                "`!bug:unsubscribe <bug ID>` : Removes you from the list of mentions"
+                " on an open issue. Example: `!bug:unsubscribe 2`\n"
                 "`!ouch` : Asks for my help, but you already knew how to use this one"
             )
         elif self.aux == 'octavia':
@@ -237,7 +246,9 @@ class HelpSession:
             if choice is None:
                 await self.client.send_message(
                     self.user,
-                    "I didn't quite understand what you meant by that"
+                    "I didn't quite understand what you meant by that."
+                    " If you think I should have been able to understand, "
+                    " type `!bug Beymax didn't understand '%s'`" % message
                 )
                 # await self.stage_default()
             elif choice == 'bots':
@@ -265,7 +276,9 @@ class HelpSession:
             if choice is None:
                 await self.client.send_message(
                     self.user,
-                    "I didn't quite understand what you meant by that"
+                    "I didn't quite understand what you meant by that."
+                    " If you think I should have been able to understand, "
+                    " type `!bug Beymax didn't understand '%s'`" % message
                 )
             elif choice == 'back':
                 await self.stage_default()
@@ -281,7 +294,9 @@ class HelpSession:
             if choice is None:
                 await self.client.send_message(
                     self.user,
-                    "I didn't quite understand what you meant by that"
+                    "I didn't quite understand what you meant by that."
+                    " If you think I should have been able to understand, "
+                    " type `!bug Beymax didn't understand '%s'`" % message
                 )
             elif choice == 'yes':
                 await self.stage_commands()
@@ -310,7 +325,9 @@ class HelpSession:
             if choice is None:
                 await self.client.send_message(
                     self.user,
-                    "I didn't quite understand what you meant by that"
+                    "I didn't quite understand what you meant by that."
+                    " If you think I should have been able to understand, "
+                    " type `!bug Beymax didn't understand '%s'`" % message
                 )
             elif choice == 'yes':
                 await self.stage_default()
@@ -350,7 +367,9 @@ class HelpSession:
             if choice is None:
                 await self.client.send_message(
                     self.user,
-                    "I didn't quite understand what you meant by that"
+                    "I didn't quite understand what you meant by that."
+                    " If you think I should have been able to understand, "
+                    " type `!bug Beymax didn't understand '%s'`" % message
                 )
             elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
                 self.aux = choice
