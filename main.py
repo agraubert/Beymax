@@ -613,8 +613,7 @@ class Beymax(discord.Client):
                         "No bug with that ID"
                     )
                 else:
-                    body = '[%d] [%s] %s : %s\n'
-                    'Issue: %s\n' % (
+                    body = '[%d] [%s] %s : %s\n' % (
                         bugid,
                         bugs[bugid]['status'],
                         ' '.join(
@@ -622,8 +621,8 @@ class Beymax(discord.Client):
                             bugs[bugid]['users']
                         ),
                         bugs[bugid]['label'],
-                        bugs[bugid]['content']
                     )
+                    body += 'Issue: %s\n' % bugs[bugid]['content']
                     for comment in bugs[bugid]['comments']:
                         body += 'Developer Comment: %s\n' % comment
                     await self.send_message(
