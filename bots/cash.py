@@ -127,7 +127,8 @@ def EnableCash(bot):
                         '%s has started a new funding project:\n'
                         'Raise $%d by %s for %s\n'
                         'If you would like to donate, venmo %s and mention %s'
-                        ' in the payment' % (
+                        ' in the payment\n'
+                        'Remember, all projects are pay-what-you-want' % (
                             message.author.mention,
                             goal,
                             args[2],
