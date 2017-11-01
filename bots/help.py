@@ -221,7 +221,8 @@ class HelpSession:
                 cmd,
                 bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'] + [command[1:] for command in self.client.commands],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                beymax_commands=[command[1:] for command in self.client.commands],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
@@ -244,6 +245,9 @@ class HelpSession:
             elif choice in {'octavia', 'beymax'}:
                 self.aux = choice
                 await self.stage_explain_bot()
+            elif choice == 'beymax_commands':
+                self.aux = 'beymax'
+                await self.stage_commands()
             elif choice == 'channels':
                 await self.stage_channels()
             elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
@@ -288,7 +292,8 @@ class HelpSession:
                 cmd,
                 bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'] + [command[1:] for command in self.client.commands],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                beymax_commands=[command[1:] for command in self.client.commands],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
@@ -314,6 +319,9 @@ class HelpSession:
             elif choice in {'octavia', 'beymax'}:
                 self.aux = choice
                 await self.stage_explain_bot()
+            elif choice == 'beymax_commands':
+                self.aux = 'beymax'
+                await self.stage_commands()
             elif choice == 'channels':
                 await self.stage_channels()
             elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
