@@ -29,7 +29,8 @@ def EnablePolls(bot):
                 target,
                 (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
             )
-        await self.delete_message(message)
+        if not isinstance(message.channel, discord.PrivateChannel):
+            await self.delete_message(message)
         self.polls[target.id] = (message.author, set())
 
     if 'on_reaction_add' in dir(bot):

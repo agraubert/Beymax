@@ -80,6 +80,7 @@ class CoreBot(discord.Client):
             for check, func in self.special:
                 if check(self, message):
                     await func(self, message, content)
+                    break
         current = time.time()
         for i, (interval, task) in enumerate(self.tasks):
             last = self.update_times[i]
