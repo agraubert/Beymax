@@ -10,8 +10,9 @@ class CoreBot(discord.Client):
     tasks = [] # [interval(s), function] functions take (self)
     special = [] # [callable, function] callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
 
-    def add_command(self, cmd, *cmds):
-        cmds = [cmd]+cmds
+    def add_command(self, *cmds):
+        if not len(cmds):
+            raise ValueError("Must provide at least one command")
         def wrapper(func):
             for cmd in cmds:
                 self.commands[cmd] = func
