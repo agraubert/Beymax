@@ -46,9 +46,9 @@ def EnableCash(bot):
                 await self.send_message(
                     self.general,
                     '@everyone %s has generously donated $%0.2f towards %s, which puts us'
-                    ' at %.0f%% of the $%d goal. If you would like to donate, '
-                    'venmo %s and mention %s in the payment' % (
-                        self.users[uid]['mention'],
+                    ' at %.0f%% of the $%d goal.\nIf you would like to donate, '
+                    'venmo `%s` and mention `%s` in the payment' % (
+                        self.users[uid]['mention'] if uid in self.users else '<Anonymous>',
                         amount,
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
@@ -126,7 +126,7 @@ def EnableCash(bot):
                         self.general,
                         '%s has started a new funding project:\n'
                         'Raise $%d by %s for %s\n'
-                        'If you would like to donate, venmo %s and mention %s'
+                        'If you would like to donate, venmo `%s` and mention `%s`'
                         ' in the payment\n'
                         'Remember, all projects are pay-what-you-want' % (
                             message.author.mention,
@@ -187,8 +187,8 @@ def EnableCash(bot):
                     self.general,
                     "Funds are still being collected for %s\n"
                     "Current progress: $%0.2f/$%d (%.0f%%)\n"
-                    "Project ends: %d/%d/%d"
-                    'If you would like to donate, venmo %s and mention %s'
+                    "Project ends: %d/%d/%d\n"
+                    'If you would like to donate, venmo `%s` and mention `%s`'
                     ' in the payment' % (
                         data['title'],
                         data['current'],
