@@ -219,9 +219,9 @@ class HelpSession:
         if self.stage == 'default':
             choice = binwords(
                 cmd,
-                bots=['bots', 'apps', 'robots'] + [command[1:] for command in self.client.commands],
+                bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'] + [command[1:] for command in self.client.commands],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
@@ -286,9 +286,9 @@ class HelpSession:
         elif self.stage == 'terminal':
             choice = binwords(
                 cmd,
-                bots=['bots', 'apps', 'robots'] + [command[1:] for command in self.client.commands],
+                bots=['bots', 'apps', 'robots'],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'] + [command[1:] for command in self.client.commands],
                 channels=['channels', 'groups', 'messages', 'channel'],
                 general=['general'],
                 jukebox=['jukebox'],
