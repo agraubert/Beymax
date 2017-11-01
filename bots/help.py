@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import sanitize
+from .utils import sanitize, load_db
 import discord
 import asyncio
 
