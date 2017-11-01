@@ -142,8 +142,8 @@ def EnableCash(bot):
                         "You have created the funding project `%s`. Currently, "
                         "you must manually notify me when you get paid. The command"
                         " for this is `!_payment`.\nFor example, if I paid you $10"
-                        ", you would use `!_project %s %s $10` (that number is my user id)."
-                        "\nTo get user IDs, you must be in development mode, then"
+                        ", you would use `!_payment %s %s $10` \n(that number is my user id)."
+                        " To get user IDs, you must be in development mode, then"
                         " right click on a user and select 'Copy ID'" % (
                             short,
                             short,
