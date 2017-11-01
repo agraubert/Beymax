@@ -1,18 +1,11 @@
-import discord
-import re
-import asyncio
-import requests
-import time
-import datetime
-import json
-from pyemojify import emojify
-import random
-import threading
-import os
-import shutil
-random.seed()
+from bots.core import CoreBot, EnableUtils
+from bots.birthday import EnableBirthday
+from bots.bug import EnableBugs
+from bots.help import EnableHelp
+from bots.ow import EnableOverwatch
+from bots.party import EnableParties
+from bots.poll import EnablePolls
 
-numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 #schemas:
 #stats: {id: {tag:battletag, rank:last_ranking}}
 #users:
@@ -24,40 +17,6 @@ numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nin
 # }
 #birthdays = {id:{month, day, year}}
 #parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
-
-def get_mmr(user):
-    # base_url = 'https://masteroverwatch.com/profile/pc/us/'
-    url = 'http://localhost:4444/api/v3/u/%s/stats' % user
-    response = requests.get(
-        url,
-        timeout = 3
-    )
-    # result = re.search(
-    #     r'<span.*?class=\"[^\"]*mmr[^\"]*\"></span>\"?\s*\"?([0-9,]+)\s*\"?',
-    #     response.text
-    # )
-    # return int(result.group(1).replace(',',''))
-    if response.status_code == 404:
-        raise ValueError("Bad Username")
-    data = response.json()
-    rank = data['us']['stats']['competitive']['overall_stats']['comprank']
-    img = data['us']['stats']['competitive']['overall_stats']['avatar']
-    return (rank if rank is not None else 0, img)
-
-def rank(rating):
-    if rating <=1499:
-        return (1,'Bronze')
-    elif rating <=1999:
-        return (2,'Silver')
-    elif rating <=2499:
-        return (3,'Gold')
-    elif rating <=2999:
-        return (4,'Platinum')
-    elif rating <=3499:
-        return (5,'Diamond')
-    elif rating <=3999:
-        return (6,'Master')
-    return (7,'Grand Master')
 
 def select_status():
     return random.sample(
@@ -76,408 +35,10 @@ def select_status():
         1
     )[0]
 
-def sanitize(string, illegal, replacement=''):
-    for char in illegal:
-        string = string.replace(char, replacement)
-    return string
-
-def encourage(n):
-    if n <=2:
-        pool = [
-            "Good show! You gave it your all, and that's is an achivement in itself",
-            "Well done! You certainly did better than I could have",
-            "Meh."
-        ]
-    elif n<=4:
-        pool = [
-            "Excellent! That's no small feat!",
-            "Very well done! I'm sure I could learn something from you",
-            "Fantastic job! I'm proud of you!",
-            "That's like, okay, I guess"
-        ]
-    elif n<=6:
-        pool = [
-            "Incredible! Advancing beyond Platinum is a monumental achivement!",
-            "Wow! You climbed out of the masses and found yourself at the very peak!",
-            "I've seen better"
-        ]
-    else:
-        pool = [
-            "Holy shit! You put your skills to the test, and came out on the very top!  Nicely, done!"
-        ]
-    return random.sample(pool,1)[0]
-
-
-def postfix(n):
-    if n[-1] == '1':
-        return n+'st'
-    elif n[-1] == '2':
-        return n+'nd'
-    elif n[-1] == '3':
-        return n+'rd'
-    return n+'th'
-
-def binwords(message, **bins):
-    try:
-        lookup = {member:target for target,members in bins.items() for member in members}
-        results = {}
-        for word in message.split():
-            if word in lookup:
-                key = lookup[word]
-                if key not in results:
-                    results[key] = 1
-                else:
-                    results[key] += 1
-        return max(
-            (count, item) for item,count in results.items()
-        )[-1]
-    except:
-        return
-
-class HelpSession:
-    def __init__(self, client, user):
-        self.client = client
-        self.user = user
-        self.stage = 'default'
-        self.aux = None
-        self.active = True
-
-    async def stage_default(self):
-        await self.client.send_message(
-            self.user,
-            "You can ask me for help with the bots, or the channels, but "+
-            "if you're not sure what sort of things I can do, just say `help`\n"+
-            "What seems to be the problem?"
-        )
-        self.stage='default'
-
-    async def stage_help(self):
-        await self.client.send_message(
-            self.user,
-            "Over the course of this conversation, I'll do my best to answer any "+
-            "questions you may have regarding this server and its features.\n"+
-            "You can respond to these messages in normal English, and I'll "+
-            "do my best to determine what you want. However, if you're having "+
-            "trouble getting your point across to me, you can try using single "+
-            "word responses, like you're talking to a computer."
-        )
-        self.stage = 'default'
-
-    async def stage_bots(self):
-        await self.client.send_message(
-            self.user,
-            "Right now, there are two bots on this server:\n"+
-            "First and foremost, is **Octavia**, our DJ.  She's here to "
-            "make sure everyone always has access to some sweet tunes.\n"
-            "And then obviously there's me, **Beymax**. I'm here to help you "
-            "out and answer any questions you have, as well as some other "
-            "utilities like making polls or creating parties.\n"
-            "If you have any further questions about the bots, just type "
-            "one of our names. Or, if you'd like to go back, just say so."
-        )
-        self.stage = 'bots'
-
-    async def stage_channels(self):
-        await self.client.send_message(
-            self.user,
-            "On this server, we try to keep different discussions organized "
-            "into separate channels.\n"
-            "There's the `general` text channel and `General` voice channel "
-            "which are pretty much for whatever you want (first come, first served).\n"
-            "The `testing grounds` channels are where bots like myself are "
-            "tested before deployment.\n"
-            "The `rpg` text and `RPG` voice channels are for discussions related "
-            "to the various tabletop games in progress. If you'd like to join "
-            "rpg group, reach out to *Brightfire* or *GarethDen*.\n"
-            "There's also the `AFK` voice channel, which is where we put you "
-            "if you're silent in a voice channel for 30 minutes or so.\n"
-            "Additionally, you may see various voice channels with `Party` in "
-            "the name. These channels are temporary voice channels used when "
-            "`General` is already claimed. You can create one with the `!party` "
-            "command.\n"
-            "If you'd like to know about any channel in particular, just say "
-            "it's name. Otherwise, you can tell me to go back, if you want."
-        )
-        self.stage = 'channels'
-
-    async def stage_explain_bot(self):
-        self.stage = 'explain-bot'
-        if self.aux == 'beymax':
-            await self.client.send_message(
-                self.user,
-                "I am Beymax, your personal ~~healthcare~~ **server** companion.\n"
-                "I'm here to help in situations like this, where someone wans "
-                "to know a bit more about how this server works\n"
-                "I can do lots of things like create polls, track overwatch rank, "
-                "create voice channels, and even greet people as they join the server!\n"
-                "Would you like to know about the commands that I respond to?"
-            )
-        elif self.aux == 'octavia':
-            await self.client.send_message(
-                self.user,
-                "Octavia is a single-purpose bot. She sits politely in whichever "
-                "voice channel she's been summoned to and will play music at "
-                "anyone's request. Please note that there is only one of her, so "
-                "you'll have to share. If someone else is already using Octavia "
-                "please don't summon her into another voice channel.\n"
-                "Would you like to know about the commands that she responds to?"
-            )
-
-    async def stage_commands(self):
-        self.stage = 'stage-commands'
-        if self.aux == 'beymax':
-            await self.client.send_message(
-                self.user,
-                "Here is the list of commands I currently support:\n"
-                "`!ow <battle#tag>` : Tells me to track your overwatch rank using"
-                " that battle tag. Example: `!ow fakename#1234`\n"
-                "`!party [party name]` : Tells me to create a temporary party for"
-                " you. The party name part is optional. Example: `!party Test`\n"
-                "`!disband` : Disbands your party, if you have one\n"
-                "`!birthday <your birthday>` : Informs me of your birthday so I"
-                " can congratulate you when it comes. Example: `!birthday 1/1/1970`\n"
-                "`!poll <poll title> | [poll option 1] | [poll option 2] | etc...`"
-                " : Creates a reaction based poll. Use `|` to separate the title"
-                " and each option (up to ten options). Example: `!poll Is beymax"
-                " cool? | Yes | Absolutely`\n"
-                "`!ouch` : Asks for my help, but you already knew how to use this one"
-            )
-        elif self.aux == 'octavia':
-            await self.client.send_message(
-                self.user,
-                "Here are the common commands that Octavia supports:\n"
-                "`!np` : Asks Octavia about the current song\n"
-                "`!pause` : Asks Octavia to pause the song. Some users may not "
-                "have permission to do this.\n"
-                "`!play <song>` : Asks Octavia to play a song. You can give her"
-                " specific URLs to play (youtube, soundcloud, etc) or you can "
-                "give her some search terms and she'll figure it out (she's pretty"
-                " smart). Example: `!play never gonna give you up`\n"
-                "`!queue` : Asks Octavia about the current playlist\n"
-                "`!skip` : Asks Octavia to skip the current song. Some users may"
-                " not have permission to do this, and will instead vote to skip\n"
-                "`!summon` : Brings Octavia into your current voice channel. "
-                "Please be curteous and don't steal her from another channel if "
-                "she's already plying music for someone else\n"
-                "If you would like more help with Octavia's commands, go to the"
-                " #jukebox channel and say `!help`. You can ask for specific help"
-                " with `!help <command>` (for example: `!help play`)"
-            )
-        await self.stage_terminal()
-
-    async def stage_terminal(self):
-        self.stage = 'terminal'
-        await self.client.send_message(
-            self.user,
-            "Is there anything else I can help you with?"
-        )
-    async def stage_explain_channel(self):
-        self.stage='explain-channel'
-        if self.aux == 'general':
-            await self.client.send_message(
-                self.user,
-                "The general channels are for whatever you want.\n"
-                "Talk about games, talk about life, talk about work, talk about "
-                "talking -- it's up to you. The General voice channel is first-come"
-                " first-serve, so if there's already a group there, you'll need "
-                "to use the `!party` command to create your own channel"
-            )
-        elif self.aux == 'jukebox':
-            await self.client.send_message(
-                self.user,
-                "The jukebox is Octavia's channel. It's the only channel where "
-                "Octavia listens to commands, like `!play` or `!summon`. "
-                "If you're looking to play some tunes, this is the place to go"
-            )
-        elif self.aux == 'testing_grounds':
-            await self.client.send_message(
-                self.user,
-                "The testing ground channels are for development purposes. "
-                "It's where bots, such as myself, are tested out before new features"
-                " make there way out to general use. Locked out? It's nothing "
-                "personal. We just only want you to see us at our best!"
-            )
-        elif self.aux == 'rpgs':
-            await self.client.send_message(
-                self.user,
-                "The RPG channels are for playing RPGs or RPG-related discussion."
-                " It's where people who are part of the various RPGs in our group"
-                "hold RPG discussion so as not to spam the general channels. "
-                "Looking to host or join an RPG? Reach out to Brightfire or "
-                "GarethDen and they'll hook you up."
-            )
-        elif self.aux == 'party':
-            await self.client.send_message(
-                self.user,
-                "Party channels are temporary voice channels used when a group "
-                "doesn't want to use General (or if General's already in use). "
-                "Parties are created with the `!party` command and usually last"
-                " less than a day before I disband them"
-            )
-        elif self.aux == 'afk':
-            await self.client.send_message(
-                self.user,
-                "The AFK channel is where we put people who sit in a voice channel"
-                " without talking or typing for 30 minutes. It's not a punishment"
-                " but it helps keep the voice channels clear if you're not really"
-                " using them"
-            )
-        await self.stage_terminal()
-
-
-    async def digest(self, message):
-        cmd = sanitize(message, '`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"').lower()
-        print("Digest content:", cmd)
-        if self.stage == 'default':
-            choice = binwords(
-                cmd,
-                bots=['bots', 'apps', 'robots'],
-                octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
-                channels=['channels', 'groups', 'messages', 'channel'],
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ],
-                help=['help'],
-            )
-            if choice is None:
-                await self.client.send_message(
-                    self.user,
-                    "I didn't quite understand what you meant by that"
-                )
-                # await self.stage_default()
-            elif choice == 'bots':
-                await self.stage_bots()
-            elif choice in {'octavia', 'beymax'}:
-                self.aux = choice
-                await self.stage_explain_bot()
-            elif choice == 'channels':
-                await self.stage_channels()
-            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
-                self.aux = choice
-                await self.stage_explain_channel()
-            elif choice == 'help':
-                await self.stage_help()
-        elif self.stage == 'bots':
-            choice = binwords(
-                cmd,
-                octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
-                back=['go', 'back']
-            )
-            if choice is None:
-                await self.client.send_message(
-                    self.user,
-                    "I didn't quite understand what you meant by that"
-                )
-            elif choice == 'back':
-                await self.stage_default()
-            elif choice in {'octavia', 'beymax'}:
-                self.aux = choice
-                await self.stage_explain_bot()
-        elif self.stage == 'explain-bot':
-            choice = binwords(
-                cmd,
-                yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
-                no=['no', 'nope', 'na', 'thanks']
-            )
-            if choice is None:
-                await self.client.send_message(
-                    self.user,
-                    "I didn't quite understand what you meant by that"
-                )
-            elif choice == 'yes':
-                await self.stage_commands()
-            else:
-                await self.stage_terminal()
-        elif self.stage == 'terminal':
-            choice = binwords(
-                cmd,
-                bots=['bots', 'apps', 'robots'],
-                octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
-                channels=['channels', 'groups', 'messages', 'channel'],
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ],
-                help=['help'],
-                yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
-                no=['no', 'nope', 'nah', 'thanks']
-            )
-            if choice is None:
-                await self.client.send_message(
-                    self.user,
-                    "I didn't quite understand what you meant by that"
-                )
-            elif choice == 'yes':
-                await self.stage_default()
-            elif choice == 'bots':
-                await self.stage_bots()
-            elif choice in {'octavia', 'beymax'}:
-                self.aux = choice
-                await self.stage_explain_bot()
-            elif choice == 'channels':
-                await self.stage_channels()
-            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
-                self.aux = choice
-                await self.stage_explain_channel()
-            elif choice == 'help':
-                await self.stage_help()
-            else:
-                self.active = False
-                await self.client.send_message(
-                    self.user,
-                    "Okay. Glad to be of service"
-                )
-        elif self.stage == 'channels':
-            choice = binwords(
-                cmd,
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ]
-            )
-            if choice is None:
-                await self.client.send_message(
-                    self.user,
-                    "I didn't quite understand what you meant by that"
-                )
-            elif choice in {'general', 'jukebox', 'testing_grounds', 'rpgs', 'party', 'afk'}:
-                self.aux = choice
-                await self.stage_explain_channel()
-
-
-class Beymax(discord.Client):
-    help_sessions={}
-    general=None
-    update_interval = 3600
-
-    async def send_and_wait(self, *args, **kwargs):
-        await self.send_message(*args, **kwargs)
-        #await self.wait_for_message(author = self.user)
-
-    # def update_and_schedule(self):
-    #     loop = asyncio.get_event_loop()
-    #     loop.run_until_complete(self.update_overwatch())
-    #     loop.close()
-    #     self.timer = threading.Timer(self.update_interval, self.update_overwatch)
-    #     self.timer.start()
+class Beymax(CoreBot):
 
     async def on_ready(self):
+        await super().on_reader()
         print('Logged in as')
         print(self.user.name)
         print(self.user.id)
@@ -488,575 +49,18 @@ class Beymax(discord.Client):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name)
-        self.users = load_db('users.json')
-        self.status_update_time = 0
-        self.party_update_time = 0
-        self.invite_update_time = 0
-        self.invite_update_interval = 604800 # 7 days
-        self.birthday_update_time = 0
-        self.birthday_update_interval = 43200 # 12 hours
-        self._general = discord.utils.get(
-            self.get_all_channels(),
-            name='general',
-            type=discord.ChannelType.text
-        )
-        self._testing_grounds = discord.utils.get(
+        self.dev_channel = discord.utils.get(
             self.get_all_channels(),
             name='testing_grounds',
             type=discord.ChannelType.text
         )
-        self._bots_n_bugs = discord.utils.get(
+        self._bug_channel = discord.utils.get(
             self.get_all_channels(),
             name='bots_n_bugs',
             type=discord.ChannelType.text
         )
-        self.bots_n_bugs = self._bots_n_bugs
-        self.general = self._general
-        # self.timer = threading.Timer(self.update_interval, self.update_overwatch)
-        # self.timer.start()
+        self.bug_channel = self._bug_channel
         print("Ready to serve!")
-
-
-
-    def getname(self, user):
-        if 'nick' in dir(user) and type(user.nick) is str and len(user.nick):
-            return user.nick
-        return user.name
-
-    async def on_message(self, message):
-        if message.author == self.user:
-            return
-        struct = {
-            'id': message.author.id,
-            'fullname': str(message.author),
-            'mention': message.author.mention,
-            'name': self.getname(message.author)
-        }
-        self.users[str(message.author)] = struct
-        self.users[message.author.id] = struct
-        # print(message.author)
-        try:
-            content = message.content.strip().split()
-            content[0] = content[0].lower()
-        except:
-            return
-        # print("Message in channel:", message.channel.name)
-        # print("Content:", content)
-        if content[0] == '!ouch':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            await self.send_message(
-                message.author,
-                "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"+
-                "It's my job to make sure you have a good time and understand the various tools at your disposal in this server\n"+
-                "You can ask me for help with the bots, or the channels, but\n"+
-                "if you're not sure what sort of things I can do, just say `help`\n"+
-                "What seems to be the problem?"
-            )
-            self.help_sessions[message.author] = HelpSession(self, message.author)
-        elif content[0] == '!poll':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            opts = ' '.join(content[1:]).split('|')
-            title = opts.pop(0)
-            body = self.getname(message.author)+" has started a poll:\n"
-            body+=title+"\n"
-            body+="\n".join((
-                    "%d) %s"%(num, opt)
-                    for (num, opt) in
-                    zip(range(1,len(opts)+1), opts)
-                ))
-            body+="\n\nReact with your vote"
-            target = await self.send_message(
-                message.channel,
-                body
-            )
-            for i in range(1,len(opts)+1):
-                await self.add_reaction(
-                    target,
-                    (b'%d\xe2\x83\xa3'%i).decode()#emojify(':%s:'%numnames[i])
-                )
-            await self.delete_message(message)
-        elif content[0] in {'!kill-beymax', '!satisfied'}:
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            save_db(self.users, 'users.json')
-            await self.close()
-        elif content[0] == '!_greet':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            await self.on_member_join(message.author)
-        elif content[0] == '!bug':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            bugs.append({
-                'users': [message.author.id],
-                'status': 'Pending', #pending->investigating->solution in progress->testing solution->closed
-                'content': ' '.join(content[1:]),
-                'comments':[],
-                'label': ' '.join(content[1:])
-            })
-            await self.send_message(
-                self.bots_n_bugs,
-                'New issue reported: <@&308683717419991043>\n' #@developer
-                '[%d] [pending] %s : %s' % (
-                    len(bugs)-1,
-                    message.author.mention,
-                    bugs[-1]['content']
-                )
-            )
-            save_db(bugs, 'bugs.json')
-        elif content[0] in {'!thread', '!bug:thread'}:
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    body = '[%d] [%s] %s : %s\n' % (
-                        bugid,
-                        bugs[bugid]['status'],
-                        ' '.join(
-                            self.users[user]['name'] for user in
-                            bugs[bugid]['users']
-                        ),
-                        bugs[bugid]['label'],
-                    )
-                    body += 'Issue: %s\n' % bugs[bugid]['content']
-                    for comment in bugs[bugid]['comments']:
-                        body += 'Developer Comment: %s\n' % comment
-                    await self.send_message(
-                        message.channel,
-                        body
-                    )
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!bug:comment':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    bugs[bugid]['comments'].append(' '.join(content[2:]))
-                    await self.send_message(
-                        self.bots_n_bugs,
-                        'New comment on issue:\n'
-                        '[%d] [%s] %s : %s\n'
-                        'Comment: [%s] : %s' % (
-                            bugid,
-                            bugs[bugid]['status'],
-                            ' '.join(
-                                self.users[user]['mention'] for user in
-                                bugs[bugid]['users']
-                            ),
-                            bugs[bugid]['label'],
-                            message.author.mention,
-                            bugs[bugid]['comments'][-1]
-                        )
-                    )
-                    save_db(bugs, 'bugs.json')
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!bug:status':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    bugs[bugid]['status'] = ' '.join(content[2:])
-                    await self.send_message(
-                        self.bots_n_bugs,
-                        'Issue status changed:\n'
-                        '[%d] [%s] %s : %s' % (
-                            bugid,
-                            bugs[bugid]['status'],
-                            ' '.join(
-                                self.users[user]['mention'] for user in
-                                bugs[bugid]['users']
-                            ),
-                            bugs[bugid]['label'],
-                        )
-                    )
-                    save_db(bugs, 'bugs.json')
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!bug:label':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    label = ' '.join(content[2:])
-                    await self.send_message(
-                        self.bots_n_bugs,
-                        'Issue label changed:\n'
-                        '[%d] [%s] %s : %s\n'
-                        'New label: %s' % (
-                            bugid,
-                            bugs[bugid]['status'],
-                            ' '.join(
-                                self.users[user]['mention'] for user in
-                                bugs[bugid]['users']
-                            ),
-                            bugs[bugid]['label'],
-                            label
-                        )
-                    )
-                    bugs[bugid]['label'] = label
-                    save_db(bugs, 'bugs.json')
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!bug:user':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    try:
-                        user = await self.get_user_info(content[2])
-                        bugs[bugid]['users'].append(user.id)
-                        await self.send_message(
-                            user,
-                            "You have been added to the following issue by %s:\n"
-                            '[%d] [%s] : %s\n'
-                            'If you would like to unsubscribe from this issue, '
-                            'type `!bug:unsubscribe %d`'% (
-                                str(message.author),
-                                bugid,
-                                bugs[bugid]['status'],
-                                bugs[bugid]['label'],
-                                bugid
-                            )
-                        )
-                        await self.send_message(
-                            message.channel,
-                            "Added user to issue"
-                        )
-                        save_db(bugs, 'bugs.json')
-                    except:
-                        await self.send_message(
-                            message.channel,
-                            "No user with that ID"
-                        )
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!bug:unsubscribe':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            bugs = load_db('bugs.json', [])
-            try:
-                bugid = int(content[1])
-                if bugid >= len(bugs):
-                    await self.send_message(
-                        message.channel,
-                        "No bug with that ID"
-                    )
-                else:
-                    if bugs[bugid]['users'][0] == message.author.id:
-                        await self.send_message(
-                            message.channel,
-                            "As the creator of this issue, you cannot unsubscribe"
-                        )
-                    elif message.author.id not in bugs[bugid]['users']:
-                        await self.send_message(
-                            message.channel,
-                            "You are not subscribed to this issue"
-                        )
-                    else:
-                        bugs[bugid]['users'].remove(message.author.id)
-                        await self.send_message(
-                            message.channel,
-                            "You have been unsubscribed from this issue:\n"
-                            '[%d] [%s] : %s' % (
-                                bugid,
-                                bugs[bugid]['status'],
-                                bugs[bugid]['label']
-                            )
-                        )
-                        save_db(bugs, 'bugs.json')
-            except:
-                await self.send_message(
-                    message.channel,
-                    "Unable to parse the bug ID from the message"
-                )
-        elif content[0] == '!_announce':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            await self.send_message(self.general, message.content.strip().replace('!_announce', ''))
-        elif content[0] == '!_owreset':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            state = load_db('stats.json')
-            if len(state):
-                for uid, data in state.items():
-                    tag = data['tag']
-                    rating = data['rating']
-                    try:
-                        current, img = get_mmr(tag)
-                        state[uid]['rating'] = current
-                        state[uid]['avatar'] = img
-                    except:
-                        pass
-                ranked = [(data['tag'], uid, int(data['rating']), rank(int(data['rating']))) for uid, data in state.items()]
-                ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
-                await self.send_message(
-                    self.general, # for now
-                    "It's that time again, folks!\n"
-                    "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
-                )
-                index = {
-                    ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
-                }
-                for tag,uid,rating,(rn,rclass) in ranked:
-                    await self.send_message(
-                        self.general,
-                        "In "+index[tag]+" place, "+
-                        (self.users[uid]['mention'] if uid in self.users else tag)+
-                        " with a rating of "+str(rating)+"\n"
-                        +encourage(rn) + (
-                            ('\n'+state[uid]['avatar']) if 'avatar' in state[uid]
-                            else ''
-                        )
-                    )
-                await self.send_message(
-                    self.general,
-                    "Let's give everyone a round of applause.  Great show from everybody!\n"
-                    "I can't wait to see how you all do next time! [Competitive ranks reset]"
-                )
-            for uid in state:
-                state[uid]['rating'] = 0
-            save_db(state, 'stats_interim.json')
-            if os.path.isfile('stats.json'):
-                os.remove('stats.json')
-
-        elif content[0] == '!owupdate':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            await self.update_overwatch()
-        elif content[0] == '!_owinit':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            shutil.move('stats_interim.json', 'stats.json')
-            body = "The new Overwatch season has started! Here are the users I'm "
-            body += "currently tracking statistics for:\n"
-            stats = load_db('stats.json')
-            for uid in stats:
-                body += '%s as %s\n' % (
-                    self.users[uid]['name'],
-                    stats[uid]['tag']
-                )
-                stats[uid]['rating'] = 0
-            body += "If anyone else would like to be tracked, use the `!ow` command."
-            body += " Good luck to you all!"
-            await self.send_message(
-                self.general,
-                body
-            )
-            save_db(stats, 'stats.json')
-        elif content[0] == '!ow':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
-            if len(content) != 2:
-                await self.send_message(
-                    message.channel,
-                    "I need you to provide your battle tag\n"
-                    "For example, `!ow beymax#1234`"
-                )
-            else:
-                username = content[1].replace('#', '-')
-                try:
-                    state = load_db(path)
-                    get_mmr(username)
-                    state[message.author.id] = {
-                        'tag': username,
-                        'rating': 0
-                    }
-                    save_db(state, path)
-                    await self.send_message(
-                        message.channel,
-                        "Alright! I'll keep track of your stats"
-                    )
-                    #the timer is prolly going to have to wait for now
-                    # threading.Timer(
-                    #     120,
-                    #     lambda :self.loop.run_until_complete(
-                    #         self.update_overwatch()
-                    #     )
-                    # ).start()
-                    await asyncio.sleep(15)
-                    await self.update_overwatch()
-                except:
-                    await self.send_message(
-                        message.channel,
-                        "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
-                        "Battle-tags are case-sensitive, so make sure you typed everything correctly"
-                    )
-        elif content[0] == '!output-dev':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            self.general = self._testing_grounds
-            self.bots_n_bugs = self._testing_grounds
-            await self.send_message(
-                self._testing_grounds,
-                "Development mode enabled. All messages will be sent to testing grounds"
-            )
-        elif content[0] == '!output-prod':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            self.general = self._general
-            self.bots_n_bugs = self._bots_n_bugs
-            await self.send_message(
-                self._testing_grounds,
-                "Production mode enabled. All messages will be sent to general"
-            )
-        elif content[0] == '!birthday':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            if len(content) < 2 or not re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1]):
-                await self.send_message(
-                    message.channel,
-                    "Please tell me your birthday in MM/DD/YYYY format. For"
-                    " example: `!birthday 1/1/1970`"
-                )
-            else:
-                result = re.match(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', content[1])
-                birthdays = load_db('birthdays.json')
-                birthdays[message.author.id] = {
-                    'month': int(result.group(1)),
-                    'day': int(result.group(2)),
-                    'year': int(result.group(3))
-                }
-                await self.send_message(
-                    message.channel,
-                    "Okay, I'll remember that"
-                )
-                save_db(birthdays, 'birthdays.json')
-        elif content[0] == '!party':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            if message.server is not None:
-                parties = load_db('parties.json', [])
-                current_party = None
-                for i in range(len(parties)):
-                    if message.server.id == parties[i]['server'] and message.author.id == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
-                        if not parties[i]['primed']:
-                            current_party = parties[i]['name']
-                            parties[i]['primed'] = True
-                        else:
-                            await self.delete_channel(
-                                discord.utils.get(
-                                    message.server.channels,
-                                    id=parties[i]['id'],
-                                    type=discord.ChannelType.voice
-                                )
-                            )
-                            parties[i] = None
-                parties = [party for party in parties if party is not None]
-                if current_party:
-                    await self.send_message(
-                        message.channel,
-                        "It looks like you already have a party together right now: `%s`\n"
-                        "However, I can disband that party and create this new one for you.\n"
-                        "If you'd like me to do that, just type the same command again"
-                        % current_party
-                    )
-                else:
-                    name = (' '.join(content[1:])+' Party ') if len(content) > 1 else 'Party '
-                    name = sanitize_channel(name)
-                    suffix = 1
-                    while name+str(suffix) in parties:
-                        suffix += 1
-                    name += str(suffix)
-                    channel = await self.create_channel(
-                        message.server,
-                        name,
-                        type=discord.ChannelType.voice
-                    )
-                    await self.send_message(
-                        message.channel,
-                        "Alright, %s, I've created the `%s` channel for you.\n"
-                        "When you're finished, you can close the channel with `!disband`\n"
-                        "Otherwise, I'll go ahead and close it for you after 24 hours, if nobody's using it"
-                        % (
-                            message.author.mention,
-                            name
-                        )
-                    )
-                    parties.append({
-                        'name':name,
-                        'id':channel.id,
-                        'server':message.server.id,
-                        'primed':False,
-                        'creator':message.author.id,
-                        'time': time.time()
-                    })
-                save_db(parties, 'parties.json')
-        elif content[0] == '!disband':
-            print("Command in channel", message.channel, "from", message.author, ":", content)
-            if message.server is not None:
-                parties = load_db('parties.json', [])
-                pruned = []
-                for i in range(len(parties)):
-                    if message.server.id == parties[i]['server'] and message.author.id == parties[i]['creator']:
-                        await self.delete_channel(
-                            discord.utils.get(
-                                self.get_all_channels(),
-                                id=parties[i]['id'],
-                                type=discord.ChannelType.voice
-                            )
-                        )
-                        pruned.append(parties[i]['name'])
-                        parties[i] = None
-                parties = [party for party in parties if party is not None]
-                save_db(parties, 'parties.json')
-                if len(pruned) == 1:
-                    await self.send_message(
-                        self.general,
-                        '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
-                        % pruned[0]
-                    )
-                elif len(pruned) > 1:
-                    await self.send_message(
-                        self.general,
-                        'The following parties have been disbanded:\n'
-                        '\n'.join('`%s`'% party for party in pruned)+
-                        '\nIf you would like to create another party, use the `!party` command'
-                    )
-                else:
-                    await self.send_message(
-                        message.channel,
-                        "You don't have an active party"
-                    )
-        elif isinstance(message.channel, discord.PrivateChannel) and message.author in self.help_sessions:
-            await self.help_sessions[message.author].digest(message.content)
-        await self.maintenance_tasks()
-        self.help_sessions = {user:session for user,session in self.help_sessions.items() if session.active}
 
     async def on_member_join(self, member):
         await self.send_message(
@@ -1065,152 +69,93 @@ class Beymax(discord.Client):
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
 
-    async def maintenance_tasks(self):
-        current = time.time()
-        if current - self.status_update_time > self.update_interval:
-            name = select_status()
-            print("CHANGING STATUS:", name)
-            await self.change_presence(
-                game=discord.Game(name=name)
-            )
-            await self.update_overwatch()
-            self.status_update_time = current
-        # if current - self.invite_update_time > self.invite_update_interval:
-        #     stale_invites = load_db('invites.json')
-        #     active_invites = await self.invites_from(self._general.server)
-        #     inviters = {}
-        #     for invite in active_invites:
-        #         select = invite.max_age == 0 or (datetime.now() - invite.created_at).days >= 7
-        #         select &= invite.max_uses - invite.uses > 5 or invite.max_uses == invite.uses
-        #         select &= not invite.temporary
-        #         select |= (datetime.now() - invite.created_at).days >= 30
-        #         select &= invite.id not in stale_invites or current - stale_invites[invite.id] < self.invite_update_interval
-        #         if select:
-        #             if invite.inviter not in inviters:
-        #                 inviters[invite.inviter] = [invite]
-        #             else:
-        #                 inviters[invite.inviter].append(invite)
-        #     for inviter, invites in inviters:
-        #         body = (
-        #             "Hello, %s, I was looking through the server's active invites"
-        #             " and I noticed that you have %d stale invite%s lying"
-        #             " around:\n" % (
-        #                 self.mentions[inviter.name],
-        #                 len(invites),
-        #                 's' if len(invites) > 1 else ''
-        #             )
-        #         )
-        #         for invite in invites:
-        #             body+="`%s`, created %s\n" % (
-        #                 invite.url,
-        #                 invite.created_at.strftime(
-        #                     '%A %m/%d/%y at %I:%M %p'
-        #                 )
-        #             )
-        #         if len(invites) > 1:
-        #             body += (
-        #                 "Do you mind deleting any of those that you don't need?\n"
-        #                 "Thanks for helping to keep the server safe!"
-        #             )
-        #     stale_invites = {
-        #         invite.id:current for invite in active_invites
-        #     }
-        #     save_db(stale_invites, 'invites.json')
-        if current - self.birthday_update_time > self.birthday_update_interval:
-            birthdays = load_db('birthdays.json')
-            today = datetime.date.today()
-            for uid, data in birthdays.items():
-                month = data['month']
-                day = data['day']
-                if today.day == day and today.month == month:
-                    await self.send_message(
-                        self.general,
-                        "@everyone congratulate %s, for today is their birthday!"
-                        " They are %d!" % (
-                            self.users[uid]['mention'] if uid in self.users else "someone",
-                            today.year - data['year']
-                        )
-                    )
-            self.birthday_update_time = current
-        if current - self.party_update_time > 60:
-            parties = load_db('parties.json', [])
-            pruned = []
-            for i in range(len(parties)):
-                if current - parties[i]['time'] >= 86400:
-                    channel = discord.utils.get(
-                        self.get_all_channels(),
-                        id=parties[i]['id'],
-                        type=discord.ChannelType.voice
-                    )
-                    if not len(channel.voice_members):
-                        await self.delete_channel(
-                            channel
-                        )
-                        pruned.append(parties[i]['name'])
-                        parties[i] = None
-            parties = [party for party in parties if party is not None]
-            save_db(parties, 'parties.json')
-            if len(pruned) == 1:
-                await self.send_message(
-                    self.general,
-                    '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
-                     % pruned[0]
-                )
-            elif len(pruned) > 1:
-                await self.send_message(
-                    self.general,
-                    'The following parties have been disbanded:\n'
-                    '\n'.join('`%s`'% party for party in pruned)+
-                    '\nIf you would like to create another party, use the `!party` command'
-                )
-            self.party_update_time = current
+def ConstructBeymax():
+    beymax = Beymax()
 
-    async def update_overwatch(self):
-        if os.path.isfile('stats_interim.json'):
-            return
-        state = load_db('stats.json')
-        for uid, data in state.items():
-            tag = data['tag']
-            rating = data['rating']
-            try:
-                current, img = get_mmr(tag)
-                state[uid]['rating'] = current
-                state[uid]['avatar'] = img
-                currentRank = rank(current)
-                oldRank = rank(int(rating))
-                if currentRank[0] > oldRank[0]:
-                    body = "Everyone put your hands together for "
-                    body += self.users[uid]['mention'] if uid in self.users else tag
-                    body += " who just reached "
-                    body += currentRank[1]
-                    body += " in Overwatch!"
-                    if 'avatar' in state[uid]:
-                        body += '\n'+state[uid]['avatar']
-                    if currentRank[0] >= 4:
-                        # Ping the channel for anyone who reached platinum or above
-                        body = body.replace('Everyone', '@everyone')
-                    await self.send_message(
-                        self.general, #for now
-                        body
-                    )
-            except:
-                pass
-        save_db(state, 'stats.json')
+    beymax.add_command('!kill-beymax', '!satisfied')
+    async def cmd_shutdown(self, message, content):
+        await self.close()
 
-def load_db(filename, default=None):
-    try:
-        with open(filename) as reader:
-            return json.load(reader)
-    except FileNotFoundError:
-        return {} if default is None else default
+    beymax.add_command('!_greet')
+    async def cmd_greet(self, message, content):
+        await self.on_member_join(message.author)
 
-def save_db(data, filename):
-    with open(filename, 'w') as writer:
-        return json.dump(data, writer)
+    beymax.add_task(3600) # 1 hour
+    async def update_status(self):
+        name = select_status()
+        print("CHANGING STATUS:", name)
+        await self.change_presence(
+            game=discord.Game(name=name)
+        )
 
-def sanitize_channel(name):
-    return sanitize(name, '~!@#$%^&*()-', '_')
+    beymax.EnableAll(
+        EnableUtils,
+        EnableBirthday,
+        EnableBugs,
+        EnableHelp,
+        EnableOverwatch,
+        EnableParties,
+        EnablePolls
+    )
 
 if __name__ == '__main__':
     with open("token.txt") as r:
-        Beymax().run(r.read().strip())
+        ConstructBeymax().run(r.read().strip())
+
+
+# import discord
+# import re
+# import asyncio
+# import requests
+# import time
+# import datetime
+# import json
+# from pyemojify import emojify
+# import random
+# import threading
+# import os
+# import shutil
+# random.seed()
+
+# numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+# if current - self.invite_update_time > self.invite_update_interval:
+#     stale_invites = load_db('invites.json')
+#     active_invites = await self.invites_from(self._general.server)
+#     inviters = {}
+#     for invite in active_invites:
+#         select = invite.max_age == 0 or (datetime.now() - invite.created_at).days >= 7
+#         select &= invite.max_uses - invite.uses > 5 or invite.max_uses == invite.uses
+#         select &= not invite.temporary
+#         select |= (datetime.now() - invite.created_at).days >= 30
+#         select &= invite.id not in stale_invites or current - stale_invites[invite.id] < self.invite_update_interval
+#         if select:
+#             if invite.inviter not in inviters:
+#                 inviters[invite.inviter] = [invite]
+#             else:
+#                 inviters[invite.inviter].append(invite)
+#     for inviter, invites in inviters:
+#         body = (
+#             "Hello, %s, I was looking through the server's active invites"
+#             " and I noticed that you have %d stale invite%s lying"
+#             " around:\n" % (
+#                 self.mentions[inviter.name],
+#                 len(invites),
+#                 's' if len(invites) > 1 else ''
+#             )
+#         )
+#         for invite in invites:
+#             body+="`%s`, created %s\n" % (
+#                 invite.url,
+#                 invite.created_at.strftime(
+#                     '%A %m/%d/%y at %I:%M %p'
+#                 )
+#             )
+#         if len(invites) > 1:
+#             body += (
+#                 "Do you mind deleting any of those that you don't need?\n"
+#                 "Thanks for helping to keep the server safe!"
+#             )
+#     stale_invites = {
+#         invite.id:current for invite in active_invites
+#     }
+#     save_db(stale_invites, 'invites.json')
