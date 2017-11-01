@@ -32,7 +32,7 @@ def EnablePolls(bot):
             )
         if not isinstance(message.channel, discord.PrivateChannel):
             await self.delete_message(message)
-        self.polls[target.id] = (message.author, set())
+            self.polls[target.id] = (message.author, set())
 
     if 'on_reaction_add' in dir(bot):
         bot._poll_on_react = bot.on_reaction_add
