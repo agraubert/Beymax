@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import getname
+import discord
 import asyncio
 
 def EnablePolls(bot):
