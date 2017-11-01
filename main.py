@@ -7,6 +7,8 @@ from bots.party import EnableParties
 from bots.poll import EnablePolls
 import discord
 import asyncio
+import random
+random.seed()
 
 #schemas:
 #stats: {id: {tag:battletag, rank:last_ranking}}
