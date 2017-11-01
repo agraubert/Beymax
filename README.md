@@ -6,6 +6,10 @@ Not to be confused with _[Baymax](https://en.wikipedia.org/wiki/Baymax)_
 
 A custom Discord bot to handle various utilities
 
+main.py contains the reference implementation of Beymax. Files in the bots folder
+contain code for creating your own bots with subsets of the same commands and for
+easily adding your own commands to a bot
+
 ### Chat commands
 
 * `!ow <battle-tag>`

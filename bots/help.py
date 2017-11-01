@@ -218,7 +218,7 @@ class HelpSession:
         if self.stage == 'default':
             choice = binwords(
                 cmd,
-                bots=['bots', 'apps', 'robots'],
+                bots=['bots', 'apps', 'robots'] + [command[1:] for command in self.client.commands],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
                 beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
                 channels=['channels', 'groups', 'messages', 'channel'],
@@ -285,7 +285,7 @@ class HelpSession:
         elif self.stage == 'terminal':
             choice = binwords(
                 cmd,
-                bots=['bots', 'apps', 'robots'],
+                bots=['bots', 'apps', 'robots'] + [command[1:] for command in self.client.commands],
                 octavia=['octavia', 'tenno', 'dj', 'music'],
                 beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
                 channels=['channels', 'groups', 'messages', 'channel'],

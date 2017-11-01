@@ -19,7 +19,7 @@ def EnableBugs(bot):
         await self.send_message(
             self.bug_channel,
             'New issue reported: <@&308683717419991043>\n' #@Developer
-            '[%d] [pending] %s : %s' % (
+            '[%d] [Pending] %s : %s' % (
                 len(bugs)-1,
                 message.author.mention,
                 bugs[-1]['content']
@@ -60,7 +60,7 @@ def EnableBugs(bot):
                 "Unable to parse the bug ID from the message"
             )
 
-    @bot.add_command('!bug:comment')
+    @bot.add_command('!comment', '!bug:comment')
     async def cmd_comment(self, message, content):
         bugs = load_db('bugs.json', [])
         try:
