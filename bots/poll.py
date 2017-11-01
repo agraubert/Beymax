@@ -6,6 +6,8 @@ def EnablePolls(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.polls = {}
+
     @bot.add_command('!poll')
     async def cmd_poll(self, message, content):
         opts = ' '.join(content[1:]).split('|')
@@ -28,5 +30,24 @@ def EnablePolls(bot):
                 (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
             )
         await self.delete_message(message)
+        self.polls[target.id] = (message.author, set())
+
+    if 'on_reaction_add' in dir(bot):
+        bot._poll_on_react = bot.on_reaction_add
+    else:
+        bot._poll_on_react = None
+
+    async def on_reaction_add(reaction, user):
+        if bot._poll_on_react is not None:
+            await bot._poll_on_react(reaction, user)
+        if reaction.message.id in bot.polls:
+            creator, reactors = bot.polls[reaction.message.id]
+            if user.id not in reactors:
+                await bot.send_message(
+                    creator,
+                    user+" has voted on your poll in "+reaction.message.channel.name
+                )
+                bot.polls[reaction.message.id][1].add(user.id)
+    bot.on_reaction_add = on_reaction_add
 
     return bot
