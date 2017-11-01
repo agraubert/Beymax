@@ -74,15 +74,15 @@ class Beymax(CoreBot):
 def ConstructBeymax():
     beymax = Beymax()
 
-    beymax.add_command('!kill-beymax', '!satisfied')
+    @beymax.add_command('!kill-beymax', '!satisfied')
     async def cmd_shutdown(self, message, content):
         await self.close()
 
-    beymax.add_command('!_greet')
+    @beymax.add_command('!_greet')
     async def cmd_greet(self, message, content):
         await self.on_member_join(message.author)
 
-    beymax.add_task(3600) # 1 hour
+    @beymax.add_task(3600) # 1 hour
     async def update_status(self):
         name = select_status()
         print("CHANGING STATUS:", name)
