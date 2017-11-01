@@ -602,6 +602,39 @@ class Beymax(discord.Client):
                 )
             )
             save_db(bugs, 'bugs.json')
+        elif content[0] in {'!thread', '!bug:thread'}:
+            print("Command in channel", message.channel, "from", message.author, ":", content)
+            bugs = load_db('bugs.json', [])
+            try:
+                bugid = int(content[1])
+                if bugid >= len(bugs):
+                    await self.send_message(
+                        message.channel,
+                        "No bug with that ID"
+                    )
+                else:
+                    body = '[%d] [%s] %s : %s\n'
+                    'Issue: %s\n' % (
+                        bugid,
+                        bugs[bugid]['status'],
+                        ' '.join(
+                            self.users[user]['name'] for user in
+                            bugs[bugid]['users']
+                        ),
+                        bugs[bugid]['label'],
+                        bugs[bugid]['content']
+                    )
+                    for comment in bugs[bugid]['comments']:
+                        body += 'Developer Comment: %s\n' % comment
+                    await self.send_message(
+                        message.channel,
+                        body
+                    )
+            except:
+                await self.send_message(
+                    message.channel,
+                    "Unable to parse the bug ID from the message"
+                )
         elif content[0] == '!bug:comment':
             print("Command in channel", message.channel, "from", message.author, ":", content)
             bugs = load_db('bugs.json', [])
