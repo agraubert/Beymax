@@ -43,12 +43,19 @@ def EnableCash(bot):
                 except ValueError:
                     amount = int(contents[3][1:])
                 cash[project]['current'] += amount
+                cash[project]['contributions'].append(
+                    {
+                        'time':time.time(),
+                        'user': uid,
+                        'amount': amount
+                    }
+                )
                 await self.send_message(
                     self.general,
                     '@everyone %s has generously donated $%0.2f towards %s, which puts us'
                     ' at %.0f%% of the $%d goal.\nIf you would like to donate, '
                     'venmo `%s` and mention `%s` in the payment' % (
-                        self.users[uid]['mention'] if uid in self.users else '<Anonymous>',
+                        self.users[uid]['mention'] if uid in self.users else 'someone',
                         amount,
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
