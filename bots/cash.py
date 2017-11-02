@@ -53,13 +53,19 @@ def EnableCash(bot):
                 await self.send_message(
                     self.general,
                     '@everyone %s has generously donated $%0.2f towards %s, which puts us'
-                    ' at %.0f%% of the $%d goal.\nIf you would like to donate, '
+                    ' at %.0f%% of the $%d goal.\n'
+                    'There is $%0.2f left to raise by %d/%d/%d\n'
+                    'If you would like to donate, '
                     'venmo `%s` and mention `%s` in the payment' % (
                         self.users[uid]['mention'] if uid in self.users else 'someone',
                         amount,
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
                         cash[project]['goal'],
+                        cash[project]['goal']-cash[project]['current'],
+                        cash[project]['end']['month'],
+                        cash[project]['end']['day'],
+                        cash[project]['end']['year'],
                         cash[project]['account'],
                         project
                     )
@@ -167,6 +173,41 @@ def EnableCash(bot):
                         "Goal must be an integer and start with '$'"
                     )
 
+    @bot.add_command('!_project:end')
+    async def cmd_end_project(self, message, content):
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is: `!_project:end short_name`"
+            )
+        else:
+            cash = load_db('cash.json')
+            project = content[1]
+            if project not in cash:
+                await self.send_message(
+                    message.channel,
+                    "No funding project with that name"
+                )
+            else:
+                await self.send_message(
+                    self.general,
+                    "The funding project for %s has ended at %.0f%% of its $%d goal" % (
+                        cash[project]['title'],
+                        100*(cash[project]['current']/cash[project]['goal']),
+                        cash[project]['goal']
+                    )
+                    + (
+                        "\nNice work, and thanks to all the donors!" if
+                        cash[project]['current']>=cash[project]['goal']
+                        else ""
+                    )
+                )
+                old_cash = load_db('old_cash.json')
+                old_cash[project] = cash[project]
+                save_db(old_cash, 'old_cash.json')
+                del cash[project]
+                save_db(cash, 'cash.json')
+
     @bot.add_task(604800) # 1 week
     async def notify_projects(self):
         cash = load_db('cash.json')
@@ -188,7 +229,7 @@ def EnableCash(bot):
                 )
                 old_cash = load_db('old_cash.json')
                 old_cash[project] = data
-                save_db('old_cash.json')
+                save_db(old_cash, 'old_cash.json')
                 del cash[project]
             elif time.time() - data['notified'] > 2628001: #~1 month
                 await self.send_message(
