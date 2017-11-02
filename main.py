@@ -93,6 +93,16 @@ def ConstructBeymax():
             game=discord.Game(name=name)
         )
 
+    def pick(self, message):
+        return random.random() < 0.025
+
+    @beymax.add_special(pick)
+    async def react(self, message, content):
+        await self.add_reaction(
+            message,
+            b'\xf0\x9f\x91\x8d'.decode() # :thumbsup:
+        )
+
     beymax.EnableAll(
         EnableUtils,
         EnableBirthday,
