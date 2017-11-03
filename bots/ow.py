@@ -134,7 +134,7 @@ def EnableOverwatch(bot):
                     "Alright! I'll keep track of your stats"
                 )
                 await asyncio.sleep(15)
-                await self.update_overwatch()
+                await update_overwatch(self)
             except:
                 await self.send_message(
                     message.channel,

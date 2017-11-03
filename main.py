@@ -102,6 +102,7 @@ def ConstructBeymax():
             message,
             b'\xf0\x9f\x91\x8d'.decode() # :thumbsup:
         )
+        
 
     beymax.EnableAll(
         EnableUtils,
