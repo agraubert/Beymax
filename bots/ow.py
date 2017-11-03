@@ -141,6 +141,7 @@ def EnableOverwatch(bot):
                     "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
                     "Battle-tags are case-sensitive, so make sure you typed everything correctly"
                 )
+                raise
 
     @bot.add_command('!_owreset')
     async def cmd_owreset(self, message, content):
@@ -196,7 +197,7 @@ def EnableOverwatch(bot):
         stats = load_db('stats.json')
         for uid in stats:
             body += '%s as %s\n' % (
-                self.users[uid]['name'],
+                self.users[uid]['name'] if uid in self.users else 'someone',
                 stats[uid]['tag']
             )
             stats[uid]['rating'] = 0
