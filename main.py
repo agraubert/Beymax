@@ -94,7 +94,7 @@ def ConstructBeymax():
         )
 
     def pick(self, message):
-        return random.random() < 0.025
+        return random.random() < 0.05
 
     @beymax.add_special(pick)
     async def react(self, message, content):
@@ -102,7 +102,7 @@ def ConstructBeymax():
             message,
             b'\xf0\x9f\x91\x8d'.decode() # :thumbsup:
         )
-        
+
 
     beymax.EnableAll(
         EnableUtils,
