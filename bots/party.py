@@ -111,6 +111,7 @@ def EnableParties(bot):
 
     @bot.add_task(600) # 10 min
     async def prune_parties(self):
+        current = time.time()
         parties = load_db('parties.json', [])
         pruned = []
         for i in range(len(parties)):
