@@ -79,13 +79,14 @@ class CoreBot(discord.Client):
         else:
             for check, func in self.special:
                 if check(self, message):
+                    print("Running special", func.__qualname__)
                     await func(self, message, content)
                     break
         current = time.time()
         for i, (interval, task) in enumerate(self.tasks):
             last = self.update_times[i]
             if current - last > interval:
-                print("Running task", task)
+                print("Running task", task.__qualname__)
                 await task(self)
                 self.update_times[i] = current
 
