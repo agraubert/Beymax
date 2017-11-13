@@ -25,7 +25,7 @@ def get_mmr(user):
 
 def rank(rating):
     ranks = {
-        'Unranked':0
+        'Unranked':0,
         'Bronze':1,
         'Silver':2,
         'Gold':3,
