@@ -103,7 +103,7 @@ def EnableParties(bot):
             if len(pruned) == 1:
                 await self.send_message(
                     message.channel,
-                    '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                    '%s has been disbanded. If you would like to create another party, use the `!party` command'
                     % pruned[0]
                 )
             elif len(pruned) > 1:
@@ -149,7 +149,7 @@ def EnableParties(bot):
         if len(pruned) == 1:
             await self.send_message(
                 self.general,
-                '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
+                '%s has been disbanded. If you would like to create another party, use the `!party` command'
                  % pruned[0]
             )
         elif len(pruned) > 1:
