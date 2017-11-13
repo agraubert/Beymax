@@ -161,7 +161,7 @@ def EnableOverwatch(bot):
                     state[uid]['tier'] = tier
                 except:
                     pass
-            ranked = [(data['tag'], uid, tier, int(data['rating']), rank(tier)) for uid, data in state.items()]
+            ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
             ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
             await self.send_message(
                 self.general, # for now
@@ -171,7 +171,7 @@ def EnableOverwatch(bot):
             index = {
                 ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
             }
-            for tag,uid,rating,tier,rn in ranked:
+            for tag,uid,tier,rating,rn in ranked:
                 await self.send_message(
                     self.general,
                     "In "+index[tag]+" place, "+
