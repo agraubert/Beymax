@@ -43,10 +43,12 @@ def EnableParties(bot):
             else:
                 name = (' '.join(content[1:])+' Party ') if len(content) > 1 else 'Party '
                 name = sanitize_channel(name)
-                suffix = 1
-                while name+str(suffix) in parties:
-                    suffix += 1
-                name += str(suffix)
+                party_names = {party['name'] for party in parties}
+                if name in party_names:
+                    suffix = 1
+                    while name+str(suffix) in party_names:
+                        suffix += 1
+                    name += str(suffix)
                 channel = await self.create_channel(
                     message.server,
                     name,
@@ -79,28 +81,36 @@ def EnableParties(bot):
             pruned = []
             for i in range(len(parties)):
                 if message.server.id == parties[i]['server'] and message.author.id == parties[i]['creator']:
-                    await self.delete_channel(
-                        discord.utils.get(
-                            self.get_all_channels(),
-                            id=parties[i]['id'],
-                            type=discord.ChannelType.voice
+                    channel = discord.utils.get(
+                        self.get_all_channels(),
+                        id=parties[i]['id'],
+                        type=discord.ChannelType.voice
+                    )
+                    pruned.append(
+                        '`%s`' % parties[i]['name']
+                        if parties[i]['name'] == channel.name
+                        else '`%s` AKA `%s`' % (
+                            channel.name,
+                            parties[i]['name']
                         )
                     )
-                    pruned.append(parties[i]['name'])
+                    await self.delete_channel(
+                        channel
+                    )
                     parties[i] = None
             parties = [party for party in parties if party is not None]
             save_db(parties, 'parties.json')
             if len(pruned) == 1:
                 await self.send_message(
-                    self.general,
+                    message.channel,
                     '`%s` has been disbanded. If you would like to create another party, use the `!party` command'
                     % pruned[0]
                 )
             elif len(pruned) > 1:
                 await self.send_message(
-                    self.general,
+                    message.channel,
                     'The following parties have been disbanded:\n'
-                    '\n'.join('`%s`'% party for party in pruned)+
+                    '\n'.join(pruned)+
                     '\nIf you would like to create another party, use the `!party` command'
                 )
             else:
@@ -122,10 +132,17 @@ def EnableParties(bot):
                     type=discord.ChannelType.voice
                 )
                 if not len(channel.voice_members):
+                    pruned.append(
+                        '`%s`' % parties[i]['name']
+                        if parties[i]['name'] == channel.name
+                        else '`%s` AKA `%s`' % (
+                            channel.name,
+                            parties[i]['name']
+                        )
+                    )
                     await self.delete_channel(
                         channel
                     )
-                    pruned.append(parties[i]['name'])
                     parties[i] = None
         parties = [party for party in parties if party is not None]
         save_db(parties, 'parties.json')
@@ -139,7 +156,7 @@ def EnableParties(bot):
             await self.send_message(
                 self.general,
                 'The following parties have been disbanded:\n'
-                '\n'.join('`%s`'% party for party in pruned)+
+                '\n'.join(pruned)+
                 '\nIf you would like to create another party, use the `!party` command'
             )
 

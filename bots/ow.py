@@ -20,22 +20,21 @@ def get_mmr(user):
     data = response.json()
     rank = data['us']['stats']['competitive']['overall_stats']['comprank']
     img = data['us']['stats']['competitive']['overall_stats']['avatar']
-    return (rank if rank is not None else 0, img)
+    tier = data['us']['stats']['competitive']['overall_stats']['tier']
+    return (rank if rank is not None else 0, img, tier.title() if tier is not None else 'Unranked')
 
 def rank(rating):
-    if rating <=1499:
-        return (1,'Bronze')
-    elif rating <=1999:
-        return (2,'Silver')
-    elif rating <=2499:
-        return (3,'Gold')
-    elif rating <=2999:
-        return (4,'Platinum')
-    elif rating <=3499:
-        return (5,'Diamond')
-    elif rating <=3999:
-        return (6,'Master')
-    return (7,'Grand Master')
+    ranks = {
+        'Unranked':0
+        'Bronze':1,
+        'Silver':2,
+        'Gold':3,
+        'Platinum':4,
+        'Diamond':5,
+        'Master':6,
+        'Grand Master':7
+    }
+    return ranks[rating] if rating in ranks else 0
 
 def encourage(n):
     if n <=2:
@@ -85,17 +84,19 @@ def EnableOverwatch(bot):
         for uid, data in state.items():
             tag = data['tag']
             rating = data['rating']
+            old_tier = data['tier'] if 'tier' in data else 'Unranked'
             try:
-                current, img = get_mmr(tag)
+                current, img, tier = get_mmr(tag)
                 state[uid]['rating'] = current
                 state[uid]['avatar'] = img
-                currentRank = rank(current)
-                oldRank = rank(int(rating))
+                state[uid]['tier'] = tier
+                currentRank = rank(tier)
+                oldRank = rank(old_tier)
                 if currentRank[0] > oldRank[0]:
                     body = "Everyone put your hands together for "
                     body += self.users[uid]['mention'] if uid in self.users else tag
                     body += " who just reached "
-                    body += currentRank[1]
+                    body += tier
                     body += " in Overwatch!"
                     if 'avatar' in state[uid]:
                         body += '\n'+state[uid]['avatar']
@@ -126,7 +127,9 @@ def EnableOverwatch(bot):
                 get_mmr(username)
                 state[message.author.id] = {
                     'tag': username,
-                    'rating': 0
+                    'rating': 0,
+                    'avatar':'',
+                    'tier':'Unranked'
                 }
                 save_db(state, path)
                 await self.send_message(
@@ -150,14 +153,16 @@ def EnableOverwatch(bot):
             for uid, data in state.items():
                 tag = data['tag']
                 rating = data['rating']
+                old_tier = data['tier'] if 'tier' in data else 'Unranked'
                 try:
-                    current, img = get_mmr(tag)
+                    current, img, tier = get_mmr(tag)
                     state[uid]['rating'] = current
                     state[uid]['avatar'] = img
+                    state[uid]['tier'] = tier
                 except:
                     pass
-            ranked = [(data['tag'], uid, int(data['rating']), rank(int(data['rating']))) for uid, data in state.items()]
-            ranked.sort(key=lambda x:(x[-1][1], x[-2])) #prolly easier just to sort by mmr
+            ranked = [(data['tag'], uid, tier, int(data['rating']), rank(tier)) for uid, data in state.items()]
+            ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
             await self.send_message(
                 self.general, # for now
                 "It's that time again, folks!\n"
@@ -166,11 +171,12 @@ def EnableOverwatch(bot):
             index = {
                 ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
             }
-            for tag,uid,rating,(rn,rclass) in ranked:
+            for tag,uid,rating,tier,rn in ranked:
                 await self.send_message(
                     self.general,
                     "In "+index[tag]+" place, "+
                     (self.users[uid]['mention'] if uid in self.users else tag)+
+                    " who made "+tier+
                     " with a rating of "+str(rating)+"\n"
                     +encourage(rn) + (
                         ('\n'+state[uid]['avatar']) if 'avatar' in state[uid]
@@ -184,6 +190,7 @@ def EnableOverwatch(bot):
             )
         for uid in state:
             state[uid]['rating'] = 0
+            state[uid]['tier'] = 'Unranked'
         save_db(state, 'stats_interim.json')
         if os.path.isfile('stats.json'):
             os.remove('stats.json')
@@ -201,6 +208,7 @@ def EnableOverwatch(bot):
                 stats[uid]['tag']
             )
             stats[uid]['rating'] = 0
+            stats[uid]['tier'] = 'Unranked'
         body += "If anyone else would like to be tracked, use the `!ow` command."
         body += " Good luck to you all!"
         await self.send_message(
