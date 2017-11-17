@@ -255,4 +255,76 @@ def EnableUtils(bot): #prolly move to it's own bot
             '\n'.join(body)
         )
 
+    @bot.add_command('!permissions:grant')
+    async def cmd_grant(self, message, content):
+        """
+        `!permissions:grant (user:<username or id>|role:<role or ID>) <command>`
+        Grants a user or role access to a command. You must have permissions to
+        use a command to grant access to the command
+        Example: `!permissions:grant role:Mod permissions:grant`
+        """
+        cmd = content[2]
+        if not cmd.startswith('!'):
+            cmd = '!'+cmd
+        if cmd not in self.commands:
+            await self.send_message(
+                message.channel,
+                'No command named `%s`' % cmd
+            )
+        elif not self.check_permissions_chain(cmd[1:], message.author):
+            await self.send_message(
+                message.channel,
+                "You cannot grant permissions that you do not have yourself"
+            )
+        else:
+            if content[1].startswith('user:'):
+                user = content[1][5:]
+                if user not in self.users:
+                    await self.send_message(
+                        message.channel,
+                        "Unknown user %s" % user
+                    )
+                else:
+                    obj = {
+                        'users': [user],
+                        'allow': [cmd[1:]]
+                    }
+                    if not validate_permissions(obj):
+                        await self.send_message(
+                            message.channel,
+                            "New rule failed validation"
+                        )
+                    self.permissions['permissions'].append(obj)
+                    self.permissions['users'][self.getid(user)]=obj
+                    self.permissions['users'][self.getid(user)]['_grant'] = 'directly to you'
+                    await self.send_message(
+                        self.primary_server.get_member(self.getid(user)),
+                        "You have been granted use of the `%s` command by %s" % (
+                            cmd,
+                            str(message.author)
+                        )
+                    )
+                    await self.send_message(
+                        self.testing_grounds,
+                        "User %s has been granted use of the `%s` command by %s" % (
+                            user,
+                            cmd,
+                            str(message.author)
+                        )
+                    )
+            elif content[1].startswith('role:'):
+                role = content[1][5:]
+                if role not in {role.name for role in self.primary_server.roles}+{role.id for role in self.primary_server.roles}:
+                    await self.send_message(
+                        message.channel,
+                        "Unknown role %s" % role
+                    )
+            else:
+                await self.send_message(
+                    message.channel,
+                    'Must specify user or role with `user:<username or id>`'
+                    ' or `role:<Role name or id>`'
+                )
+
+
     return bot
