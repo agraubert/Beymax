@@ -221,7 +221,7 @@ def EnableUtils(bot): #prolly move to it's own bot
     async def cmd_perms(self, message, content):
         chain = self.build_permissions_chain(message.author)
         cmds = []
-        for command in self.commands:
+        for command in sorted(self.commands):
             (allow, rule) = self.check_permissions_chain(command[1:], message.author, chain)
             if allow:
                 cmds.append((
