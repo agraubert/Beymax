@@ -8,6 +8,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug')
     async def cmd_bug(self, message, content):
+        """
+        `!bug [feedback or bug report]` : Opens a new ticket with your
+        feedback. Example: `!bug Beymax didn't understand me in a help session`
+        """
         bugs = load_db('bugs.json', [])
         bugs.append({
             'users': [message.author.id],
@@ -29,6 +33,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!thread', '!bug:thread')
     async def cmd_thread(self, message, content):
+        """
+        `!thread <bug ID>` : Displays the full comment thread for a bug.
+        Example: `!thread 2`
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])
@@ -62,6 +70,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!comment', '!bug:comment')
     async def cmd_comment(self, message, content):
+        """
+        `!comment <bug ID> [Your comments]` : Adds your comments to the bug's
+        thread. Example: `!comment 2 The help system is working great!`
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])
@@ -103,6 +115,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug:status')
     async def cmd_bug_status(self, message, content):
+        """
+        `!bug:status <bug ID> <New status>` : Sets the status for the bug.
+        Example: `!bug:status 2 In Progress`
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])
@@ -135,6 +151,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug:label')
     async def cmd_bug_label(self, message, content):
+        """
+        `!bug:label <bug ID> <New label>` : Sets the label for a bug report.
+        Example: `!bug:label 2 Beymax's help system`
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])
@@ -170,6 +190,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug:user')
     async def cmd_bug_user(self, message, content):
+        """
+        `!bug:user <bug ID> <User ID>` : Subscribes a user to a bug report.
+        Example: `!bug:user 2 310283932341895169` (that's my user ID)
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])
@@ -213,6 +237,10 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug:unsubscribe')
     async def cmd_bug_unsubscribe(self, message, content):
+        """
+        `!bug:unsubscribe <bug ID>` : Unsubscribes yourself from a bug report.
+        Example: `!bug:unsubscribe 2`
+        """
         bugs = load_db('bugs.json', [])
         try:
             bugid = int(content[1])

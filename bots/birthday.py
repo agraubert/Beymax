@@ -10,6 +10,10 @@ def EnableBirthday(bot):
 
     @bot.add_command('!birthday')
     async def cmd_birthday(self, message, content):
+        """
+        `!birthday <your birthday>` : Informs me of your birthday so I
+         can congratulate you when it comes. Example: `!birthday 1/1/1970`
+        """
         if len(content) < 2 or not re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1]):
             await self.send_message(
                 message.channel,

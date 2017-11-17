@@ -11,6 +11,10 @@ def EnablePolls(bot):
 
     @bot.add_command('!poll')
     async def cmd_poll(self, message, content):
+        """
+        `!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
+        Example: `!poll Is Beymax cool? | Yes | Definitely`
+        """
         opts = ' '.join(content[1:]).split('|')
         title = opts.pop(0)
         body = getname(message.author)+" has started a poll:\n"

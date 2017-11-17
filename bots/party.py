@@ -14,6 +14,10 @@ def EnableParties(bot):
 
     @bot.add_command('!party')
     async def cmd_party(self, message, content):
+        """
+        `!party [party name]` : Creates a new voice channel (name is optional).
+        Example: `!party` or `!party Birthday`
+        """
         if message.server is not None:
             parties = load_db('parties.json', [])
             current_party = None
@@ -76,6 +80,9 @@ def EnableParties(bot):
 
     @bot.add_command('!disband')
     async def cmd_disband(self, message, content):
+        """
+        `!disband` : Closes any active party voice channels you have
+        """
         if message.server is not None:
             parties = load_db('parties.json', [])
             pruned = []

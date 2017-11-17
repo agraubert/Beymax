@@ -191,6 +191,9 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     @bot.add_command('!output-dev')
     async def cmd_dev(self, message, content):
+        """
+        `!output-dev` : Any messages that would always go to general will go to testing grounds
+        """
         self.general = self.dev_channel
         self.bug_channel = self.dev_channel
         await self.send_message(
@@ -200,6 +203,9 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     @bot.add_command('!output-prod')
     async def cmd_prod(self, message, content):
+        """
+        `!output-prod` : Restores normal message routing
+        """
         self.general = self._general
         self.bug_channel = self._bug_channel
         await self.send_message(
@@ -209,6 +215,10 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     @bot.add_command('!_announce')
     async def cmd_announce(self, message, content):
+        """
+        `!_announce <message>` : Forces me to say the given message in general.
+        Example: `!_announce I am really cool`
+        """
         await self.send_message(
             self.general,
             message.content.strip().replace('!_announce', '')
@@ -216,6 +226,9 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     @bot.add_command('!permissions')
     async def cmd_perms(self, message, content):
+        """
+        `!permissions` : Gets a list of commands you have permissions to use
+        """
         chain = self.build_permissions_chain(message.author)
         cmds = []
         for command in sorted(self.commands):

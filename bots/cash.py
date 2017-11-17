@@ -14,6 +14,11 @@ def EnableCash(bot):
 
     @bot.add_command('!_payment')
     async def cmd_payment(self, message, content):
+        """
+        `!_payment <project> <user ID> $<amount>` : Records a user's payment on a project.
+        Use `0` as the user ID for anonymous payments.
+        Example: `!_payment bots 310283932341895169 $5`
+        """
         if len(content) != 4:
             await self.send_message(
                 message.channel,
@@ -74,6 +79,11 @@ def EnableCash(bot):
 
     @bot.add_command('!_project')
     async def cmd_project(self, message, content):
+        """
+        `!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY | $<goal amount> | <Venmo username>`
+        Starts a new fundraising project.
+        Example: `!_project server costs for beymax and octavia | bots 01/02/2003 | $5 | @user-name`
+        """
         args = message.content.replace('!_project', '').split('|')
         #!_project full name | short name | end MM/DD/YY | $goal | venmo
         if len(args) != 5:
@@ -175,6 +185,10 @@ def EnableCash(bot):
 
     @bot.add_command('!_project:end')
     async def cmd_end_project(self, message, content):
+        """
+        `!_project:end <project short name>` : Ends fundraising for a project.
+        Example: `!project:end bots`
+        """
         if len(content) != 2:
             await self.send_message(
                 message.channel,

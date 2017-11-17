@@ -78,6 +78,9 @@ def EnableOverwatch(bot):
     @bot.add_task(3600) # 1 hour
     @bot.add_command('!owupdate')
     async def update_overwatch(self, *args): #ignore message and content args
+        """
+        `!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
+        """
         if os.path.isfile('stats_interim.json'):
             return
         state = load_db('stats.json')
@@ -113,6 +116,10 @@ def EnableOverwatch(bot):
 
     @bot.add_command('!ow')
     async def cmd_ow(self, message, content):
+        """
+        `!ow <battle#tag>` : Enables overwatch stats tracking
+        Example: `!ow beymax#1234`
+        """
         path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
         if len(content) != 2:
             await self.send_message(
@@ -148,6 +155,9 @@ def EnableOverwatch(bot):
 
     @bot.add_command('!_owreset')
     async def cmd_owreset(self, message, content):
+        """
+        `!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
+        """
         state = load_db('stats.json')
         if len(state):
             for uid, data in state.items():
@@ -198,6 +208,9 @@ def EnableOverwatch(bot):
 
     @bot.add_command('!_owinit')
     async def cmd_owinit(self, message, content):
+        """
+        `!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
+        """
         shutil.move('stats_interim.json', 'stats.json')
         body = "The new Overwatch season has started! Here are the users I'm "
         body += "currently tracking statistics for:\n"

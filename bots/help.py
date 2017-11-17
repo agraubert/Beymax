@@ -2,6 +2,7 @@ from .core import CoreBot
 from .utils import sanitize, load_db
 import discord
 import asyncio
+import sys
 
 def binwords(message, **bins):
     try:
@@ -19,6 +20,31 @@ def binwords(message, **bins):
         )[-1]
     except:
         return
+
+def trim(docstring):
+    if not docstring:
+        return ''
+    # Convert tabs to spaces (following the normal Python rules)
+    # and split into a list of lines:
+    lines = docstring.expandtabs().splitlines()
+    # Determine minimum indentation (first line doesn't count):
+    indent = sys.maxsize
+    for line in lines[1:]:
+        stripped = line.lstrip()
+        if stripped:
+            indent = min(indent, len(line) - len(stripped))
+    # Remove indentation (first line is special):
+    trimmed = [lines[0].strip()]
+    if indent < sys.maxsize:
+        for line in lines[1:]:
+            trimmed.append(line[indent:].rstrip())
+    # Strip off trailing and leading blank lines:
+    while trimmed and not trimmed[-1]:
+        trimmed.pop()
+    while trimmed and not trimmed[0]:
+        trimmed.pop(0)
+    # Return a single string:
+    return '\n'.join(trimmed)
 
 class HelpSession:
     def __init__(self, client, user):
@@ -112,29 +138,12 @@ class HelpSession:
     async def stage_commands(self):
         self.stage = 'stage-commands'
         if self.aux == 'beymax':
+            body = ["Here is the list of commands I currently support:"]
+            for cmd in self.client.commands:
+                self.body.append(trim(self.client.commands[cmd].__doc__))
             await self.client.send_message( #->generalize from self.commands
                 self.user,
-                "Here is the list of commands I currently support:\n"
-                "`!ow <battle#tag>` : Tells me to track your overwatch rank using"
-                " that battle tag. Example: `!ow fakename#1234`\n"
-                "`!party [party name]` : Tells me to create a temporary party for"
-                " you. The party name part is optional. Example: `!party Test`\n"
-                "`!disband` : Disbands your party, if you have one\n"
-                "`!birthday <your birthday>` : Informs me of your birthday so I"
-                " can congratulate you when it comes. Example: `!birthday 1/1/1970`\n"
-                "`!poll <poll title> | [poll option 1] | [poll option 2] | etc...`"
-                " : Creates a reaction based poll. Use `|` to separate the title"
-                " and each option (up to ten options). Example: `!poll Is beymax"
-                " cool? | Yes | Absolutely`\n"
-                "`!bug [feedback or bug report]` : Opens a new ticket with your"
-                " feedback. Example: `!bug Beymax didn't understand me in a help session`\n"
-                "`!comment <bug ID> [your comment]` : Comments on an open issue."
-                " Example: `!comment 2 The help system is working great!`\n"
-                "`!thread <bug ID>` : Pulls up the full comment thread of an issue. "
-                "Example: `!thread 2`\n"
-                "`!bug:unsubscribe <bug ID>` : Removes you from the list of mentions"
-                " on an open issue. Example: `!bug:unsubscribe 2`\n"
-                "`!ouch` : Asks for my help, but you already knew how to use this one"
+                "\n".join(body)
             )
         elif self.aux == 'octavia':
             await self.client.send_message(
