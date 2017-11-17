@@ -234,10 +234,11 @@ def EnableUtils(bot): #prolly move to it's own bot
         if isinstance(message.channel, discord.PrivateChannel):
             body.append(
                 "You may have additional permissions granted to you by a role"
-                " but I cannot check those within a private chat"
+                " but I cannot check those within a private chat. Try the"
+                " `!permissions` command in a server channel"
             )
         await self.send_message(
-            message.channel,
+            message.author,
             '\n'.join(body)
         )
 

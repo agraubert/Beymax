@@ -4,4 +4,8 @@ defaults:
     - satisfied
     - output-dev
     - output-prod
+    - bug:label
+    - bug:status
+    - bug:user
+    - owupdate
   underscore: false
