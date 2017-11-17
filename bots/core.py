@@ -60,7 +60,6 @@ class CoreBot(discord.Client):
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
-            print(self.permissions)
             #get user by name: server.get_member_named
             #get user by id: server.get_member
             #iterate over server.role_hierarchy until the command is found (default enabled)
@@ -94,8 +93,6 @@ class CoreBot(discord.Client):
                 self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
                     self.permissions['roles'][role]['role']
                 )
-            print(self.permissions)
-
 
     async def close(self):
         save_db(self.users, 'users.json')
