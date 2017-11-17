@@ -138,9 +138,21 @@ class HelpSession:
     async def stage_commands(self):
         self.stage = 'stage-commands'
         if self.aux == 'beymax':
-            body = ["Here is the list of commands I currently support:"]
+            body = ["Here is the list of commands you currently have access to:"]
+            chain = self.client.build_permissions_chain(self.user)
+            seen = set()
             for cmd in self.client.commands:
-                self.body.append(trim(self.client.commands[cmd].__doc__))
+                if self.client.check_permissions_chain(cmd[1:], self.user, chain):
+                    if hash(self.client.commands[cmd].__doc__) not in seen:
+                        self.body.append(trim(self.client.commands[cmd].__doc__))
+                        # to prevent commands with aliases
+                        seen.add(hash(self.client.commands[cmd].__doc__))
+            if not hasattr(self.user, 'roles'):
+                body.append(
+                    "There may be other commands you can use that have been"
+                    " granted to you through a role, but I can not check them"
+                    " unless you say `!ouch` from within a server channel"
+                )
             await self.client.send_message( #->generalize from self.commands
                 self.user,
                 "\n".join(body)

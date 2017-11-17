@@ -79,10 +79,16 @@ def ConstructBeymax():
 
     @beymax.add_command('!kill-beymax', '!satisfied')
     async def cmd_shutdown(self, message, content):
+        """
+        `!satisfied` : Shuts down beymax
+        """
         await self.close()
 
     @beymax.add_command('!_greet')
     async def cmd_greet(self, message, content):
+        """
+        `!_greet` : Manually triggers a greeting (I will greet you)
+        """
         await self.on_member_join(message.author)
 
     @beymax.add_task(3600) # 1 hour
