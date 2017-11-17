@@ -3,6 +3,7 @@ from .utils import sanitize, load_db
 import discord
 import asyncio
 import sys
+import math
 
 def binwords(message, **bins):
     try:
@@ -144,7 +145,7 @@ class HelpSession:
             for cmd in self.client.commands:
                 if self.client.check_permissions_chain(cmd[1:], self.user, chain):
                     if hash(self.client.commands[cmd].__doc__) not in seen:
-                        self.body.append(trim(self.client.commands[cmd].__doc__))
+                        body.append(trim(self.client.commands[cmd].__doc__))
                         # to prevent commands with aliases
                         seen.add(hash(self.client.commands[cmd].__doc__))
             if not hasattr(self.user, 'roles'):
@@ -153,10 +154,17 @@ class HelpSession:
                     " granted to you through a role, but I can not check them"
                     " unless you say `!ouch` from within a server channel"
                 )
-            await self.client.send_message( #->generalize from self.commands
-                self.user,
-                "\n".join(body)
-            )
+            tmp = []
+            for line in body:
+                tmp.append(line)
+                msg = '\n'.join(tmp)
+                if len(msg) > 1024:
+                    await self.client.send_message(
+                        self.user,
+                        msg
+                    )
+                    tmp = []
+                    await asyncio.sleep(2)
         elif self.aux == 'octavia':
             await self.client.send_message(
                 self.user,
