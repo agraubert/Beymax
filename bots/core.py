@@ -60,32 +60,41 @@ class CoreBot(discord.Client):
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
-                #get user by name: server.get_member_named
-                #get user by id: server.get_member
-                #iterate over server.role_hierarchy until the command is found (default enabled)
-                #validate the permissions object
-                if not isintance(self.permissions, dict):
-                    sys.exit("permissions.yml must be a dictionary")
-                if 'defaults' not in self.permissions:
-                    sys.exit("permissions.yml must define defaults")
-                validate_permissions(self.permissions, True)
-                if 'permissions' in self.permissions:
-                    if not isinstance(self.permissions['permissions'], list):
-                        sys.exit("permissions key of permissions.yml must be a list")
-                for target in self.permissions['permissions']:
-                    validate_permissions(target)
-                self.permissions['roles'] = {
-                    discord.utils.find(
-                        lambda role: role.name == obj['role'] or role.id == obj['role']
-                        self.primary_server.roles
-                    ).id:obj for obj in self.permissions['permissions']
-                    if 'role' in obj
-                }
-                self.permissions['users'] = {
-                    getid(user):obj for obj in self.permissions['permissions']
-                    if 'users' in obj
-                    for user in obj['users']
-                }
+            print(self.permissions)
+            #get user by name: server.get_member_named
+            #get user by id: server.get_member
+            #iterate over server.role_hierarchy until the command is found (default enabled)
+            #validate the permissions object
+            if not isinstance(self.permissions, dict):
+                sys.exit("permissions.yml must be a dictionary")
+            if 'defaults' not in self.permissions:
+                sys.exit("permissions.yml must define defaults")
+            validate_permissions(self.permissions['defaults'], True)
+            if 'permissions' in self.permissions:
+                if not isinstance(self.permissions['permissions'], list):
+                    sys.exit("permissions key of permissions.yml must be a list")
+            for target in self.permissions['permissions']:
+                validate_permissions(target)
+            self.permissions['roles'] = {
+                discord.utils.find(
+                    lambda role: role.name == obj['role'] or role.id == obj['role'],
+                    self.primary_server.roles
+                ).id:obj for obj in self.permissions['permissions']
+                if 'role' in obj
+            }
+            self.permissions['users'] = {
+                self.getid(user):obj for obj in self.permissions['permissions']
+                if 'users' in obj
+                for user in obj['users']
+            }
+            self.permissions['defaults']['_grant'] = 'by default'
+            for user in self.permissions['users']:
+                self.permissions['users'][user]['_grant'] = 'directly to you'
+            for role in self.permissions['roles']:
+                self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
+                    self.permissions['roles'][role]['role']
+                )
+            print(self.permissions)
 
 
     async def close(self):
@@ -103,34 +112,36 @@ class CoreBot(discord.Client):
             return result.id
         sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
-    def build_permissions_chain(user):
+    def build_permissions_chain(self, user):
         chain = []
         if user.id in self.permissions['users']:
             chain.append(self.permissions['users'][user.id])
-        elif hasattr(user, 'roles'):
+        if hasattr(user, 'roles'):
             user_roles = set(user.roles)
+            print("Roles:", user_roles)
             for role in self.primary_server.role_hierarchy:
-                if role in user_roles:
-                    chain.append(role)
-        return [item for item in chain] + self.permissions['defaults']
+                if role in user_roles and role.id in self.permissions['roles']:
+                    chain.append(self.permissions['roles'][role.id])
+        return [item for item in chain] + [self.permissions['defaults']]
 
-    def has_underscore_permissions(user, chain=None):
+    def has_underscore_permissions(self, user, chain=None):
         if chain is None:
             chain = self.build_permissions_chain(user)
         for obj in chain:
             if 'underscore' in obj:
                 return obj['underscore']
 
-    def check_permissions_chain(cmd, user, chain=None):
+    def check_permissions_chain(self, cmd, user, chain=None):
         if chain is None:
             chain = self.build_permissions_chain(user)
         for obj in chain:
             if 'allow' in obj and cmd in obj['allow']:
-                return True, obj
+                return True, obj['_grant']
             elif 'deny' in obj and cmd in obj['deny']:
-                return False, obj
+                return False, obj['_grant']
             elif cmd.startswith('_') and 'underscore' in obj:
-                return obj['underscore'], obj
+                return obj['underscore'], obj['_grant']
+        return (not cmd.startswith('_'), 'by default') #default behavior
 
     async def on_message(self, message):
         if message.author == self.user:
@@ -149,11 +160,11 @@ class CoreBot(discord.Client):
         except:
             return
         if content[0] in self.commands:
-            if self.check_permissions_chain(cmd[1:], message.author)[0]:
+            if self.check_permissions_chain(content[0][1:], message.author)[0]:
                 print("Command in channel", message.channel, "from", message.author, ":", content)
                 await self.commands[content[0]](self, message, content)
             else:
-                print(message.author, "permissions denied to use command", content[0], "in", message.channel)
+                print("Denied", message.author, "using command", content[0], "in", message.channel)
                 await self.send_message(
                     message.channel,
                     "You do not have permissions to use this command\n" +
@@ -162,7 +173,7 @@ class CoreBot(discord.Client):
                      if isinstance(message.channel, discord.PrivateChannel)
                      else ""
                     ) +
-                    "To check your permissions, use the `!perms` command"
+                    "To check your permissions, use the `!permissions` command"
                 )
         else:
             for check, func in self.special:
@@ -207,7 +218,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.content.strip().replace('!_announce', '')
         )
 
-    @bot.add_command('!perms')
+    @bot.add_command('!permissions')
     async def cmd_perms(self, message, content):
         chain = self.build_permissions_chain(message.author)
         cmds = []
@@ -216,19 +227,14 @@ def EnableUtils(bot): #prolly move to it's own bot
             if allow:
                 cmds.append((
                     command,
-                    discord.utils.find(
-                        lambda role: role.name ==rule['role'] or role.id == rule['role']
-                        self.primary_server.roles
-                    ) if 'role' in rule else None
+                    rule
                 ))
         body = ["Here are the commands you have permissions to use:"]
         for cmd, rule in cmds:
-            tmp = '`%s` : %s' % (
+            body.append('`%s` : Granted **%s**' % (
                 cmd,
-                'Granted by role ' + rule.name if rule is not None else
-                'Granted directly to you'
-            )
-            body.append(''+tmp)
+                rule
+            ))
         if isinstance(message.channel, discord.PrivateChannel):
             body.append(
                 "You may have additional permissions granted to you by a role"
