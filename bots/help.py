@@ -142,7 +142,7 @@ class HelpSession:
             body = ["Here is the list of commands you currently have access to:"]
             chain = self.client.build_permissions_chain(self.user)
             seen = set()
-            for cmd in self.client.commands:
+            for cmd in sorted(self.client.commands):
                 if self.client.check_permissions_chain(cmd[1:], self.user, chain):
                     if hash(self.client.commands[cmd].__doc__) not in seen:
                         body.append(trim(self.client.commands[cmd].__doc__))
