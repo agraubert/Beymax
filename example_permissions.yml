@@ -1,0 +1,7 @@
+defaults:
+  deny:
+    - kill-beymax
+    - satisfied
+    - output-dev
+    - output-prod
+  underscore: false
