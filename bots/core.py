@@ -118,7 +118,6 @@ class CoreBot(discord.Client):
             chain.append(self.permissions['users'][user.id])
         if hasattr(user, 'roles'):
             user_roles = set(user.roles)
-            print("Roles:", user_roles)
             for role in self.primary_server.role_hierarchy:
                 if role in user_roles and role.id in self.permissions['roles']:
                     chain.append(self.permissions['roles'][role.id])
