@@ -105,6 +105,13 @@ class CoreBot(discord.Client):
         for line in body:
             tmp.append(line)
             msg = delim.join(tmp)
+            if len(msg) > 2048 and delim=='. ':
+                last_msg = await self.send_message(
+                    destination,
+                    msg,
+                    delim=' ',
+                    **kwargs
+                )
             if len(msg) > 1536 and delim=='\n':
                 last_msg = await self.send_message(
                     destination,
@@ -115,10 +122,16 @@ class CoreBot(discord.Client):
             elif len(msg) > 1024:
                 last_msg = await super().send_message(
                     destination,
-                    msg
+                    msg,
+                    **kwargs
                 )
                 tmp = []
                 await asyncio.sleep(1)
+        if len(tmp):
+            last_msg = await super().send_message(
+                destination,
+                msg
+            )
         return last_msg
 
     def getid(self, username):
