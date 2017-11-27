@@ -16,6 +16,8 @@ def binwords(message, **bins):
                     results[key] = 1
                 else:
                     results[key] += 1
+        if 'help' in results:
+            results['help'] /= 2
         return max(
             (count, item) for item,count in results.items()
         )[-1]
@@ -154,17 +156,10 @@ class HelpSession:
                     " granted to you through a role, but I can not check them"
                     " unless you say `!ouch` from within a server channel"
                 )
-            tmp = []
-            for line in body:
-                tmp.append(line)
-                msg = '\n'.join(tmp)
-                if len(msg) > 1024:
-                    await self.client.send_message(
-                        self.user,
-                        msg
-                    )
-                    tmp = []
-                    await asyncio.sleep(2)
+            await self.client.send_message(
+                self.user,
+                '\n'.join(body)
+            )
         elif self.aux == 'octavia':
             await self.client.send_message(
                 self.user,
@@ -269,7 +264,7 @@ class HelpSession:
                 party=['party'] + [
                     party['name'].split() for party in load_db('parties.json', [])
                 ],
-                help=['help'],
+                # help=['help'],
             )
             if choice is None:
                 await self.client.send_message(

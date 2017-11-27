@@ -98,6 +98,29 @@ class CoreBot(discord.Client):
         save_db(self.users, 'users.json')
         await super().close()
 
+    async def send_message(self, destination, content, *, delim='\n', **kwargs):
+        body = content.split(delim)
+        tmp = []
+        last_msg = None
+        for line in body:
+            tmp.append(line)
+            msg = delim.join(tmp)
+            if len(msg) > 1536 and delim=='\n':
+                last_msg = await self.send_message(
+                    destination,
+                    msg,
+                    delim='. ',
+                    **kwargs
+                )
+            elif len(msg) > 1024:
+                last_msg = await super().send_message(
+                    self.user,
+                    msg
+                )
+                tmp = []
+                await asyncio.sleep(1)
+        return last_msg
+
     def getid(self, username):
         if username in self.users:
             return self.users[username]['id']
