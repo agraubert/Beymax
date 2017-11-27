@@ -114,7 +114,7 @@ class CoreBot(discord.Client):
                 )
             elif len(msg) > 1024:
                 last_msg = await super().send_message(
-                    self.user,
+                    destination,
                     msg
                 )
                 tmp = []
