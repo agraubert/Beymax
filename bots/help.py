@@ -264,7 +264,7 @@ class HelpSession:
                 party=['party'] + [
                     party['name'].split() for party in load_db('parties.json', [])
                 ],
-                # help=['help'],
+                help=['help'],
             )
             if choice is None:
                 await self.client.send_message(
