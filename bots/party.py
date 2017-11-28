@@ -45,11 +45,12 @@ def EnableParties(bot):
                     % current_party
                 )
             else:
-                name = (' '.join(content[1:])+' Party ') if len(content) > 1 else 'Party '
+                name = (' '.join(content[1:])+' Party') if len(content) > 1 else 'Party'
                 name = sanitize_channel(name)
                 party_names = {party['name'] for party in parties}
-                if name in party_names:
+                if name in party_names or name == 'Party':
                     suffix = 1
+                    name += ' '
                     while name+str(suffix) in party_names:
                         suffix += 1
                     name += str(suffix)
@@ -95,7 +96,7 @@ def EnableParties(bot):
                     )
                     pruned.append(
                         '`%s`' % parties[i]['name']
-                        if parties[i]['name'] == channel.name
+                        if str(parties[i]['name']) == str(channel.name)
                         else '`%s` AKA `%s`' % (
                             channel.name,
                             parties[i]['name']
@@ -141,7 +142,7 @@ def EnableParties(bot):
                 if not len(channel.voice_members):
                     pruned.append(
                         '`%s`' % parties[i]['name']
-                        if parties[i]['name'] == channel.name
+                        if str(parties[i]['name']) == str(channel.name)
                         else '`%s` AKA `%s`' % (
                             channel.name,
                             parties[i]['name']
