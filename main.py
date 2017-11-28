@@ -35,7 +35,9 @@ def select_status():
             'a robot doctor, but only on TV',
             'your loyal servant, for now',
             'with the server settings',
-            'with the Discord API'
+            'with the Discord API',
+            'with your very lives',
+            'Metadata Salesman'
         ],
         1
     )[0]
