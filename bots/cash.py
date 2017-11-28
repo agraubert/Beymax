@@ -211,6 +211,20 @@ def EnableCash(bot):
                         cash[project]['goal']
                     )
                     + (
+                        '\nDonations:\n' +
+                        '\n'.join(
+                            '%s: $%d' % (
+                                self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                contrib['amount']
+                            )
+                            for contrib in sorted(
+                                cash[project]['contributions'],
+                                key=lambda x:x['amount'],
+                                reverse=True
+                            )
+                        )
+                    )
+                    + (
                         "\nNice work, and thanks to all the donors!" if
                         cash[project]['current']>=cash[project]['goal']
                         else ""
@@ -236,9 +250,28 @@ def EnableCash(bot):
                 await self.send_message(
                     self.general,
                     "The funding project for %s has ended at %.0f%% of its $%d goal" % (
-                        data['title'],
-                        100*(data['current']/data['goal']),
-                        data['goal']
+                        cash[project]['title'],
+                        100*(cash[project]['current']/cash[project]['goal']),
+                        cash[project]['goal']
+                    )
+                    + (
+                        '\nDonations:\n' +
+                        '\n'.join(
+                            '%s: $%d' % (
+                                self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                contrib['amount']
+                            )
+                            for contrib in sorted(
+                                cash[project]['contributions'],
+                                key=lambda x:x['amount'],
+                                reverse=True
+                            )
+                        )
+                    )
+                    + (
+                        "\nNice work, and thanks to all the donors!" if
+                        cash[project]['current']>=cash[project]['goal']
+                        else ""
                     )
                 )
                 old_cash = load_db('old_cash.json')
