@@ -103,7 +103,7 @@ def ConstructBeymax():
 
     @beymax.add_command('!_status')
     async def cmd_status(self, message, content):
-        if len(content):
+        if len(content[1:]):
             name = ' '.join(content[1:]).strip()
         else:
             name = select_status()
