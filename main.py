@@ -94,7 +94,8 @@ def ConstructBeymax():
         await self.on_member_join(message.author)
 
     @beymax.add_task(3600) # 1 hour
-    async def update_status(self):
+    @beymax.add_command('!_status')
+    async def update_status(self, *args):
         name = select_status()
         print("CHANGING STATUS:", name)
         await self.change_presence(
