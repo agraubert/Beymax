@@ -5,7 +5,7 @@ import asyncio
 import time
 
 def sanitize_channel(name):
-    return sanitize(name, '~!@#$%^&*()-', '_')
+    return sanitize(name, '~!@#$%^&*()-', '_').rstrip()
 
 
 def EnableParties(bot):
