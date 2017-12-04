@@ -118,7 +118,7 @@ def ConstructBeymax():
     async def react(self, message, content):
         await self.add_reaction(
             message,
-            b'\xf0\x9f\x91\x8d'.decode() # :thumbsup:
+            b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup:
         )
 
 
