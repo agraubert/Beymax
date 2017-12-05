@@ -15,7 +15,19 @@ def EnablePolls(bot):
         `!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
         Example: `!poll Is Beymax cool? | Yes | Definitely`
         """
-        opts = ' '.join(content[1:]).split('|')
+        opts = [
+            (opt.rstrip() if '~<blank>' not in opt else opt)
+            for opt in ' '.join(content[1:]).split('|')
+        ]
+        if sum(1 for opt in opts if not len(opt)):
+            await self.send_message(
+                message.author,
+                "Your poll command contained trailing or adjacent `|` characters"
+                " which resulted in blank fields that I'm going to ignore. If"
+                " the blank fields were intentional, add `~<blank>` into each"
+                " field that you want to leave blank"
+            )
+        opts = [opt.replace('~<blank>', '') for opt in opts if len(opt)]
         title = opts.pop(0)
         body = getname(message.author)+" has started a poll:\n"
         body+=title+"\n"
