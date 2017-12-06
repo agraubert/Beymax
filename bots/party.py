@@ -56,8 +56,8 @@ def EnableParties(bot):
                     name += str(suffix)
                 perms = []
                 if hasattr(message.channel, 'overwrites'):
-                    for role, src in perms:
-                        dest = discord.PermissionsOverwrite(
+                    for role, src in message.channel.overwrites:
+                        dest = discord.PermissionOverwrite(
                             create_instant_invite=src.create_instant_invite,
                             manage_channels=src.manage_channels,
                             manage_roles=src.manage_roles,
@@ -72,13 +72,15 @@ def EnableParties(bot):
                         perms.append((role, dest))
                 perms.append((
                     message.server.get_member(self.user.id),
-                    discord.PermissionsOverwrite(
+                    discord.PermissionOverwrite(
                         manage_channels=True
                     )
                 ))
                 perms.append((
                     message.author,
-                    manage_roles=True
+                    discord.PermissionOverwrite(
+                        manage_roles=True
+                    )
                 ))
                 channel = await self.create_channel(
                     message.server,
