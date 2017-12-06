@@ -176,7 +176,7 @@ class CoreBot(discord.Client):
         result = self.primary_server.get_member(username)
         if result is not None:
             return result.id
-        sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
+        raise NameError("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
     def build_permissions_chain(self, user):
         # Assemble the chain of permissions rules for a given user
@@ -234,8 +234,10 @@ class CoreBot(discord.Client):
             content[0] = content[0].lower()
         except:
             return
-        if content[0] in self.commands: #if the first argument is a command
-            if self.check_permissions_chain(content[0][1:], message.author)[0]:
+        if content[0] in self.commands:
+            if message.author.id in self.ignored_users:
+                print("Ignoring command from", message.author,":", content)
+            elif self.check_permissions_chain(content[0][1:], message.author)[0]:
                 print("Command in channel", message.channel, "from", message.author, ":", content)
                 await self.commands[content[0]](self, message, content)
             else:
@@ -340,5 +342,42 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.author,
             '\n'.join(body)
         )
+
+    @bot.add_command('!ignore')
+    async def cmd_ignore(self, message, content):
+        """
+        `!ignore <user id or user#tag>` : Ignore all commands by the given user
+        until the next time I'm restarted
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!ignore <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                self.ignored_users.add(uid)
+                user = self.primary_server.get_member(uid)
+                await self.send_message(
+                    user,
+                    "I have been asked to ignore you by %s. Please contact them"
+                    " to petition this decision." % (str(message.author))
+                )
+                await self.send_message(
+                    self.general,
+                    "%s has asked me to ignore %s. %s can no longer issue any commands"
+                    " until I am restarted" % (
+                        str(message.author),
+                        str(user),
+                        getname(user)
+                    )
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
 
     return bot
