@@ -54,9 +54,36 @@ def EnableParties(bot):
                     while name+str(suffix) in party_names:
                         suffix += 1
                     name += str(suffix)
+                perms = []
+                if hasattr(message.channel, 'overwrites'):
+                    for role, src in perms:
+                        dest = discord.PermissionsOverwrite(
+                            create_instant_invite=src.create_instant_invite,
+                            manage_channels=src.manage_channels,
+                            manage_roles=src.manage_roles,
+                            manage_webhooks=src.manage_webhooks,
+                            connect=src.read_messages,
+                            send=src.send_messages,
+                            mute_members=src.manage_messages,
+                            deafen_members=src.manage_messages,
+                            move_members=src.manage_messages,
+                            use_voice_activation=True
+                        )
+                        perms.append((role, dest))
+                perms.append((
+                    message.server.get_member(self.user.id),
+                    discord.PermissionsOverwrite(
+                        manage_channels=True
+                    )
+                ))
+                perms.append((
+                    message.author,
+                    manage_roles=True
+                ))
                 channel = await self.create_channel(
                     message.server,
                     name,
+                    *perms,
                     type=discord.ChannelType.voice
                 )
                 await self.send_message(
@@ -78,6 +105,12 @@ def EnableParties(bot):
                     'time': time.time()
                 })
             save_db(parties, 'parties.json')
+        else:
+            await self.send_message(
+                message.channel,
+                "You cannot use this command in a private chat. "
+                "Please try it again from within a server channel"
+            )
 
     @bot.add_command('!disband')
     async def cmd_disband(self, message, content):
