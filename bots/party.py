@@ -91,6 +91,8 @@ def EnableParties(bot):
                 #     type=discord.ChannelType.voice,
                 #     category=self.categories['Voice Channels']
                 # )
+
+                #Temporary workaround for party creation within categories
                 @asyncio.coroutine
                 def tmp_create_channel():
                     permissions_payload = [
@@ -104,7 +106,6 @@ def EnableParties(bot):
                     ]
 
                     def tmp_post_request():
-                        #server.id, name, str(type), perms as permission_overwrites and category
                         payload = {
                             'name': name,
                             'type': str(discord.ChannelType.voice),
@@ -123,6 +124,7 @@ def EnableParties(bot):
                     data = yield from tmp_post_request()
                     channel = discord.Channel(server=message.server, **data)
                     return channel
+
                 channel = await tmp_create_channel()
                 await self.send_message(
                     message.channel,

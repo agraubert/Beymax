@@ -13,7 +13,7 @@ class CoreBot(discord.Client):
     tasks = [] # [interval(s), function] functions take (self)
     special = [] # [callable, function] callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
 
-    def add_command(self, *cmds):
+    def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
         if not len(cmds):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
@@ -22,19 +22,19 @@ class CoreBot(discord.Client):
             return func
         return wrapper
 
-    def add_task(self, interval):
+    def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
         def wrapper(func):
             self.tasks.append((interval, func))
             return func
         return wrapper
 
-    def add_special(self, check):
+    def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
         def wrapper(func):
             self.special.append((check, func))
             return func
         return wrapper
 
-    def EnableAll(self, *bots):
+    def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
         for bot in bots:
             if callable(bot):
                 self = bot(self)
@@ -103,6 +103,7 @@ class CoreBot(discord.Client):
         await super().close()
 
     async def send_message(self, destination, content, *, delim='\n', **kwargs):
+        #built in chunking
         body = content.split(delim)
         tmp = []
         last_msg = None
@@ -110,13 +111,17 @@ class CoreBot(discord.Client):
             tmp.append(line)
             msg = delim.join(tmp)
             if len(msg) > 2048 and delim=='. ':
+                # If the message is > 2KB and we're trying to split by sentences,
+                # try to split it up by spaces
                 last_msg = await self.send_message(
                     destination,
                     msg,
                     delim=' ',
                     **kwargs
                 )
-            if len(msg) > 1536 and delim=='\n':
+            elif len(msg) > 1536 and delim=='\n':
+                # if the message is > 1.5KB and we're trying to split by lines,
+                # try to split by sentences
                 last_msg = await self.send_message(
                     destination,
                     msg,
@@ -124,6 +129,8 @@ class CoreBot(discord.Client):
                     **kwargs
                 )
             elif len(msg) > 1024:
+                # Otherwise, send it if the current message has reached the
+                # 1KB chunking target
                 last_msg = await super().send_message(
                     destination,
                     msg,
@@ -132,6 +139,7 @@ class CoreBot(discord.Client):
                 tmp = []
                 await asyncio.sleep(1)
         if len(tmp):
+            #send any leftovers (guaranteed <2KB)
             last_msg = await super().send_message(
                 destination,
                 msg
@@ -139,6 +147,7 @@ class CoreBot(discord.Client):
         return last_msg
 
     def getid(self, username):
+        #Get the id of a user from an unknown reference (could be their username, fullname, or id)
         if username in self.users:
             return self.users[username]['id']
         result = self.primary_server.get_member_named(username)
@@ -150,6 +159,7 @@ class CoreBot(discord.Client):
         sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
     def build_permissions_chain(self, user):
+        # Assemble the chain of permissions rules for a given user
         chain = []
         if user.id in self.permissions['users']:
             chain.append(self.permissions['users'][user.id])
@@ -161,14 +171,21 @@ class CoreBot(discord.Client):
         return [item for item in chain] + [self.permissions['defaults']]
 
     def has_underscore_permissions(self, user, chain=None):
+        # Check the permissions chain for a user to see if they can use
+        # Administrative (underscore) commands
         if chain is None:
+            #build the chain, if it wasn't given as an argument
             chain = self.build_permissions_chain(user)
         for obj in chain:
             if 'underscore' in obj:
                 return obj['underscore']
 
     def check_permissions_chain(self, cmd, user, chain=None):
+        #Important note: cmd argument does not include the leading ! of a command
+        # Permissions.yml file contains commands without prefix, and we check them
+        # here without the prefix
         if chain is None:
+            #build the chain, if it wasn't given as an argument
             chain = self.build_permissions_chain(user)
         for obj in chain:
             if 'allow' in obj and cmd in obj['allow']:
@@ -182,6 +199,8 @@ class CoreBot(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
+        # build the user struct and update the users object
+        # FIXME: We should migrate away from self.users[] and add our own get_user method
         struct = {
             'id': message.author.id,
             'fullname': str(message.author),
@@ -195,7 +214,7 @@ class CoreBot(discord.Client):
             content[0] = content[0].lower()
         except:
             return
-        if content[0] in self.commands:
+        if content[0] in self.commands: #if the first argument is a command
             if self.check_permissions_chain(content[0][1:], message.author)[0]:
                 print("Command in channel", message.channel, "from", message.author, ":", content)
                 await self.commands[content[0]](self, message, content)
@@ -204,6 +223,8 @@ class CoreBot(discord.Client):
                 await self.send_message(
                     message.channel,
                     "You do not have permissions to use this command\n" +
+                    # Add additional message if this is a DM and they may actually
+                    # have permissions for this command
                     (("If you have permissions granted to you by a role, "
                      "I cannot check those in private messages\n")
                      if isinstance(message.channel, discord.PrivateChannel)
@@ -212,11 +233,15 @@ class CoreBot(discord.Client):
                     "To check your permissions, use the `!permissions` command"
                 )
         else:
+            # If this was not a command, check if any of the special functions
+            # would like to run on this message
             for check, func in self.special:
                 if check(self, message):
                     print("Running special", func.__qualname__)
                     await func(self, message, content)
                     break
+        # Check if it is time to run any tasks
+        #
         current = time.time()
         for i, (interval, task) in enumerate(self.tasks):
             last = self.update_times[i]
@@ -226,6 +251,7 @@ class CoreBot(discord.Client):
                 self.update_times[i] = current
 
 def EnableUtils(bot): #prolly move to it's own bot
+    #add some core commands
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 

@@ -2,13 +2,17 @@
 
 Not to be confused with _[Baymax](https://en.wikipedia.org/wiki/Baymax)_
 
---
+---
 
 A custom Discord bot to handle various utilities
 
 main.py contains the reference implementation of Beymax. Files in the bots folder
 contain code for creating your own bots with subsets of the same commands and for
 easily adding your own commands to a bot
+
+### Setup
+
+Looking to set up Beymax on your server? Check the [setup] walkthrough
 
 ### Chat commands
 
@@ -46,6 +50,49 @@ easily adding your own commands to a bot
   no self control (but mostly because it's the only way to make the reactions
   appear initially)
 
+* `!birthday <your birthday>`
+
+  Tracks your birthday (provided in MM/DD/YYYY format). Beymax will post a congratulatory
+  message
+
+* `!bug <issue>`
+
+  Reports a bug with Beymax. Currently bugs are tracked in discord via a dedicated
+  text channel, but the goal would be to report the bug and open an issue on Beymax's
+  github
+
+* `!bug:comment <bug id> <your comments>` or `!comment <bug id> <your comments>`
+
+  Adds a comment to an open issue
+
+* `!bug:label <bug id> <new label>`
+
+  Re-labels a bug. By default bugs are labeled using the original issue text
+
+* `!bug:status <bug id> <status>`
+
+  Change the status of a bug
+
+* `!bug:thread <bug id>` or `!thread <bug id>`
+
+  Display the full comment thread of a bug
+
+* `!bug:unsubscribe <bug id>` or `!unsubscribe <bug id>`
+
+  Disables getting \@mentioned every time changes are made to this bug. You cannot
+  unsubscribe if you created the bug
+
+* `!bug:user <bug id> <user id>`
+
+  Subscribes the user to the bug
+
+* `!permissions`
+
+  Beymax will PM you with a list of all commands you have are authorized to use.
+  Note that permissions gained though roles cannot be verified in a PM, so if you
+  use `!permissions` in a PM with Beymax, he will only report default permissions
+  and those assigned to you directly.
+
 * `!kill-beymax` or `!satisfied`
 
   Shuts down Beymax
@@ -72,6 +119,15 @@ easily adding your own commands to a bot
 
   Has Beymax send the _message_ verbatim into the general chat
 
+* `!_greet`
+
+  Manually trigger a greeting message (for yourself)
+
+* `!_owinit`
+
+  Enable stats tracking and trigger start-of-season message. Currently, there is
+  no automated method for doing this
+
 * `!_owupdate`
 
   Performs a manual update of overwatch statistics. This normally happens every
@@ -81,3 +137,22 @@ easily adding your own commands to a bot
 
   Performs an end-of-season analysis. I currently have no way to automate Beymax
   doing this task as the season end dates are rather unpredictable
+
+* `!_payment <project> <user ID> $<amount>`
+
+  Records a payment to an ongoing fundraising project.  Currently this must be done
+  manually
+
+* `!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY | $<goal amount> | <Venmo username>`
+
+  Starts a new fundraising project. Beymax will notify users monthly until the project
+  is manually ended, the time expires, or the goal is reached
+
+* `!_project:end <project short name>`
+
+  Manually ends a fundraising project
+
+* `!_status [status message]`
+
+  Changes Beymax's current status message to the provided status. If no status is provided,
+  Beymax will pick one from the preset list

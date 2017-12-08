@@ -24,6 +24,7 @@ random.seed()
 #parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
 
 def select_status():
+    #return a randomly selected status message from the list
     return random.sample(
         [
             'Surgeon Simulator',
@@ -45,8 +46,8 @@ def select_status():
 class Beymax(CoreBot):
 
     async def on_ready(self):
-        await super().on_ready()
-        print('Logged in as')
+        await super().on_ready() #first run the CoreBot initialization
+        print('Logged in as') #then run Beymax-Specific startup (print info)
         print(self.user.name)
         print(self.user.id)
         print('------')
@@ -56,12 +57,12 @@ class Beymax(CoreBot):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name, channel.type)
-        self.dev_channel = discord.utils.get(
+        self.dev_channel = discord.utils.get( #set dev_channel to testing_grounds
             self.get_all_channels(),
             name='testing_grounds',
             type=discord.ChannelType.text
         )
-        self._bug_channel = discord.utils.get(
+        self._bug_channel = discord.utils.get( #set bug_channel to bots_n_bugs
             self.get_all_channels(),
             name='bots_n_bugs',
             type=discord.ChannelType.text
@@ -69,14 +70,14 @@ class Beymax(CoreBot):
         self.bug_channel = self._bug_channel
         print("Ready to serve!")
 
-    async def on_member_join(self, member):
+    async def on_member_join(self, member): #greet new members
         await self.send_message(
             self.general,
             "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
 
-def ConstructBeymax():
+def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = Beymax()
 
     @beymax.add_command('!kill-beymax', '!satisfied')
@@ -118,10 +119,10 @@ def ConstructBeymax():
     async def react(self, message, content):
         await self.add_reaction(
             message,
-            b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup:
+            b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
 
-    beymax.EnableAll(
+    beymax.EnableAll( #enable all sub-bots
         EnableUtils,
         EnableBirthday,
         EnableBugs,
@@ -137,61 +138,3 @@ def ConstructBeymax():
 if __name__ == '__main__':
     with open("token.txt") as r:
         ConstructBeymax().run(r.read().strip())
-
-
-# import discord
-# import re
-# import asyncio
-# import requests
-# import time
-# import datetime
-# import json
-# from pyemojify import emojify
-# import random
-# import threading
-# import os
-# import shutil
-# random.seed()
-
-# numnames = ['one', "two", 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
-# if current - self.invite_update_time > self.invite_update_interval:
-#     stale_invites = load_db('invites.json')
-#     active_invites = await self.invites_from(self._general.server)
-#     inviters = {}
-#     for invite in active_invites:
-#         select = invite.max_age == 0 or (datetime.now() - invite.created_at).days >= 7
-#         select &= invite.max_uses - invite.uses > 5 or invite.max_uses == invite.uses
-#         select &= not invite.temporary
-#         select |= (datetime.now() - invite.created_at).days >= 30
-#         select &= invite.id not in stale_invites or current - stale_invites[invite.id] < self.invite_update_interval
-#         if select:
-#             if invite.inviter not in inviters:
-#                 inviters[invite.inviter] = [invite]
-#             else:
-#                 inviters[invite.inviter].append(invite)
-#     for inviter, invites in inviters:
-#         body = (
-#             "Hello, %s, I was looking through the server's active invites"
-#             " and I noticed that you have %d stale invite%s lying"
-#             " around:\n" % (
-#                 self.mentions[inviter.name],
-#                 len(invites),
-#                 's' if len(invites) > 1 else ''
-#             )
-#         )
-#         for invite in invites:
-#             body+="`%s`, created %s\n" % (
-#                 invite.url,
-#                 invite.created_at.strftime(
-#                     '%A %m/%d/%y at %I:%M %p'
-#                 )
-#             )
-#         if len(invites) > 1:
-#             body += (
-#                 "Do you mind deleting any of those that you don't need?\n"
-#                 "Thanks for helping to keep the server safe!"
-#             )
-#     stale_invites = {
-#         invite.id:current for invite in active_invites
-#     }
-#     save_db(stale_invites, 'invites.json')
