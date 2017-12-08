@@ -28,13 +28,18 @@ def EnableParties(bot):
                         current_party = parties[i]['name']
                         parties[i]['primed'] = True
                     else:
-                        await self.delete_channel(
-                            discord.utils.get(
-                                message.server.channels,
-                                id=parties[i]['id'],
-                                type=discord.ChannelType.voice
+                        try:
+                            await self.delete_channel(
+                                discord.utils.get(
+                                    message.server.channels,
+                                    id=parties[i]['id'],
+                                    type=discord.ChannelType.voice
+                                )
                             )
-                        )
+                        except Discord.NotFound:
+                            pass
+                        except Discord.HTTPException as e:
+                            print("Error deleting channel:", e.text, e.response)
                         parties[i] = None
             parties = [party for party in parties if party is not None]
             if current_party:
@@ -56,6 +61,8 @@ def EnableParties(bot):
                         suffix += 1
                     name += str(suffix)
                 perms = []
+                #translate permissions from the text channel where the command was used
+                #into analogous voice permissions
                 if hasattr(message.channel, 'overwrites'):
                     for role, src in message.channel.overwrites:
                         dest = discord.PermissionOverwrite(
@@ -71,12 +78,14 @@ def EnableParties(bot):
                             use_voice_activation=True
                         )
                         perms.append((role, dest))
+                # Add specific override for Beymax (so he can kill the channel)
                 perms.append((
                     message.server.get_member(self.user.id),
                     discord.PermissionOverwrite(
                         manage_channels=True
                     )
                 ))
+                # Add specific override for the channel's creator (so they can modify permissions)
                 perms.append((
                     message.author,
                     discord.PermissionOverwrite(
@@ -167,17 +176,18 @@ def EnableParties(bot):
                         id=parties[i]['id'],
                         type=discord.ChannelType.voice
                     )
-                    pruned.append(
-                        '`%s`' % parties[i]['name']
-                        if str(parties[i]['name']) == str(channel.name)
-                        else '`%s` AKA `%s`' % (
-                            channel.name,
-                            parties[i]['name']
+                    if channel is not None:
+                        pruned.append(
+                            '`%s`' % parties[i]['name']
+                            if str(parties[i]['name']) == str(channel.name)
+                            else '`%s` AKA `%s`' % (
+                                channel.name,
+                                parties[i]['name']
+                            )
                         )
-                    )
-                    await self.delete_channel(
-                        channel
-                    )
+                        await self.delete_channel(
+                            channel
+                        )
                     parties[i] = None
             parties = [party for party in parties if party is not None]
             save_db(parties, 'parties.json')
@@ -212,18 +222,19 @@ def EnableParties(bot):
                     id=parties[i]['id'],
                     type=discord.ChannelType.voice
                 )
-                if not len(channel.voice_members):
-                    pruned.append(
-                        '`%s`' % parties[i]['name']
-                        if str(parties[i]['name']) == str(channel.name)
-                        else '`%s` AKA `%s`' % (
-                            channel.name,
-                            parties[i]['name']
+                if channel is None or not len(channel.voice_members):
+                    if channel is not None:
+                        pruned.append(
+                            '`%s`' % parties[i]['name']
+                            if str(parties[i]['name']) == str(channel.name)
+                            else '`%s` AKA `%s`' % (
+                                channel.name,
+                                parties[i]['name']
+                            )
                         )
-                    )
-                    await self.delete_channel(
-                        channel
-                    )
+                        await self.delete_channel(
+                            channel
+                        )
                     parties[i] = None
         parties = [party for party in parties if party is not None]
         save_db(parties, 'parties.json')
