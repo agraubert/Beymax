@@ -36,9 +36,9 @@ def EnableParties(bot):
                                     type=discord.ChannelType.voice
                                 )
                             )
-                        except Discord.NotFound:
+                        except discord.NotFound:
                             pass
-                        except Discord.HTTPException as e:
+                        except discord.HTTPException as e:
                             print("Error deleting channel:", e.text, e.response)
                         parties[i] = None
             parties = [party for party in parties if party is not None]
