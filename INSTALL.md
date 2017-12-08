@@ -22,33 +22,33 @@ don't know what a shell is, you're going to have a bad time
 ---
 
 1. Download Beymax
-  1. Beymax is set up to run single-server only, so you'll need to download and
-  run your own version for your **Server**
-  2. On the **Host** coputer, open a **Shell** and navigate to the directory where
-  you would like to install Beymax
-  3. Download the current version of Beymax's code: `git clone https://github.com/agraubert/Beymax.git`
-    * If you don't have Git installed on your computer, you can get it [here](https://git-scm.com/)
-  4. Move into the `Beymax` directory
+    1. Beymax is set up to run single-server only, so you'll need to download and
+    run your own version for your **Server**
+    2. On the **Host** coputer, open a **Shell** and navigate to the directory where
+    you would like to install Beymax
+    3. Download the current version of Beymax's code: `git clone https://github.com/agraubert/Beymax.git`
+        * If you don't have Git installed on your computer, you can get it [here](https://git-scm.com/)
+    4. Move into the `Beymax` directory
 2. Set up a Discord App for Beymax
-  1. Go to the [Discord Developers page](https://discordapp.com/developers/) and
-  log in, if necessary
-  2. Click on `My Apps` on the left sidebar
-  3. Click on the big `New App` button in the center of the page
-  4. Give a name for your bot. This could be `Beymax`, if you so choose, but you
-  can use whatever you like.
-    * **Note:** This will be the username of your bot
-    * You may optionally add a Description and Icon. I highly recommend uploading
+    1. Go to the [Discord Developers page](https://discordapp.com/developers/) and
+    log in, if necessary
+    2. Click on `My Apps` on the left sidebar
+    3. Click on the big `New App` button in the center of the page
+    4. Give a name for your bot. This could be `Beymax`, if you so choose, but you
+    can use whatever you like.
+        * **Note:** This will be the username of your bot
+        * You may optionally add a Description and Icon. I highly recommend uploading
     an icon for your bot (instead of using a default one)
-  5. Click the `Create App` button, when ready
-  6. Scroll down to the `Create a Bot User` button and click it.
-    * Confirm the prompt that comes up. You'll need a bot user
-  7. Click the `click to reveal` link next to `Token:`
-    * The token will be a long string of letters and numbers. Copy that text for
-    the next step
-  8. In the folder where beymax is installed (the same folder as `main.py` and
+    5. Click the `Create App` button, when ready
+    6. Scroll down to the `Create a Bot User` button and click it.
+        * Confirm the prompt that comes up. You'll need a bot user
+    7. Click the `click to reveal` link next to `Token:`
+        * The token will be a long string of letters and numbers. Copy that text for
+        the next step
+    8. In the folder where beymax is installed (the same folder as `main.py` and
     `example_permissions.yml`), create a file called `token.txt`
-  9. Paste your client token (from step 7) into that file and save it.
-    * Do not place any other text in the file
+    9. Paste your client token (from step 7) into that file and save it.
+        * Do not place any other text in the file
 3. Configure your bot
   1. Right now, the Beymax framework requires modifications to the code to configure
   your bot. In the future, we may add a configuration file, but this is not currently
