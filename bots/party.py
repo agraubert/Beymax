@@ -36,6 +36,8 @@ def EnableParties(bot):
                                     type=discord.ChannelType.voice
                                 )
                             )
+                        except AttributeError:
+                            pass
                         except discord.NotFound:
                             pass
                         except discord.HTTPException as e:
