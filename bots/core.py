@@ -50,6 +50,10 @@ class CoreBot(discord.Client):
             name='general',
             type=discord.ChannelType.text
         )
+        self.categories = {
+            channel.name:channel for channel in self.get_all_channels()
+            if channel.type == discord.ChannelType.category
+        }
         self.general = self._general
         self._bug_channel = self._general #Change which channels these use
         self.bug_channel = self._general #Change which channels these use

@@ -86,7 +86,8 @@ def EnableParties(bot):
                     message.server,
                     name,
                     *perms,
-                    type=discord.ChannelType.voice
+                    type=discord.ChannelType.voice,
+                    category=self.categories['Voice Channels']
                 )
                 await self.send_message(
                     message.channel,
