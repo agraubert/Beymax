@@ -55,7 +55,7 @@ class Beymax(CoreBot):
             print(server.name)
         print("Bot has access to:")
         for channel in self.get_all_channels():
-            print(channel.name)
+            print(channel.name, channel.type)
         self.dev_channel = discord.utils.get(
             self.get_all_channels(),
             name='testing_grounds',

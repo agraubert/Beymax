@@ -1,6 +1,7 @@
 from .core import CoreBot
 from .utils import load_db, save_db, sanitize
 import discord
+from discord.http import Route
 import asyncio
 import time
 
@@ -82,13 +83,47 @@ def EnableParties(bot):
                         manage_roles=True
                     )
                 ))
-                channel = await self.create_channel(
-                    message.server,
-                    name,
-                    *perms,
-                    type=discord.ChannelType.voice,
-                    category=self.categories['Voice Channels']
-                )
+                # FIXME: discord.py needs to add category support
+                # channel = await self.create_channel(
+                #     message.server,
+                #     name,
+                #     *perms,
+                #     type=discord.ChannelType.voice,
+                #     category=self.categories['Voice Channels']
+                # )
+                @asyncio.coroutine
+                def tmp_create_channel():
+                    permissions_payload = [
+                        {
+                            'allow': rule.pair()[0].value,
+                            'deny': rule.pair()[1].value,
+                            'id': target.id,
+                            'type': 'member' if isinstance(target, discord.User) else 'role'
+                        }
+                        for target, rule in perms
+                    ]
+
+                    def tmp_post_request():
+                        #server.id, name, str(type), perms as permission_overwrites and category
+                        payload = {
+                            'name': name,
+                            'type': str(discord.ChannelType.voice),
+                            'permission_overwrites': permissions_payload,
+                            'parent_id': self.categories['Voice Channels'].id
+                        }
+                        return self.http.request(
+                            Route(
+                                'POST',
+                                '/guilds/{guild_id}/channels',
+                                guild_id=message.server.id
+                            ),
+                            json=payload,
+                            # reason=None
+                        )
+                    data = yield from tmp_post_request()
+                    channel = discord.Channel(server=message.server, **data)
+                    return channel
+                channel = await tmp_create_channel()
                 await self.send_message(
                     message.channel,
                     "Alright, %s, I've created the `%s` channel for you.\n"
