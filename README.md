@@ -12,7 +12,7 @@ easily adding your own commands to a bot
 
 ### Setup
 
-Looking to set up Beymax on your server? Check the [setup] walkthrough
+Looking to set up Beymax on your server? Check the [Setup Guide](https://github.com/agraubert/Beymax/blob/master/INSTALL.md)
 
 ### Chat commands
 
