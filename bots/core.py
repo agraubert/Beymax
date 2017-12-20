@@ -76,8 +76,13 @@ class CoreBot(discord.Client):
             if 'permissions' in self.permissions:
                 if not isinstance(self.permissions['permissions'], list):
                     sys.exit("permissions key of permissions.yml must be a list")
+            seen_roles = set()
             for target in self.permissions['permissions']:
                 validate_permissions(target)
+                if 'role' in target:
+                    if target['role'] in seen_roles:
+                        sys.exit("Duplicate role encountered in permissions.yml")
+                    seen_roles.add(target['role'])
             self.permissions['roles'] = {
                 discord.utils.find(
                     lambda role: role.name == obj['role'] or role.id == obj['role'],
@@ -85,14 +90,29 @@ class CoreBot(discord.Client):
                 ).id:obj for obj in self.permissions['permissions']
                 if 'role' in obj
             }
-            self.permissions['users'] = {
-                self.getid(user):obj for obj in self.permissions['permissions']
+            tmp = [
+                (self.getid(user),obj) for obj in self.permissions['permissions']
                 if 'users' in obj
                 for user in obj['users']
-            }
+            ]
+            self.permissions['users'] = {}
+            for uid, rule in tmp:
+                if uid not in self.permissions['users']:
+                    self.permissions['users'][uid] = [rule]
+                else:
+                    self.permissions['users'][uid].append(rule)
+            for uid in self.permissions['users']:
+                self.permissions['users'][uid].sort(
+                    key=lambda x:len(x['users'])
+                )
             self.permissions['defaults']['_grant'] = 'by default'
             for user in self.permissions['users']:
-                self.permissions['users'][user]['_grant'] = 'directly to you'
+                for i in range(len(self.permissions['users'][user])):
+                    nUsers = len(self.permissions['users'][user][i]['users'])
+                    self.permissions['users'][user][i]['_grant'] = (
+                        'directly to you' if nUsers == 1 else
+                        'to you and %d other people' % nUsers
+                    )
             for role in self.permissions['roles']:
                 self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
                     self.permissions['roles'][role]['role']
@@ -162,7 +182,7 @@ class CoreBot(discord.Client):
         # Assemble the chain of permissions rules for a given user
         chain = []
         if user.id in self.permissions['users']:
-            chain.append(self.permissions['users'][user.id])
+            chain += self.permissions['users'][user.id]
         if hasattr(user, 'roles'):
             user_roles = set(user.roles)
             for role in self.primary_server.role_hierarchy:
