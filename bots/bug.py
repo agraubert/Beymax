@@ -16,7 +16,7 @@ def EnableBugs(bot):
             'via PM',
             '\n'.join([lines[0][128:]]+lines[1:])
         )
-        response = await post_issue(body.strip())
+        response = await post_issue(title.strip(), body.strip())
         if response.status_code in {200,201}:
             await self.send_message(
                 message.author,
