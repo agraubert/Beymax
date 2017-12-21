@@ -6,7 +6,7 @@ def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    @bot.add_command('!_bug')
+    @bot.add_command('!bug')
     async def cmd_issue(self, message, content):
         lines = ' '.join(message.content.replace('!_bug', '', 1)).split('\n')
         title = lines[0][:128]
@@ -35,7 +35,7 @@ def EnableBugs(bot):
                 "Unable to report issue for "+str(message.author)
             )
 
-    @bot.add_command('!bug')
+    @bot.add_command('!bug:legacy')
     async def cmd_bug(self, message, content):
         """
         `!bug [feedback or bug report]` : Opens a new ticket with your
