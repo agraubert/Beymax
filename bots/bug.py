@@ -8,18 +8,20 @@ def EnableBugs(bot):
 
     @bot.add_command('!_bug')
     async def cmd_issue(self, message, content):
+        lines = ' '.join(content).split('\n')
+        title = lines[0][:128]
         body = '%s (%s) has reported a new issue:\n%s' % (
             str(message.author),
             'on '+message.server.name if message.server is not None else
             'via PM',
-            message.content
+            '\n'.join([lines[0][128:]]+lines[1:])
         )
         response = await post_issue(body.strip())
         if response.status_code in {200,201}:
             await self.send_message(
                 message.author,
                 "I've reported the issue, which you can view and comment on here: %s" % (
-                    response.json()['url']
+                    response.json()['html_url']
                 )
             )
         else:

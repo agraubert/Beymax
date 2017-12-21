@@ -35,13 +35,10 @@ def validate_permissions(obj, is_default=False):
         sys.exit("Permissions object must set some permission (allow, deny, or underscore)")
     return
 
-async def post_issue(content):
+async def post_issue(title, body):
     with open('git.token') as r:
         token = r.read().strip()
-    lines = content.split('\n')
-    title = lines[0][:128]
-    body = '\n'.join([lines[0][128:]]+lines[1:])
-    yield requests.post(
+    return requests.post(
         'https://api.github.com/repos/agraubert/Beymax/issues?access_token=%s'%token,
         json={
             'title':title,
