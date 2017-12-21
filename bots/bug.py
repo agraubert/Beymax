@@ -1,10 +1,37 @@
 from .core import CoreBot
-from .utils import load_db, save_db, getname
+from .utils import load_db, save_db, getname, post_issue
 import asyncio
 
 def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
+
+    @bot.add_command('!_bug')
+    async def cmd_issue(self, message, content):
+        body = '%s (%s) has reported a new issue:\n%s' % (
+            str(message.author),
+            'on '+message.server.name if message.server is not None else
+            'via PM',
+            message.content
+        )
+        response = await post_issue(body.strip())
+        if response.status_code in {200,201}:
+            await self.send_message(
+                message.author,
+                "I've reported the issue, which you can view and comment on here: %s" % (
+                    response.json()['url']
+                )
+            )
+        else:
+            await self.send_message(
+                message.author,
+                "I was unable to report the issue for you. Please try to report"
+                " the issue using the legacy system `!bug:legacy`"
+            )
+            await self.send_message(
+                self.dev_channel,
+                "Unable to report issue for "+str(message.author)
+            )
 
     @bot.add_command('!bug')
     async def cmd_bug(self, message, content):

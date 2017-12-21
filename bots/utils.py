@@ -1,5 +1,7 @@
 import json
 import sys
+import requests
+import asyncio
 
 def load_db(filename, default=None):
     try:
@@ -32,3 +34,17 @@ def validate_permissions(obj, is_default=False):
     if not ('allow' in obj or 'deny' in obj  or 'underscore' in obj):
         sys.exit("Permissions object must set some permission (allow, deny, or underscore)")
     return
+
+async def post_issue(content):
+    with open('git.token') as r:
+        token = r.read().strip()
+    lines = content.split('\n')
+    title = lines[0][:128]
+    body = '\n'.join([lines[0][128:]]+lines[1:])
+    yield requests.post(
+        'https://api.github.com/repos/agraubert/Beymax/issues?access_token=%s'%token,
+        json={
+            'title':title,
+            'body':body
+        }
+    )
