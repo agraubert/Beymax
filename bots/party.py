@@ -91,7 +91,8 @@ def EnableParties(bot):
                 perms.append((
                     message.author,
                     discord.PermissionOverwrite(
-                        manage_roles=True
+                        manage_roles=True,
+                        manage_channels=True # Allow creator to modify the channel
                     )
                 ))
                 # FIXME: discord.py needs to add category support
