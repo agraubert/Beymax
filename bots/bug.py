@@ -8,7 +8,7 @@ def EnableBugs(bot):
 
     @bot.add_command('!bug')
     async def cmd_issue(self, message, content):
-        lines = ' '.join(message.content.replace('!_bug', '', 1)).split('\n')
+        lines = ' '.join(message.content.replace('!bug', '', 1)).split('\n')
         title = lines[0][:128]
         body = '%s (%s) has reported a new issue:\n%s' % (
             str(message.author),
