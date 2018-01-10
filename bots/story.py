@@ -117,6 +117,9 @@ def EnableStory(bot):
 
     @bot.add_command('!_stories')
     async def cmd_story(self, message, content):
+        """
+        `!_stories` : Lists the available stories
+        """
         games = [
             f[:-3] for f in os.listdir('games') if f.endswith('.z5')
         ]
@@ -160,6 +163,8 @@ def EnableStory(bot):
                     '```'+self.player.readchunk()+'```'
                 )
             elif content == 'score':
+                self.player.write('score')
+                self.player.readchunk()
                 await self.send_message(
                     message.channel,
                     'Your score is %d' % self.player.score
@@ -171,6 +176,7 @@ def EnableStory(bot):
                     'You have quit your game. Your score was %d' % self.player.score
                 )
                 state['user'] = '~<IDLE>'
+                del state['transcript']
                 del self.player
                 save_db(state, 'game.json')
             else:
@@ -182,15 +188,20 @@ def EnableStory(bot):
                     '```'+self.player.readchunk()+'```'
                 )
         else:
-            await self.delete_message(message)
             await self.send_message(
                 message.author,
                 "Please refrain from posting messages in the story channel"
                 " while someone else is playing"
             )
+            await asyncio.sleep(0.5)
+            await self.delete_message(message)
 
     @bot.add_command('!_start')
     async def cmd_start(self, message, content):
+        """
+        `!_start <game name>` : Starts an interactive text adventure
+        Example: `!_start zork1`
+        """
         state = load_db('game.json', {'user':'~<IDLE>'})
         if state['user'] == '~<IDLE>':
             games = {
@@ -244,3 +255,38 @@ def EnableStory(bot):
 
 
     return bot
+
+    def xp_for(level):
+        if level <= 1:
+            return 10
+        else:
+            return (2*xp_for(level-1)-xp_for(level-2))+5
+
+    @bot.add_command('!_balance')
+    async def cmd_balance(self, message, content):
+        """
+        `!_balance` : Displays your current token balance
+        """
+        players = load_db('players.json')
+        if message.author.id not in players:
+            players[message.author.id] = {
+                'level':1,
+                'xp':0,
+                'balance':10
+            }
+        player = players[message.author.id]
+        await self.send_message(
+            message.channel,
+            "You are currently level %d and have a balance of %d tokens\n"
+            "You have %d xp to go to reach the next level" % (
+                player['level'],
+                player['balance'],
+                xp_for(player['level']+1)-player['xp']
+            )
+        )
+
+    @bot.add_command('!_bid')
+    async def cmd_bid(self, message, content):
+        """
+        `!_bid <amount> <game>` : Place a bid to play the next game
+        """
