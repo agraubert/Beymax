@@ -290,3 +290,4 @@ def EnableStory(bot):
         """
         `!_bid <amount> <game>` : Place a bid to play the next game
         """
+        pass
