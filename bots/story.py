@@ -42,7 +42,7 @@ class Player:
         self.remainder = b''
         self.score = 0
         self.proc = subprocess.Popen(
-            'dfrotz games/%s.z5' % game,
+            './dfrotz games/%s.z5' % game,
             universal_newlines=False,
             shell=True,
             stdout=self.stdoutWrite,
@@ -116,45 +116,70 @@ def EnableStory(bot):
         raise TypeError("This function must take a CoreBot")
 
     @bot.add_command('!_stories')
-    def cmd_story(self, message, content):
+    async def cmd_story(self, message, content):
         games = [
             f[:-3] for f in os.listdir('games') if f.endswith('.z5')
         ]
         await self.send_message(
             message.channel,
             '\n'.join(
-                "Here are the stories thar are available:",
-                *games
+                ["Here are the stories thar are available:"]+
+                games
             )
         )
 
     def checker(self, message):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        return state['user'] != '~<IDLE>'
+        return state['user'] != '~<IDLE>' and not message.content.startswith('!')
 
     @bot.add_special(checker)
-    def state_router(self, message, content):
+    async def state_router(self, message, content):
         # Routes messages depending on the game state
         state = load_db('game.json', {'user':'~<IDLE>'})
         if state['user'] == message.author.id:
+            if not hasattr(self, 'player'):
+                # The game has been interrupted
+                await self.send_message(
+                    message.channel,
+                    "Resuming game in progress...\n"
+                    "Please wait"
+                )
+                self.player = Player(state['game'])
+                for msg in state['transcript']:
+                    self.player.write(msg)
+                    await asyncio.sleep(0.5)
+                    self.player.readchunk()
             content = message.content.strip().lower()
             if content == '$':
                 content = '\n'
+                state['transcript'].append(content)
+                save_db(state, 'game.json')
                 self.player.write('\n')
-            elif content == '$quit':
+                await self.send_message(
+                    message.channel,
+                    '```'+self.player.readchunk()+'```'
+                )
+            elif content == 'score':
+                await self.send_message(
+                    message.channel,
+                    'Your score is %d' % self.player.score
+                )
+            elif content == 'quit':
                 self.player.quit()
                 await self.send_message(
                     message.channel,
-                    'You have quit your game.'
+                    'You have quit your game. Your score was %d' % self.player.score
                 )
                 state['user'] = '~<IDLE>'
                 del self.player
                 save_db(state, 'game.json')
             else:
+                state['transcript'].append(content)
+                save_db(state, 'game.json')
                 self.player.write(content)
                 await self.send_message(
                     message.channel,
-                    self.player.readchunk()
+                    '```'+self.player.readchunk()+'```'
                 )
         else:
             await self.send_message(
@@ -163,15 +188,17 @@ def EnableStory(bot):
                 " while someone else is playing"
             )
 
-    @bod.add_command('!_start')
-    def cmd_start(self, message, content):
+    @bot.add_command('!_start')
+    async def cmd_start(self, message, content):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        if state['user'] != '~<IDLE>':
+        if state['user'] == '~<IDLE>':
             games = {
                 f[:-3] for f in os.listdir('games') if f.endswith('.z5')
             }
             if content[1] in games:
                 state['user'] = message.author.id
+                state['transcript'] = []
+                state['game'] = content[1]
                 save_db(state, 'game.json')
                 self.player = Player(content[1])
                 # in future:
@@ -180,8 +207,27 @@ def EnableStory(bot):
                 # 3) Mention in game channel to get user's attention
                 # 4) Lock permissions in game channel to prevent non-players from posting messages
                 await self.send_message(
+                    message.author,
+                    'Here are the controls for the story-mode system:\n'
+                    'Any message you type in the story channel will be interpreted'
+                    ' as input to the game *unless* your message starts with `!`'
+                    ' (discord commands) or `$` (story commands)\n'
+                    '`$` : Simply type `$` to enter a blank line to the game\n'
+                    '`quit` : Quits the game in progress\n'
+                    '`score` : View your score'
+                )
+                await self.send_message(
                     message.channel,
-                    self.player.readchunk()
+                    '%s is now playing %s\n'
+                    'The game will begin shortly' % (
+                        message.author.mention,
+                        content[1]
+                    )
+                )
+                await asyncio.sleep(2)
+                await self.send_message(
+                    message.channel,
+                    '```'+self.player.readchunk()+'```'
                 )
             else:
                 await self.send_message(

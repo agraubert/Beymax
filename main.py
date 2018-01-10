@@ -6,6 +6,7 @@ from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
+from bots.story import EnableStory
 import discord
 import asyncio
 import random
@@ -130,7 +131,8 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableOverwatch,
         EnableParties,
         EnablePolls,
-        EnableCash
+        EnableCash,
+        EnableStory
     )
 
     return beymax
