@@ -58,6 +58,8 @@ class CoreBot(discord.Client):
         self._bug_channel = self._general #Change which channels these use
         self.bug_channel = self._general #Change which channels these use
         self.dev_channel = self._general #Change which channels these use
+        self._story_channel = self._general #Change which channels these use
+        self.story_channel = self._general #Change which channels these use
         self.primary_server = self._general.server
         self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
         self.permissions = None
@@ -282,6 +284,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         self.general = self.dev_channel
         self.bug_channel = self.dev_channel
+        self.story_channel = self.dev_channel
         await self.send_message(
             self.dev_channel,
             "Development mode enabled. All messages will be sent to testing grounds"
@@ -294,6 +297,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         self.general = self._general
         self.bug_channel = self._bug_channel
+        self.story_channel = self._story_channel
         await self.send_message(
             self.dev_channel,
             "Production mode enabled. All messages will be sent to general"

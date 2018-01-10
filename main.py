@@ -69,6 +69,12 @@ class Beymax(CoreBot):
             type=discord.ChannelType.text
         )
         self.bug_channel = self._bug_channel
+        self._story_channel = discord.utils.get(
+            self.get_all_channels(),
+            name='secret_channel',
+            type=discord.ChannelType.text
+        )
+        self.story_channel = self._story_channel
         print("Ready to serve!")
 
     async def on_member_join(self, member): #greet new members

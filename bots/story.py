@@ -130,7 +130,7 @@ def EnableStory(bot):
 
     def checker(self, message):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        return state['user'] != '~<IDLE>' and not message.content.startswith('!')
+        return message.channel.id == self.story_channel.id and state['user'] != '~<IDLE>' and not message.content.startswith('!')
 
     @bot.add_special(checker)
     async def state_router(self, message, content):
@@ -214,10 +214,12 @@ def EnableStory(bot):
                     ' (discord commands) or `$` (story commands)\n'
                     '`$` : Simply type `$` to enter a blank line to the game\n'
                     '`quit` : Quits the game in progress\n'
-                    '`score` : View your score'
+                    '`score` : View your score\n'
+                    'Some games may have their own commands in addition to these'
+                    ' ones that I handle personally'
                 )
                 await self.send_message(
-                    message.channel,
+                    self.story_channel,
                     '%s is now playing %s\n'
                     'The game will begin shortly' % (
                         message.author.mention,
@@ -226,7 +228,7 @@ def EnableStory(bot):
                 )
                 await asyncio.sleep(2)
                 await self.send_message(
-                    message.channel,
+                    self.story_channel,
                     '```'+self.player.readchunk()+'```'
                 )
             else:
