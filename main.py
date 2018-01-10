@@ -81,6 +81,8 @@ class Beymax(CoreBot):
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = Beymax()
 
+    beymax = EnableStory(beymax) # Story needs priority on special message recognition
+
     @beymax.add_command('!kill-beymax', '!satisfied')
     async def cmd_shutdown(self, message, content):
         """
@@ -132,7 +134,6 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableParties,
         EnablePolls,
         EnableCash,
-        EnableStory
     )
 
     return beymax
