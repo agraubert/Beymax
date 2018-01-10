@@ -182,6 +182,7 @@ def EnableStory(bot):
                     '```'+self.player.readchunk()+'```'
                 )
         else:
+            await self.delete_message(message)
             await self.send_message(
                 message.author,
                 "Please refrain from posting messages in the story channel"
@@ -202,10 +203,8 @@ def EnableStory(bot):
                 save_db(state, 'game.json')
                 self.player = Player(content[1])
                 # in future:
-                # 1) use a reserved channel so other users can watch
-                # 2) Post to general that a game is starting
-                # 3) Mention in game channel to get user's attention
-                # 4) Lock permissions in game channel to prevent non-players from posting messages
+                # See if there's a way to change permissions of an existing channel
+                # For now, just delete other player's messages
                 await self.send_message(
                     message.author,
                     'Here are the controls for the story-mode system:\n'
@@ -226,6 +225,7 @@ def EnableStory(bot):
                         content[1]
                     )
                 )
+                # Post to general
                 await asyncio.sleep(2)
                 await self.send_message(
                     self.story_channel,
@@ -241,3 +241,6 @@ def EnableStory(bot):
                 message.channel,
                 "Please wait until the current player finishes their game"
             )
+
+
+    return bot
