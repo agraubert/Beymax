@@ -9,6 +9,7 @@ import sys
 
 
 class CoreBot(discord.Client):
+    channel_references = {} # reference name -> channel name/id
     event_listeners = {} # event name -> [listener functions (self, event)]
     commands = {} # !cmd -> function wrapper. Functions take (self, message, content)
     users = {} # id/fullname -> {id, fullname, mention, name}
@@ -50,6 +51,19 @@ class CoreBot(discord.Client):
             return func
         return wrapper
 
+    def reserve_channel(self, name):
+        # creates a channel reference by that name
+        # channel references can be changed in configuration
+        if name in self.channel_references:
+            raise NameError("Reference taken")
+        self.channel_references[name] = None
+
+    def fetch_channel(self, name):
+        channel = self.channel_references[name]
+        if channel is None:
+            return self.fetch_channel('general')
+        return channel
+
     def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
         for bot in bots:
             if callable(bot):
@@ -83,13 +97,33 @@ class CoreBot(discord.Client):
             channel.name:channel for channel in self.get_all_channels()
             if channel.type == 4 # Placeholder. ChannelType.category is not in discord.py yet
         }
-        self.general = self._general
-        self._bug_channel = self._general #Change which channels these use
-        self.bug_channel = self._general #Change which channels these use
-        self.dev_channel = self._general #Change which channels these use
         self.primary_server = self._general.server
         self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
         self.permissions = None
+        if os.path.exists('config.yml'):
+            with open('config.yml') as reader:
+                self.configuration = yaml.load(reader)
+            if 'channels' in self.configuration:
+                for name in self.channel_references:
+                    if name in self.configuration['channels']:
+                        channel = discord.utils.get(
+                            self.get_all_channels(),
+                            name=self.configuration['channels'][name],
+                            type=discord.ChannelType.text
+                        )
+                        if channel is None:
+                            channel = discord.utils.get(
+                                self.get_all_channels(),
+                                id=self.configuration['channels'][name],
+                                type=discord.ChannelType.text
+                            )
+                        if channel is None:
+                            raise NameError("No channel by name of "+self.configuration['channels'][name])
+                        self.channel_references[name] = channel
+                    else:
+                        print("Warning: Channel reference", name, "is not defined")
+        self.channel_references['general'] = self._general
+        print(self.channel_references)
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
@@ -304,15 +338,17 @@ def EnableUtils(bot): #prolly move to it's own bot
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.reserve_channel('dev')
+
     @bot.add_command('!output-dev')
     async def cmd_dev(self, message, content):
         """
         `!output-dev` : Any messages that would always go to general will go to testing grounds
         """
-        self.general = self.dev_channel
-        self.bug_channel = self.dev_channel
+        self._channel_references = {k:v for k,v in self.channel_references.items()}
+        self.channel_references = {k:self.fetch_channel('dev') for k in self.channel_references}
         await self.send_message(
-            self.dev_channel,
+            self.fetch_channel('dev'),
             "Development mode enabled. All messages will be sent to testing grounds"
         )
 
@@ -321,10 +357,9 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `!output-prod` : Restores normal message routing
         """
-        self.general = self._general
-        self.bug_channel = self._bug_channel
+        self.channel_references = {k:v for k,v in self._channel_references.items()}
         await self.send_message(
-            self.dev_channel,
+            self.fetch_channel('dev'),
             "Production mode enabled. All messages will be sent to general"
         )
 
@@ -335,7 +370,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         Example: `!_announce I am really cool`
         """
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             message.content.strip().replace('!_announce', '')
         )
 

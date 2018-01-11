@@ -57,22 +57,11 @@ class Beymax(CoreBot):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name, channel.type)
-        self.dev_channel = discord.utils.get( #set dev_channel to testing_grounds
-            self.get_all_channels(),
-            name='testing_grounds',
-            type=discord.ChannelType.text
-        )
-        self._bug_channel = discord.utils.get( #set bug_channel to bots_n_bugs
-            self.get_all_channels(),
-            name='bots_n_bugs',
-            type=discord.ChannelType.text
-        )
-        self.bug_channel = self._bug_channel
         print("Ready to serve!")
 
     async def on_member_join(self, member): #greet new members
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )

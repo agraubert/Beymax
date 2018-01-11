@@ -6,6 +6,8 @@ def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.reserve_channel('bugs')
+
     @bot.add_command('!bug')
     async def cmd_bug(self, message, content):
         """
@@ -21,7 +23,7 @@ def EnableBugs(bot):
             'label': ' '.join(content[1:])
         })
         await self.send_message(
-            self.bug_channel,
+            self.fetch_channel('bugs'),
             'New issue reported: <@&308683717419991043>\n' #@Developer
             '[%d] [Pending] %s : %s' % (
                 len(bugs)-1,
@@ -91,7 +93,7 @@ def EnableBugs(bot):
                     )
                 )
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'New comment on issue:\n'
                     '[%d] [%s] %s : %s\n'
                     'Comment: [%s] : %s' % (
@@ -130,7 +132,7 @@ def EnableBugs(bot):
             else:
                 bugs[bugid]['status'] = ' '.join(content[2:])
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'Issue status changed:\n'
                     '[%d] [%s] %s : %s' % (
                         bugid,
@@ -166,7 +168,7 @@ def EnableBugs(bot):
             else:
                 label = ' '.join(content[2:])
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'Issue label changed:\n'
                     '[%d] [%s] %s : %s\n'
                     'New label: %s' % (

@@ -243,13 +243,13 @@ def EnableParties(bot):
         save_db(parties, 'parties.json')
         if len(pruned) == 1:
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 '%s has been disbanded. If you would like to create another party, use the `!party` command'
                  % pruned[0]
             )
         elif len(pruned) > 1:
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 'The following parties have been disbanded:\n'
                 '\n'.join(pruned)+
                 '\nIf you would like to create another party, use the `!party` command'

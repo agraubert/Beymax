@@ -107,7 +107,7 @@ def EnableOverwatch(bot):
                         # Ping the channel for anyone who reached platinum or above
                         body = body.replace('Everyone', '@everyone')
                     await self.send_message(
-                        self.general, #for now
+                        self.fetch_channel('general'), #for now
                         body
                     )
             except:
@@ -174,7 +174,7 @@ def EnableOverwatch(bot):
             ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
             ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
             await self.send_message(
-                self.general, # for now
+                self.fetch_channel('general'), # for now
                 "It's that time again, folks!\n"
                 "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
             )
@@ -183,7 +183,7 @@ def EnableOverwatch(bot):
             }
             for tag,uid,tier,rating,rn in ranked:
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "In "+index[tag]+" place, "+
                     (self.users[uid]['mention'] if uid in self.users else tag)+
                     " who made "+tier+
@@ -194,7 +194,7 @@ def EnableOverwatch(bot):
                     )
                 )
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 "Let's give everyone a round of applause.  Great show from everybody!\n"
                 "I can't wait to see how you all do next time! [Competitive ranks reset]"
             )
@@ -225,7 +225,7 @@ def EnableOverwatch(bot):
         body += "If anyone else would like to be tracked, use the `!ow` command."
         body += " Good luck to you all!"
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             body
         )
         save_db(stats, 'stats.json')
