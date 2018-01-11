@@ -1,5 +1,6 @@
 from .utils import load_db, save_db, getname, validate_permissions
 import discord
+from discord.compat import create_task
 import asyncio
 import time
 import os
@@ -8,6 +9,7 @@ import sys
 
 
 class CoreBot(discord.Client):
+    event_listeners = {} # event name -> [listener functions (self, event)]
     commands = {} # !cmd -> function wrapper. Functions take (self, message, content)
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = [] # [interval(s), function] functions take (self)
@@ -34,6 +36,20 @@ class CoreBot(discord.Client):
             return func
         return wrapper
 
+    def subscribe(self, event): # decorator. Sets the decorated function to run on events
+        # event functions should take the event, followed by expected arguments
+        def wrapper(func):
+            if str(event) not in self.event_listeners:
+                self.event_listeners[str(event)] = []
+            self.event_listeners[str(event)].append(func)
+            # func.unsubscribe will unsubscribe the function from the event
+            # calling without args unsubscribes from the most recent event that this
+            # function was subscribed to. An event can be specified to unsubscribe
+            # from a specific event, if the function was subscribed to several
+            func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(func)
+            return func
+        return wrapper
+
     def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
         for bot in bots:
             if callable(bot):
@@ -41,6 +57,19 @@ class CoreBot(discord.Client):
             else:
                 raise TypeError("Bot is not callable")
         return self
+
+    def dispatch(self, event, *args, **kwargs):
+        if 'before:'+str(event) in self.event_listeners:
+            self.dispatch_event('before:'+str(event), *args, **kwargs)
+        super().dispatch(event, *args, **kwargs)
+        if str(event) in self.event_listeners:
+            self.dispatch_event(str(event), *args, **kwargs)
+        if 'after:'+str(event) in self.event_listeners:
+            self.dispatch_event('after:'+str(event), *args, **kwargs)
+
+    def dispatch_event(self, event, *args, **kwargs):
+        for listener in self.event_listeners[event]:
+            create_task(listener(self, event, *args, **kwargs), loop=self.loop)
 
     async def on_ready(self):
         print("Commands:", [cmd for cmd in self.commands])

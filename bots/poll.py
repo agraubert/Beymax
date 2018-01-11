@@ -50,22 +50,15 @@ def EnablePolls(bot):
             await self.delete_message(message)
             self.polls[target.id] = (message.author, set())
 
-    if 'on_reaction_add' in dir(bot):
-        bot._poll_on_react = bot.on_reaction_add
-    else:
-        bot._poll_on_react = None
-
-    async def on_reaction_add(reaction, user):
-        if bot._poll_on_react is not None:
-            await bot._poll_on_react(reaction, user)
-        if reaction.message.id in bot.polls:
-            creator, reactors = bot.polls[reaction.message.id]
+    @bot.subscribe('reaction_add')
+    async def on_reaction_add(self, event, reaction, user):
+        if reaction.message.id in self.polls:
+            creator, reactors = self.polls[reaction.message.id]
             if user.id not in reactors:
-                await bot.send_message(
+                await self.send_message(
                     creator,
                     getname(user)+" has voted on your poll in "+reaction.message.channel.name
                 )
-                bot.polls[reaction.message.id][1].add(user.id)
-    bot.on_reaction_add = on_reaction_add
+                self.polls[reaction.message.id][1].add(user.id)
 
     return bot
