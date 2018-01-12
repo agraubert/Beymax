@@ -170,8 +170,12 @@ class CoreBot(discord.Client):
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
         if username in self.users:
             return self.users[username]['id']
+        if '#' not in username:
+            sys.exit("Username '%s' not valid, must containe #discriminator" % username)
         result = self.primary_server.get_member_named(username)
         if result is not None:
+            if username != str(result):
+                sys.exit("Username '%s' not valid. Cannot reference users by nickname" % username)
             return result.id
         result = self.primary_server.get_member(username)
         if result is not None:
