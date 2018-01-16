@@ -426,7 +426,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 )
                 await self.send_message(
                     self.general,
-                    "%s has pardoned %s % (
+                    "%s has pardoned %s" % (
                         str(message.author),
                         str(user)
                     )
