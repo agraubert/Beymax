@@ -72,14 +72,18 @@ class CoreBot(discord.Client):
                 raise TypeError("Bot is not callable")
         return self
 
-    def dispatch(self, event, *args, **kwargs):
-        if 'before:'+str(event) in self.event_listeners:
-            self.dispatch_event('before:'+str(event), *args, **kwargs)
-        super().dispatch(event, *args, **kwargs)
-        if str(event) in self.event_listeners:
-            self.dispatch_event(str(event), *args, **kwargs)
-        if 'after:'+str(event) in self.event_listeners:
-            self.dispatch_event('after:'+str(event), *args, **kwargs)
+    def dispatch(self, event, *args, manual=False, **kwargs):
+        if not manual:
+            if 'before:'+str(event) in self.event_listeners:
+                self.dispatch_event('before:'+str(event), *args, **kwargs)
+            super().dispatch(event, *args, **kwargs)
+            if str(event) in self.event_listeners:
+                self.dispatch_event(str(event), *args, **kwargs)
+            if 'after:'+str(event) in self.event_listeners:
+                self.dispatch_event('after:'+str(event), *args, **kwargs)
+        else:
+            if str(event) in self.event_listeners:
+                self.dispatch_event(str(event), *args, **kwargs)
 
     def dispatch_event(self, event, *args, **kwargs):
         for listener in self.event_listeners[event]:
@@ -100,6 +104,7 @@ class CoreBot(discord.Client):
         self.primary_server = self._general.server
         self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
         self.permissions = None
+        self.channel_references['general'] = self._general
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
                 self.configuration = yaml.load(reader)
@@ -122,7 +127,6 @@ class CoreBot(discord.Client):
                         self.channel_references[name] = channel
                     else:
                         print("Warning: Channel reference", name, "is not defined")
-        self.channel_references['general'] = self._general
         print(self.channel_references)
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
@@ -298,9 +302,11 @@ class CoreBot(discord.Client):
         except:
             return
         if content[0] in self.commands: #if the first argument is a command
+            self.dispatch('before:'+content[0], message, content, manual=True)
             if self.check_permissions_chain(content[0][1:], message.author)[0]:
                 print("Command in channel", message.channel, "from", message.author, ":", content)
                 await self.commands[content[0]](self, message, content)
+                self.dispatch(content[0], message, content, manual=True)
             else:
                 print("Denied", message.author, "using command", content[0], "in", message.channel)
                 await self.send_message(
@@ -315,13 +321,17 @@ class CoreBot(discord.Client):
                     ) +
                     "To check your permissions, use the `!permissions` command"
                 )
+            self.dispatch('after:'+content[0], message, content, manual=True)
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
             for check, func in self.special:
                 if check(self, message):
                     print("Running special", func.__qualname__)
+                    self.dispatch('before:'+func.__name__, message, content, manual=True)
                     await func(self, message, content)
+                    self.dispatch(func.__name__, message, content, manual=True)
+                    self.dispatch('after:'+func.__name__, message, content, manual=True)
                     break
         # Check if it is time to run any tasks
         #
@@ -330,7 +340,10 @@ class CoreBot(discord.Client):
             last = self.update_times[i]
             if current - last > interval:
                 print("Running task", task.__qualname__)
+                self.dispatch('before:'+task.__name__, message, manual=True)
                 await task(self)
+                self.dispatch(task.__name__, message, manual=True)
+                self.dispatch('after:'+task.__name__, message, manual=True)
                 self.update_times[i] = current
 
 def EnableUtils(bot): #prolly move to it's own bot
