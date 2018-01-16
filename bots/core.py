@@ -8,6 +8,7 @@ import sys
 
 
 class CoreBot(discord.Client):
+    ignored_users = set()
     commands = {} # !cmd -> function wrapper. Functions take (self, message, content)
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = [] # [interval(s), function] functions take (self)
@@ -61,6 +62,7 @@ class CoreBot(discord.Client):
         self.primary_server = self._general.server
         self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
         self.permissions = None
+        self.ignored_users = set(load_db('ignores.json', []))
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
@@ -254,9 +256,10 @@ class CoreBot(discord.Client):
                     ) +
                     "To check your permissions, use the `!permissions` command"
                 )
-        else:
-            # If this was not a command, check if any of the special functions
-            # would like to run on this message
+        # If this was not a command, check if any of the special functions
+        # would like to run on this message
+        elif message.author.id not in self.ignored_users:
+            # Ignored users cannot trigger special handlers
             for check, func in self.special:
                 if check(self, message):
                     print("Running special", func.__qualname__)
@@ -348,6 +351,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `!ignore <user id or user#tag>` : Ignore all commands by the given user
         until the next time I'm restarted
+        Example: `!ignore Username#1234` Ignores all commands from Username#1234
         """
         if len(content) != 2:
             await self.send_message(
@@ -357,7 +361,17 @@ def EnableUtils(bot): #prolly move to it's own bot
         else:
             try:
                 uid = self.getid(content[1])
+                if uid in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is already ignored"
+                    )
+                    return
                 self.ignored_users.add(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
                 user = self.primary_server.get_member(uid)
                 await self.send_message(
                     user,
@@ -367,10 +381,54 @@ def EnableUtils(bot): #prolly move to it's own bot
                 await self.send_message(
                     self.general,
                     "%s has asked me to ignore %s. %s can no longer issue any commands"
-                    " until I am restarted" % (
+                    " until they have been `!pardon`-ed" % (
                         str(message.author),
                         str(user),
                         getname(user)
+                    )
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
+    @bot.add_command('!pardon')
+    async def cmd_pardon(self, message, content):
+        """
+        `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
+        commands again.
+        Example: `!pardon Username#1234` pardons Username#1234
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!pardon <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                if uid not in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is not currently ignored"
+                    )
+                self.ignored_users.remove(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
+                user = self.primary_server.get_member(uid)
+                await self.send_message(
+                    user,
+                    "You have been pardoned by %s. I will resume responding to "
+                    "your commands." % (str(message.author))
+                )
+                await self.send_message(
+                    self.general,
+                    "%s has pardoned %s % (
+                        str(message.author),
+                        str(user)
                     )
                 )
             except NameError:
