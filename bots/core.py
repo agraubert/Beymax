@@ -92,11 +92,14 @@ class CoreBot(discord.Client):
                 ).id:obj for obj in self.permissions['permissions']
                 if 'role' in obj
             }
-            tmp = [
-                (self.getid(user),obj) for obj in self.permissions['permissions']
-                if 'users' in obj
-                for user in obj['users']
-            ]
+            try:
+                tmp = [
+                    (self.getid(user),obj) for obj in self.permissions['permissions']
+                    if 'users' in obj
+                    for user in obj['users']
+                ]
+            except NameError as e:
+                raise SystemExit("Unable to find user") from e
             self.permissions['users'] = {}
             for uid, rule in tmp:
                 if uid not in self.permissions['users']:
