@@ -416,6 +416,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                         message.channel,
                         "This user is not currently ignored"
                     )
+                    return
                 self.ignored_users.remove(uid)
                 save_db(
                     list(self.ignored_users),
