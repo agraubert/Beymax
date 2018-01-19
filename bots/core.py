@@ -9,32 +9,73 @@ import sys
 
 
 class CoreBot(discord.Client):
+    nt = 0
     channel_references = {} # reference name -> channel name/id
     event_listeners = {} # event name -> [listener functions (self, event)]
-    commands = {} # !cmd -> function wrapper. Functions take (self, message, content)
+    # changed to set in favor of event API
+    commands = set() # !cmd -> function wrapper. Functions take (self, message, content)
     users = {} # id/fullname -> {id, fullname, mention, name}
-    tasks = [] # [interval(s), function] functions take (self)
-    special = [] # [callable, function] callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
+    tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
+    special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
 
     def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
         if not len(cmds):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
+            async def on_cmd(self, cmd, message, content):
+                if self.check_permissions_chain(content[0][1:], message.author)[0]:
+                    print("Command in channel", message.channel, "from", message.author, ":", content)
+                    await func(self, message, content)
+                else:
+                    print("Denied", message.author, "using command", content[0], "in", message.channel)
+                    await self.send_message(
+                        message.channel,
+                        "You do not have permissions to use this command\n" +
+                        # Add additional message if this is a DM and they may actually
+                        # have permissions for this command
+                        (("If you have permissions granted to you by a role, "
+                         "I cannot check those in private messages\n")
+                         if isinstance(message.channel, discord.PrivateChannel)
+                         else ""
+                        ) +
+                        "To check your permissions, use the `!permissions` command"
+                    )
             for cmd in cmds:
-                self.commands[cmd] = func
-            return func
+                on_cmd = self.subscribe(cmd)(on_cmd)
+                self.commands.add(cmd)
+            return on_cmd
+
         return wrapper
 
     def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
         def wrapper(func):
-            self.tasks.append((interval, func))
-            return func
+            taskname = 'task:'+func.__name__
+            if taskname in self.tasks:
+                raise NameError("This task already exists! Change the name of the task function")
+            self.tasks[taskname] = (interval, func.__qualname__)
+
+            @self.subscribe(taskname)
+            async def run_task(self, task):
+                await func(self)
+                if 'tasks' not in self.update_times:
+                    self.update_times['tasks'] = {}
+                self.update_times['tasks'][taskname] = time.time()
+
+            return run_task
         return wrapper
 
     def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
         def wrapper(func):
-            self.special.append((check, func))
-            return func
+            event = 'special:'+func.__name__
+            if event in self.special:
+                raise NameError("This special event already exists! Change the name of the special function")
+            self.special[event] = check
+
+            @self.subscribe(event)
+            async def run_special(self, evt, message, content):
+                await func(self, message, content)
+
+            return run_special
         return wrapper
 
     def subscribe(self, event): # decorator. Sets the decorated function to run on events
@@ -54,8 +95,6 @@ class CoreBot(discord.Client):
     def reserve_channel(self, name):
         # creates a channel reference by that name
         # channel references can be changed in configuration
-        if name in self.channel_references:
-            raise NameError("Reference taken")
         self.channel_references[name] = None
 
     def fetch_channel(self, name):
@@ -73,6 +112,7 @@ class CoreBot(discord.Client):
         return self
 
     def dispatch(self, event, *args, manual=False, **kwargs):
+        self.nt += 1
         if not manual:
             if 'before:'+str(event) in self.event_listeners:
                 self.dispatch_event('before:'+str(event), *args, **kwargs)
@@ -91,6 +131,15 @@ class CoreBot(discord.Client):
 
     async def on_ready(self):
         print("Commands:", [cmd for cmd in self.commands])
+        print(
+            "Tasks:",
+            '\n'.join([
+                '%s every %d seconds (Runs %s)' % (
+                    taskname,
+                    *self.tasks[taskname]
+                ) for taskname in self.tasks
+            ])
+        )
         self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
@@ -102,7 +151,12 @@ class CoreBot(discord.Client):
             if channel.type == 4 # Placeholder. ChannelType.category is not in discord.py yet
         }
         self.primary_server = self._general.server
-        self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
+        self.update_times = load_db('tasks.json')
+        taskkey = ''.join(sorted(self.tasks))
+        if 'key' not in self.update_times or self.update_times['key'] != taskkey:
+            print("Invalidating task time cache")
+            self.update_times = {'key':taskkey, 'tasks':{}}
+            save_db(self.update_times, 'tasks.json')
         self.permissions = None
         self.channel_references['general'] = self._general
         if os.path.exists('config.yml'):
@@ -302,49 +356,31 @@ class CoreBot(discord.Client):
         except:
             return
         if content[0] in self.commands: #if the first argument is a command
-            self.dispatch('before:'+content[0], message, content, manual=True)
-            if self.check_permissions_chain(content[0][1:], message.author)[0]:
-                print("Command in channel", message.channel, "from", message.author, ":", content)
-                await self.commands[content[0]](self, message, content)
-                self.dispatch(content[0], message, content, manual=True)
-            else:
-                print("Denied", message.author, "using command", content[0], "in", message.channel)
-                await self.send_message(
-                    message.channel,
-                    "You do not have permissions to use this command\n" +
-                    # Add additional message if this is a DM and they may actually
-                    # have permissions for this command
-                    (("If you have permissions granted to you by a role, "
-                     "I cannot check those in private messages\n")
-                     if isinstance(message.channel, discord.PrivateChannel)
-                     else ""
-                    ) +
-                    "To check your permissions, use the `!permissions` command"
-                )
-            self.dispatch('after:'+content[0], message, content, manual=True)
+            # dispatch command event
+            print("Dispatching command")
+            self.dispatch(content[0], message, content)
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            for check, func in self.special:
+            for event, check in self.special.items():
                 if check(self, message):
-                    print("Running special", func.__qualname__)
-                    self.dispatch('before:'+func.__name__, message, content, manual=True)
-                    await func(self, message, content)
-                    self.dispatch(func.__name__, message, content, manual=True)
-                    self.dispatch('after:'+func.__name__, message, content, manual=True)
+                    print("Running special", event)
+                    self.dispatch(event, message, content)
                     break
         # Check if it is time to run any tasks
         #
         current = time.time()
-        for i, (interval, task) in enumerate(self.tasks):
-            last = self.update_times[i]
+        ran_task = False
+        for task, (interval, qualname) in self.tasks.items():
+            last = 0
+            if 'tasks' in self.update_times and task in self.update_times['tasks']:
+                last = self.update_times['tasks'][task]
             if current - last > interval:
-                print("Running task", task.__qualname__)
-                self.dispatch('before:'+task.__name__, message, manual=True)
-                await task(self)
-                self.dispatch(task.__name__, message, manual=True)
-                self.dispatch('after:'+task.__name__, message, manual=True)
-                self.update_times[i] = current
+                print("Running task", task, '(', qualname, ')')
+                self.dispatch(task)
+                ran_task = True
+        if ran_task:
+            save_db(self.update_times, 'tasks.json')
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
@@ -352,6 +388,20 @@ def EnableUtils(bot): #prolly move to it's own bot
         raise TypeError("This function must take a CoreBot")
 
     bot.reserve_channel('dev')
+
+    @bot.add_command('!_task')
+    async def cmd_task(self, message, content):
+        """
+        `!_task <task name>` : Manually runs the named task
+        """
+        pass
+
+    @bot.add_command('!nt')
+    async def cmd_nt(self, message, content):
+        await self.send_message(
+            message.channel,
+            '%d events have been dispatched' % self.nt
+        )
 
     @bot.add_command('!output-dev')
     async def cmd_dev(self, message, content):

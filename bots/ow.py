@@ -76,8 +76,7 @@ def EnableOverwatch(bot):
         raise TypeError("This function must take a CoreBot")
 
     @bot.add_task(3600) # 1 hour
-    @bot.add_command('!owupdate')
-    async def update_overwatch(self, *args): #ignore message and content args
+    async def update_overwatch(self):
         """
         `!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
         """
@@ -113,6 +112,10 @@ def EnableOverwatch(bot):
             except:
                 pass
         save_db(state, 'stats.json')
+
+    @bot.add_command('!owupdate')
+    async def cmd_update(self, message, content):
+        await update_overwatch(self)
 
     @bot.add_command('!ow')
     async def cmd_ow(self, message, content):
