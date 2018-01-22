@@ -395,7 +395,17 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `!_task <task name>` : Manually runs the named task
         """
-        pass
+        key = ' '.join(content[1:])
+        if not key.startswith('task:'):
+            key = 'task:'+key
+        if key in self.tasks:
+            print("Manually running task", key, '(', self.tasks[key][1], ')')
+            self.dispatch(key)
+        else:
+            await self.send_message(
+                message.channel,
+                "No such task"
+            )
 
     @bot.add_command('!nt')
     async def cmd_nt(self, message, content):
