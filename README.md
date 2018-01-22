@@ -113,6 +113,14 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
   Sets Beymax to send all messages normally directed to `General` into `General`
   (standard mode)
 
+* `!ignore <user ID or username#discriminator>`
+
+  Sets Beymax to ignore all messages and commands from the provided user
+
+* `!pardon <user ID or username#discriminator>`
+
+  Sets Beymax to resume responding to commands from the provided user
+
 ### Administrative commands
 
 * `!_announce <message>`
