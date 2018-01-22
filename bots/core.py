@@ -60,6 +60,8 @@ class CoreBot(discord.Client):
                 if 'tasks' not in self.update_times:
                     self.update_times['tasks'] = {}
                 self.update_times['tasks'][taskname] = time.time()
+                save_db(self.update_times, 'tasks.json')
+
 
             return run_task
         return wrapper
@@ -157,6 +159,8 @@ class CoreBot(discord.Client):
             print("Invalidating task time cache")
             self.update_times = {'key':taskkey, 'tasks':{}}
             save_db(self.update_times, 'tasks.json')
+        else:
+            print("Not invalidating cache")
         self.permissions = None
         self.channel_references['general'] = self._general
         if os.path.exists('config.yml'):
@@ -378,9 +382,6 @@ class CoreBot(discord.Client):
             if current - last > interval:
                 print("Running task", task, '(', qualname, ')')
                 self.dispatch(task)
-                ran_task = True
-        if ran_task:
-            save_db(self.update_times, 'tasks.json')
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
