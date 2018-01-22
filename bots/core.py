@@ -212,9 +212,9 @@ class CoreBot(discord.Client):
             #build the chain, if it wasn't given as an argument
             chain = self.build_permissions_chain(user)
         for obj in chain:
-            if 'allow' in obj and cmd in obj['allow']:
+            if 'allow' in obj and (cmd in obj['allow'] or '$all' in obj['allow']):
                 return True, obj['_grant']
-            elif 'deny' in obj and cmd in obj['deny']:
+            elif 'deny' in obj and (cmd in obj['deny'] or '$all' in obj['deny']):
                 return False, obj['_grant']
             elif cmd.startswith('_') and 'underscore' in obj:
                 return obj['underscore'], obj['_grant']
