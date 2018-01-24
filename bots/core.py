@@ -153,27 +153,26 @@ class CoreBot(discord.Client):
         first = True
         for server in list(self.servers):
             print(server.name, server.id)
-            if first:
-                first = False
-            else:
-                if self.primary_server is not None and server.id != self.primary_server.id:
-                    try:
-                        await self.send_message(
-                            discord.utils.get(
-                                server.channels,
-                                name='general',
-                                type=discord.ChannelType.text
-                            ),
-                            "Unfortunately, this instance of Beymax is not configured"
-                            " to run on multiple servers. Please contact the owner"
-                            " of this instance, or run your own instance of Beymax."
-                            " Goodbye!"
-                        )
-                    except:
-                        pass
-                    await self.leave_server(server)
-                elif self.primary_server is None:
-                    print("Warning: Joining to multiple servers is not supported behavior")
+            if self.primary_server is not None and server.id != self.primary_server.id:
+                print("Leaving server", server.name)
+                try:
+                    await self.send_message(
+                        discord.utils.get(
+                            server.channels,
+                            name='general',
+                            type=discord.ChannelType.text
+                        ),
+                        "Unfortunately, this instance of Beymax is not configured"
+                        " to run on multiple servers. Please contact the owner"
+                        " of this instance, or run your own instance of Beymax."
+                        " Goodbye!"
+                    )
+                except:
+                    pass
+                await self.leave_server(server)
+            elif self.primary_server is None and not first:
+                print("Warning: Joining to multiple servers is not supported behavior")
+            first = False
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",
