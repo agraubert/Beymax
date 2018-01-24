@@ -1,6 +1,7 @@
 token.txt
 _token.txt
 permissions.yml
+config.yml
 *.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
