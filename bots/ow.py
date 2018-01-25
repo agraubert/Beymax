@@ -95,7 +95,7 @@ def EnableOverwatch(bot):
                 state[uid]['tier'] = tier
                 currentRank = rank(tier)
                 oldRank = rank(old_tier)
-                if currentRank[0] > oldRank[0]:
+                if currentRank > oldRank:
                     body = "Everyone put your hands together for "
                     body += self.users[uid]['mention'] if uid in self.users else tag
                     body += " who just reached "
@@ -103,7 +103,7 @@ def EnableOverwatch(bot):
                     body += " in Overwatch!"
                     if 'avatar' in state[uid]:
                         body += '\n'+state[uid]['avatar']
-                    if currentRank[0] >= 4:
+                    if currentRank >= 4:
                         # Ping the channel for anyone who reached platinum or above
                         body = body.replace('Everyone', '@everyone')
                     await self.send_message(
