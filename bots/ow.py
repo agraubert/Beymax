@@ -2,6 +2,7 @@ from .core import CoreBot
 from .utils import load_db, save_db
 import os
 import requests
+from requests.exceptions import RequestException
 import asyncio
 import random
 import shutil
@@ -94,7 +95,7 @@ def EnableOverwatch(bot):
                 state[uid]['tier'] = tier
                 currentRank = rank(tier)
                 oldRank = rank(old_tier)
-                if currentRank[0] > oldRank[0]:
+                if currentRank > oldRank:
                     body = "Everyone put your hands together for "
                     body += self.users[uid]['mention'] if uid in self.users else tag
                     body += " who just reached "
@@ -102,14 +103,14 @@ def EnableOverwatch(bot):
                     body += " in Overwatch!"
                     if 'avatar' in state[uid]:
                         body += '\n'+state[uid]['avatar']
-                    if currentRank[0] >= 4:
+                    if currentRank >= 4:
                         # Ping the channel for anyone who reached platinum or above
                         body = body.replace('Everyone', '@everyone')
                     await self.send_message(
                         self.fetch_channel('general'), #for now
                         body
                     )
-            except:
+            except RequestException:
                 pass
         save_db(state, 'stats.json')
 
@@ -148,7 +149,7 @@ def EnableOverwatch(bot):
                 )
                 await asyncio.sleep(15)
                 self.dispatch('task:update_overwatch')
-            except:
+            except RequestException:
                 await self.send_message(
                     message.channel,
                     "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
@@ -172,7 +173,7 @@ def EnableOverwatch(bot):
                     state[uid]['rating'] = current
                     state[uid]['avatar'] = img
                     state[uid]['tier'] = tier
-                except:
+                except RequestException:
                     pass
             ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
             ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr

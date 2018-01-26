@@ -15,6 +15,7 @@ class CoreBot(discord.Client):
     event_listeners = {} # event name -> [listener functions (self, event)]
     # changed to set in favor of event API
     commands = set() # !cmd -> function wrapper. Functions take (self, message, content)
+    ignored_users = set()
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
@@ -203,7 +204,6 @@ class CoreBot(discord.Client):
             print("Not invalidating cache")
         self.permissions = None
         self.channel_references['general'] = self._general
-
         if 'channels' in self.configuration:
             for name in self.channel_references:
                 if name in self.configuration['channels']:
@@ -224,6 +224,7 @@ class CoreBot(discord.Client):
                 else:
                     print("Warning: Channel reference", name, "is not defined")
         print(self.channel_references)
+        self.ignored_users = set(load_db('ignores.json', []))
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
@@ -253,11 +254,14 @@ class CoreBot(discord.Client):
                 ).id:obj for obj in self.permissions['permissions']
                 if 'role' in obj
             }
-            tmp = [
-                (self.getid(user),obj) for obj in self.permissions['permissions']
-                if 'users' in obj
-                for user in obj['users']
-            ]
+            try:
+                tmp = [
+                    (self.getid(user),obj) for obj in self.permissions['permissions']
+                    if 'users' in obj
+                    for user in obj['users']
+                ]
+            except NameError as e:
+                raise SystemExit("Unable to find user") from e
             self.permissions['users'] = {}
             for uid, rule in tmp:
                 if uid not in self.permissions['users']:
@@ -340,8 +344,10 @@ class CoreBot(discord.Client):
             + [server.get_member_named(username) for server in self.servers]
             )) + [None])[0]
         if result is not None:
+            if result.id != username and '#' not in username:
+                raise NameError("Username '%s' not valid, must containe #discriminator" % username)
             return result.id
-        sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
+        raise NameError("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
     def build_permissions_chain(self, user):
         # Assemble the chain of permissions rules for a given user
@@ -375,9 +381,9 @@ class CoreBot(discord.Client):
             #build the chain, if it wasn't given as an argument
             chain = self.build_permissions_chain(user)
         for obj in chain:
-            if 'allow' in obj and cmd in obj['allow']:
+            if 'allow' in obj and (cmd in obj['allow'] or '$all' in obj['allow']):
                 return True, obj['_grant']
-            elif 'deny' in obj and cmd in obj['deny']:
+            elif 'deny' in obj and (cmd in obj['deny'] or '$all' in obj['deny']):
                 return False, obj['_grant']
             elif cmd.startswith('_') and 'underscore' in obj:
                 return obj['underscore'], obj['_grant']
@@ -401,18 +407,20 @@ class CoreBot(discord.Client):
             content[0] = content[0].lower()
         except:
             return
-        if content[0] in self.commands: #if the first argument is a command
-            # dispatch command event
-            print("Dispatching command")
-            self.dispatch(content[0], message, content)
-        else:
-            # If this was not a command, check if any of the special functions
-            # would like to run on this message
-            for event, check in self.special.items():
-                if check(self, message):
-                    print("Running special", event)
-                    self.dispatch(event, message, content)
-                    break
+        if message.author.id in self.ignored_users:
+            print("Ignoring message from", message.author,":", content)
+            if content[0] in self.commands: #if the first argument is a command
+                # dispatch command event
+                print("Dispatching command")
+                self.dispatch(content[0], message, content)
+            else:
+                # If this was not a command, check if any of the special functions
+                # would like to run on this message
+                for event, check in self.special.items():
+                    if check(self, message):
+                        print("Running special", event)
+                        self.dispatch(event, message, content)
+                        break
         # Check if it is time to run any tasks
         #
         current = time.time()
@@ -520,5 +528,98 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.author,
             '\n'.join(body)
         )
+
+    @bot.add_command('!ignore')
+    async def cmd_ignore(self, message, content):
+        """
+        `!ignore <user id or user#tag>` : Ignore all commands by the given user
+        until the next time I'm restarted
+        Example: `!ignore Username#1234` Ignores all commands from Username#1234
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!ignore <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                if uid in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is already ignored"
+                    )
+                    return
+                self.ignored_users.add(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
+                user = self.primary_server.get_member(uid)
+                await self.send_message(
+                    user,
+                    "I have been asked to ignore you by %s. Please contact them"
+                    " to petition this decision." % (str(message.author))
+                )
+                await self.send_message(
+                    self.general,
+                    "%s has asked me to ignore %s. %s can no longer issue any commands"
+                    " until they have been `!pardon`-ed" % (
+                        str(message.author),
+                        str(user),
+                        getname(user)
+                    )
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
+    @bot.add_command('!pardon')
+    async def cmd_pardon(self, message, content):
+        """
+        `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
+        commands again.
+        Example: `!pardon Username#1234` pardons Username#1234
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!pardon <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                if uid not in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is not currently ignored"
+                    )
+                    return
+                self.ignored_users.remove(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
+                user = self.primary_server.get_member(uid)
+                await self.send_message(
+                    user,
+                    "You have been pardoned by %s. I will resume responding to "
+                    "your commands." % (str(message.author))
+                )
+                await self.send_message(
+                    self.general,
+                    "%s has pardoned %s" % (
+                        str(message.author),
+                        str(user)
+                    )
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
 
     return bot
