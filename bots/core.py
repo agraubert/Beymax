@@ -25,6 +25,7 @@ class CoreBot(discord.Client):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
             async def on_cmd(self, cmd, message, content):
+                await self.send_typing(message.channel)
                 if self.check_permissions_chain(content[0][1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     await func(self, message, content)
@@ -133,6 +134,15 @@ class CoreBot(discord.Client):
     def dispatch_event(self, event, *args, **kwargs):
         for listener in self.event_listeners[event]:
             create_task(listener(self, event, *args, **kwargs), loop=self.loop)
+
+    def config_get(self, *keys):
+        obj = self.configuration
+        for key in keys:
+            if key in obj:
+                obj = obj[key]
+            else:
+                return None
+        return obj
 
     async def on_ready(self):
         if os.path.exists('config.yml'):
@@ -555,20 +565,29 @@ def EnableUtils(bot): #prolly move to it's own bot
                     list(self.ignored_users),
                     'ignores.json'
                 )
-                user = self.primary_server.get_member(uid)
+                for server in self.servers:
+                    user = server.get_member(uid)
+                    if self.config_get('ignore_role') != None:
+                        blacklist_role = self.config_get('ignore_role')
+                        for role in server.roles:
+                            if role.id == blacklist_role.id or role.name == blacklist_role.name:
+                                await self.add_roles(
+                                    user,
+                                    role
+                                )
+                    await self.send_message(
+                        server.default_channel,
+                        "%s has asked me to ignore %s. %s can no longer issue any commands"
+                        " until they have been `!pardon`-ed" % (
+                            str(message.author),
+                            str(user),
+                            getname(user)
+                        )
+                    )
                 await self.send_message(
                     user,
                     "I have been asked to ignore you by %s. Please contact them"
                     " to petition this decision." % (str(message.author))
-                )
-                await self.send_message(
-                    self.general,
-                    "%s has asked me to ignore %s. %s can no longer issue any commands"
-                    " until they have been `!pardon`-ed" % (
-                        str(message.author),
-                        str(user),
-                        getname(user)
-                    )
                 )
             except NameError:
                 await self.send_message(
@@ -602,18 +621,27 @@ def EnableUtils(bot): #prolly move to it's own bot
                     list(self.ignored_users),
                     'ignores.json'
                 )
-                user = self.primary_server.get_member(uid)
+                for server in self.servers:
+                    user = server.get_member(uid)
+                    if self.config_get('ignore_role') != None:
+                        blacklist_role = self.config_get('ignore_role')
+                        for role in server.roles:
+                            if role.id == blacklist_role.id or role.name == blacklist_role.name:
+                                await self.remove_roles(
+                                    user,
+                                    role
+                                )
+                    await self.send_message(
+                        server.default_channel,
+                        "%s has pardoned %s" % (
+                            str(message.author),
+                            str(user)
+                        )
+                    )
                 await self.send_message(
                     user,
                     "You have been pardoned by %s. I will resume responding to "
                     "your commands." % (str(message.author))
-                )
-                await self.send_message(
-                    self.general,
-                    "%s has pardoned %s" % (
-                        str(message.author),
-                        str(user)
-                    )
                 )
             except NameError:
                 await self.send_message(
