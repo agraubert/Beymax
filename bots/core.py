@@ -100,7 +100,7 @@ class CoreBot(discord.Client):
         self.channel_references[name] = None
 
     def fetch_channel(self, name):
-        channel = self.channel_references[name]
+        channel = self.channel_references[name] if name in self.channel_references else None
         if channel is None:
             return self.fetch_channel('general')
         return channel
