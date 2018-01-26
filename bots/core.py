@@ -9,6 +9,7 @@ import sys
 
 class CoreBot(discord.Client):
     nt = 0
+    configuration = {}
     primary_server = None
     channel_references = {} # reference name -> channel name/id
     event_listeners = {} # event name -> [listener functions (self, event)]
@@ -136,8 +137,6 @@ class CoreBot(discord.Client):
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
                 self.configuration = yaml.load(reader)
-        else:
-            self.configuration = {}
         print("Connected to the following servers")
         if 'primary_server' in self.configuration:
             self.primary_server = discord.utils.get(
@@ -153,26 +152,27 @@ class CoreBot(discord.Client):
         first = True
         for server in list(self.servers):
             print(server.name, server.id)
-            if self.primary_server is not None and server.id != self.primary_server.id:
-                print("Leaving server", server.name)
-                try:
-                    await self.send_message(
-                        discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        ),
-                        "Unfortunately, this instance of Beymax is not configured"
-                        " to run on multiple servers. Please contact the owner"
-                        " of this instance, or run your own instance of Beymax."
-                        " Goodbye!"
-                    )
-                except:
-                    pass
-                await self.leave_server(server)
-            elif self.primary_server is None and not first:
-                print("Warning: Joining to multiple servers is not supported behavior")
-            first = False
+            if first:
+                first = False
+            else:
+                if self.primary_server is not None and server.id != self.primary_server.id:
+                    try:
+                        await self.send_message(
+                            discord.utils.get(
+                                server.channels,
+                                name='general',
+                                type=discord.ChannelType.text
+                            ),
+                            "Unfortunately, this instance of Beymax is not configured"
+                            " to run on multiple servers. Please contact the owner"
+                            " of this instance, or run your own instance of Beymax."
+                            " Goodbye!"
+                        )
+                    except:
+                        pass
+                    await self.leave_server(server)
+                elif self.primary_server is None:
+                    print("Warning: Joining to multiple servers is not supported behavior")
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",

@@ -60,6 +60,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         for channel in self.get_all_channels():
             print(channel.name, channel.type)
         print("Ready to serve!")
+        self.dispatch('task:update_status') # manually set status at startup
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
