@@ -419,18 +419,18 @@ class CoreBot(discord.Client):
             return
         if message.author.id in self.ignored_users:
             print("Ignoring message from", message.author,":", content)
-            if content[0] in self.commands: #if the first argument is a command
-                # dispatch command event
-                print("Dispatching command")
-                self.dispatch(content[0], message, content)
-            else:
-                # If this was not a command, check if any of the special functions
-                # would like to run on this message
-                for event, check in self.special.items():
-                    if check(self, message):
-                        print("Running special", event)
-                        self.dispatch(event, message, content)
-                        break
+        elif content[0] in self.commands: #if the first argument is a command
+            # dispatch command event
+            print("Dispatching command")
+            self.dispatch(content[0], message, content)
+        else:
+            # If this was not a command, check if any of the special functions
+            # would like to run on this message
+            for event, check in self.special.items():
+                if check(self, message):
+                    print("Running special", event)
+                    self.dispatch(event, message, content)
+                    break
         # Check if it is time to run any tasks
         #
         current = time.time()
@@ -570,20 +570,27 @@ def EnableUtils(bot): #prolly move to it's own bot
                     if self.config_get('ignore_role') != None:
                         blacklist_role = self.config_get('ignore_role')
                         for role in server.roles:
-                            if role.id == blacklist_role.id or role.name == blacklist_role.name:
+                            if role.id == blacklist_role or role.name == blacklist_role:
                                 await self.add_roles(
                                     user,
                                     role
                                 )
-                    await self.send_message(
-                        server.default_channel,
-                        "%s has asked me to ignore %s. %s can no longer issue any commands"
-                        " until they have been `!pardon`-ed" % (
-                            str(message.author),
-                            str(user),
-                            getname(user)
+                    try:
+                        await self.send_message(
+                            discord.utils.get(
+                                server.channels,
+                                name='general',
+                                type=discord.ChannelType.text
+                            ),
+                            "%s has asked me to ignore %s. %s can no longer issue any commands"
+                            " until they have been `!pardon`-ed" % (
+                                str(message.author),
+                                str(user),
+                                getname(user)
+                            )
                         )
-                    )
+                    except:
+                        pass
                 await self.send_message(
                     user,
                     "I have been asked to ignore you by %s. Please contact them"
@@ -626,18 +633,25 @@ def EnableUtils(bot): #prolly move to it's own bot
                     if self.config_get('ignore_role') != None:
                         blacklist_role = self.config_get('ignore_role')
                         for role in server.roles:
-                            if role.id == blacklist_role.id or role.name == blacklist_role.name:
+                            if role.id == blacklist_role or role.name == blacklist_role:
                                 await self.remove_roles(
                                     user,
                                     role
                                 )
-                    await self.send_message(
-                        server.default_channel,
-                        "%s has pardoned %s" % (
-                            str(message.author),
-                            str(user)
+                    try:
+                        await self.send_message(
+                            discord.utils.get(
+                                server.channels,
+                                name='general',
+                                type=discord.ChannelType.text
+                            ),
+                            "%s has pardoned %s" % (
+                                str(message.author),
+                                str(user)
+                            )
                         )
-                    )
+                    except:
+                        pass
                 await self.send_message(
                     user,
                     "You have been pardoned by %s. I will resume responding to "
