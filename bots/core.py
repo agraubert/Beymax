@@ -7,9 +7,10 @@ import os
 import yaml
 import sys
 
-
 class CoreBot(discord.Client):
     nt = 0
+    configuration = {}
+    primary_server = None
     channel_references = {} # reference name -> channel name/id
     event_listeners = {} # event name -> [listener functions (self, event)]
     # changed to set in favor of event API
@@ -35,7 +36,8 @@ class CoreBot(discord.Client):
                         # have permissions for this command
                         (("If you have permissions granted to you by a role, "
                          "I cannot check those in private messages\n")
-                         if isinstance(message.channel, discord.PrivateChannel)
+                         if isinstance(message.channel, discord.PrivateChannel) and
+                         self.primary_server is None
                          else ""
                         ) +
                         "To check your permissions, use the `!permissions` command"
@@ -132,6 +134,45 @@ class CoreBot(discord.Client):
             create_task(listener(self, event, *args, **kwargs), loop=self.loop)
 
     async def on_ready(self):
+        if os.path.exists('config.yml'):
+            with open('config.yml') as reader:
+                self.configuration = yaml.load(reader)
+        print("Connected to the following servers")
+        if 'primary_server' in self.configuration:
+            self.primary_server = discord.utils.get(
+                self.servers,
+                id=str(self.configuration['primary_server'])
+            )
+            if self.primary_server is None:
+                sys.exit("Primary server set, but no matching server was found")
+            else:
+                print("Validated primary server:", self.primary_server.name)
+        else:
+            print("Warning: No primary server set in configuration. Role permissions cannot be validated in PM's")
+        first = True
+        for server in list(self.servers):
+            print(server.name, server.id)
+            if self.primary_server is not None and server.id != self.primary_server.id:
+                try:
+                    await self.send_message(
+                        discord.utils.get(
+                            server.channels,
+                            name='general',
+                            type=discord.ChannelType.text
+                        ),
+                        "Unfortunately, this instance of Beymax is not configured"
+                        " to run on multiple servers. Please contact the owner"
+                        " of this instance, or run your own instance of Beymax."
+                        " Goodbye!"
+                    )
+                except:
+                    pass
+                await self.leave_server(server)
+            elif self.primary_server is None:
+                if first:
+                    first = False
+                else:
+                    print("Warning: Joining to multiple servers is not supported behavior")
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",
@@ -152,7 +193,6 @@ class CoreBot(discord.Client):
             channel.name:channel for channel in self.get_all_channels()
             if channel.type == 4 # Placeholder. ChannelType.category is not in discord.py yet
         }
-        self.primary_server = self._general.server
         self.update_times = load_db('tasks.json')
         taskkey = ''.join(sorted(self.tasks))
         if 'key' not in self.update_times or self.update_times['key'] != taskkey:
@@ -163,28 +203,26 @@ class CoreBot(discord.Client):
             print("Not invalidating cache")
         self.permissions = None
         self.channel_references['general'] = self._general
-        if os.path.exists('config.yml'):
-            with open('config.yml') as reader:
-                self.configuration = yaml.load(reader)
-            if 'channels' in self.configuration:
-                for name in self.channel_references:
-                    if name in self.configuration['channels']:
+
+        if 'channels' in self.configuration:
+            for name in self.channel_references:
+                if name in self.configuration['channels']:
+                    channel = discord.utils.get(
+                        self.get_all_channels(),
+                        name=self.configuration['channels'][name],
+                        type=discord.ChannelType.text
+                    )
+                    if channel is None:
                         channel = discord.utils.get(
                             self.get_all_channels(),
-                            name=self.configuration['channels'][name],
+                            id=self.configuration['channels'][name],
                             type=discord.ChannelType.text
                         )
-                        if channel is None:
-                            channel = discord.utils.get(
-                                self.get_all_channels(),
-                                id=self.configuration['channels'][name],
-                                type=discord.ChannelType.text
-                            )
-                        if channel is None:
-                            raise NameError("No channel by name of "+self.configuration['channels'][name])
-                        self.channel_references[name] = channel
-                    else:
-                        print("Warning: Channel reference", name, "is not defined")
+                    if channel is None:
+                        raise NameError("No channel by name of "+self.configuration['channels'][name])
+                    self.channel_references[name] = channel
+                else:
+                    print("Warning: Channel reference", name, "is not defined")
         print(self.channel_references)
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
@@ -211,7 +249,7 @@ class CoreBot(discord.Client):
             self.permissions['roles'] = {
                 discord.utils.find(
                     lambda role: role.name == obj['role'] or role.id == obj['role'],
-                    self.primary_server.roles
+                    [_role for server in self.servers for _role in server.roles]
                 ).id:obj for obj in self.permissions['permissions']
                 if 'role' in obj
             }
@@ -245,6 +283,7 @@ class CoreBot(discord.Client):
 
     async def close(self):
         save_db(self.users, 'users.json')
+        self.dispatch('cleanup')
         await super().close()
 
     async def send_message(self, destination, content, *, delim='\n', **kwargs):
@@ -295,10 +334,11 @@ class CoreBot(discord.Client):
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
         if username in self.users:
             return self.users[username]['id']
-        result = self.primary_server.get_member_named(username)
-        if result is not None:
-            return result.id
-        result = self.primary_server.get_member(username)
+        result = (list(filter(
+            lambda x:x is not None,
+            [server.get_member(username) for server in self.servers]
+            + [server.get_member_named(username) for server in self.servers]
+            )) + [None])[0]
         if result is not None:
             return result.id
         sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
@@ -308,9 +348,11 @@ class CoreBot(discord.Client):
         chain = []
         if user.id in self.permissions['users']:
             chain += self.permissions['users'][user.id]
-        if hasattr(user, 'roles'):
+        if self.primary_server is not None:
+            user = self.primary_server.get_member(user.id)
+        if hasattr(user, 'roles') and hasattr(user, 'server'):
             user_roles = set(user.roles)
-            for role in self.primary_server.role_hierarchy:
+            for role in user.server.role_hierarchy:
                 if role in user_roles and role.id in self.permissions['roles']:
                     chain.append(self.permissions['roles'][role.id])
         return [item for item in chain] + [self.permissions['defaults']]
@@ -407,7 +449,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "No such task"
             )
 
-    @bot.add_command('!nt')
+    @bot.add_command('!_nt')
     async def cmd_nt(self, message, content):
         await self.send_message(
             message.channel,
@@ -468,7 +510,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 cmd,
                 rule
             ))
-        if isinstance(message.channel, discord.PrivateChannel):
+        if isinstance(message.channel, discord.PrivateChannel) and self.primary_server is None:
             body.append(
                 "You may have additional permissions granted to you by a role"
                 " but I cannot check those within a private chat. Try the"
