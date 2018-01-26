@@ -43,10 +43,12 @@ def select_status():
         1
     )[0]
 
-class Beymax(CoreBot):
 
-    async def on_ready(self):
-        await super().on_ready() #first run the CoreBot initialization
+def ConstructBeymax(): #enable Beymax-Specific commands
+    beymax = CoreBot()
+
+    @beymax.subscribe('after:ready')
+    async def ready_up(self, event):
         print('Logged in as') #then run Beymax-Specific startup (print info)
         print(self.user.name)
         print(self.user.id)
@@ -59,15 +61,13 @@ class Beymax(CoreBot):
             print(channel.name, channel.type)
         print("Ready to serve!")
 
-    async def on_member_join(self, member): #greet new members
+    @beymax.subscribe('member_join')
+    async def greet_member(self, event, member): #greet new members
         await self.send_message(
             self.fetch_channel('general'),
             "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
-
-def ConstructBeymax(): #enable Beymax-Specific commands
-    beymax = Beymax()
 
     @beymax.add_command('!kill-beymax', '!satisfied')
     async def cmd_shutdown(self, message, content):
@@ -81,7 +81,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         `!_greet` : Manually triggers a greeting (I will greet you)
         """
-        await self.on_member_join(message.author)
+        self.dispatch('member_join', message.author)
 
     @beymax.add_task(3600) # 1 hour
     async def update_status(self, *args):
