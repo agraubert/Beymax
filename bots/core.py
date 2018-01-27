@@ -25,7 +25,6 @@ class CoreBot(discord.Client):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
             async def on_cmd(self, cmd, message, content):
-                await self.send_typing(message.channel)
                 if self.check_permissions_chain(content[0][1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     await func(self, message, content)
