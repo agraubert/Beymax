@@ -2,6 +2,7 @@ from .core import CoreBot
 from .utils import load_db, save_db
 import os
 import requests
+from requests.exceptions import RequestException
 import asyncio
 import random
 import shutil
@@ -76,8 +77,7 @@ def EnableOverwatch(bot):
         raise TypeError("This function must take a CoreBot")
 
     @bot.add_task(3600) # 1 hour
-    @bot.add_command('!owupdate')
-    async def update_overwatch(self, *args): #ignore message and content args
+    async def update_overwatch(self):
         """
         `!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
         """
@@ -95,7 +95,7 @@ def EnableOverwatch(bot):
                 state[uid]['tier'] = tier
                 currentRank = rank(tier)
                 oldRank = rank(old_tier)
-                if currentRank[0] > oldRank[0]:
+                if currentRank > oldRank:
                     body = "Everyone put your hands together for "
                     body += self.users[uid]['mention'] if uid in self.users else tag
                     body += " who just reached "
@@ -103,16 +103,20 @@ def EnableOverwatch(bot):
                     body += " in Overwatch!"
                     if 'avatar' in state[uid]:
                         body += '\n'+state[uid]['avatar']
-                    if currentRank[0] >= 4:
+                    if currentRank >= 4:
                         # Ping the channel for anyone who reached platinum or above
                         body = body.replace('Everyone', '@everyone')
                     await self.send_message(
-                        self.general, #for now
+                        self.fetch_channel('general'), #for now
                         body
                     )
-            except:
+            except RequestException:
                 pass
         save_db(state, 'stats.json')
+
+    @bot.add_command('!owupdate')
+    async def cmd_update(self, message, content):
+        self.dispatch('task:update_overwatch')
 
     @bot.add_command('!ow')
     async def cmd_ow(self, message, content):
@@ -144,8 +148,8 @@ def EnableOverwatch(bot):
                     "Alright! I'll keep track of your stats"
                 )
                 await asyncio.sleep(15)
-                await update_overwatch(self)
-            except:
+                self.dispatch('task:update_overwatch')
+            except RequestException:
                 await self.send_message(
                     message.channel,
                     "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
@@ -169,12 +173,12 @@ def EnableOverwatch(bot):
                     state[uid]['rating'] = current
                     state[uid]['avatar'] = img
                     state[uid]['tier'] = tier
-                except:
+                except RequestException:
                     pass
             ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
             ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
             await self.send_message(
-                self.general, # for now
+                self.fetch_channel('general'), # for now
                 "It's that time again, folks!\n"
                 "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
             )
@@ -183,7 +187,7 @@ def EnableOverwatch(bot):
             }
             for tag,uid,tier,rating,rn in ranked:
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "In "+index[tag]+" place, "+
                     (self.users[uid]['mention'] if uid in self.users else tag)+
                     " who made "+tier+
@@ -194,7 +198,7 @@ def EnableOverwatch(bot):
                     )
                 )
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 "Let's give everyone a round of applause.  Great show from everybody!\n"
                 "I can't wait to see how you all do next time! [Competitive ranks reset]"
             )
@@ -225,7 +229,7 @@ def EnableOverwatch(bot):
         body += "If anyone else would like to be tracked, use the `!ow` command."
         body += " Good luck to you all!"
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             body
         )
         save_db(stats, 'stats.json')

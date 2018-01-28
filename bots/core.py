@@ -1,38 +1,112 @@
 from .utils import load_db, save_db, getname, validate_permissions
 import discord
+from discord.compat import create_task
 import asyncio
 import time
 import os
 import yaml
 import sys
 
-
 class CoreBot(discord.Client):
-    commands = {} # !cmd -> function wrapper. Functions take (self, message, content)
+    nt = 0
+    configuration = {}
+    primary_server = None
+    channel_references = {} # reference name -> channel name/id
+    event_listeners = {} # event name -> [listener functions (self, event)]
+    # changed to set in favor of event API
+    commands = set() # !cmd -> function wrapper. Functions take (self, message, content)
+    ignored_users = set()
     users = {} # id/fullname -> {id, fullname, mention, name}
-    tasks = [] # [interval(s), function] functions take (self)
-    special = [] # [callable, function] callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
+    tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
+    special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
 
     def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
         if not len(cmds):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
+            async def on_cmd(self, cmd, message, content):
+                if self.check_permissions_chain(content[0][1:], message.author)[0]:
+                    print("Command in channel", message.channel, "from", message.author, ":", content)
+                    await func(self, message, content)
+                else:
+                    print("Denied", message.author, "using command", content[0], "in", message.channel)
+                    await self.send_message(
+                        message.channel,
+                        "You do not have permissions to use this command\n" +
+                        # Add additional message if this is a DM and they may actually
+                        # have permissions for this command
+                        (("If you have permissions granted to you by a role, "
+                         "I cannot check those in private messages\n")
+                         if isinstance(message.channel, discord.PrivateChannel) and
+                         self.primary_server is None
+                         else ""
+                        ) +
+                        "To check your permissions, use the `!permissions` command"
+                    )
             for cmd in cmds:
-                self.commands[cmd] = func
-            return func
+                on_cmd = self.subscribe(cmd)(on_cmd)
+                self.commands.add(cmd)
+            return on_cmd
+
         return wrapper
 
     def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
         def wrapper(func):
-            self.tasks.append((interval, func))
-            return func
+            taskname = 'task:'+func.__name__
+            if taskname in self.tasks:
+                raise NameError("This task already exists! Change the name of the task function")
+            self.tasks[taskname] = (interval, func.__qualname__)
+
+            @self.subscribe(taskname)
+            async def run_task(self, task):
+                await func(self)
+                if 'tasks' not in self.update_times:
+                    self.update_times['tasks'] = {}
+                self.update_times['tasks'][taskname] = time.time()
+                save_db(self.update_times, 'tasks.json')
+
+
+            return run_task
         return wrapper
 
     def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
         def wrapper(func):
-            self.special.append((check, func))
+            event = 'special:'+func.__name__
+            if event in self.special:
+                raise NameError("This special event already exists! Change the name of the special function")
+            self.special[event] = check
+
+            @self.subscribe(event)
+            async def run_special(self, evt, message, content):
+                await func(self, message, content)
+
+            return run_special
+        return wrapper
+
+    def subscribe(self, event): # decorator. Sets the decorated function to run on events
+        # event functions should take the event, followed by expected arguments
+        def wrapper(func):
+            if str(event) not in self.event_listeners:
+                self.event_listeners[str(event)] = []
+            self.event_listeners[str(event)].append(func)
+            # func.unsubscribe will unsubscribe the function from the event
+            # calling without args unsubscribes from the most recent event that this
+            # function was subscribed to. An event can be specified to unsubscribe
+            # from a specific event, if the function was subscribed to several
+            func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(func)
             return func
         return wrapper
+
+    def reserve_channel(self, name):
+        # creates a channel reference by that name
+        # channel references can be changed in configuration
+        self.channel_references[name] = None
+
+    def fetch_channel(self, name):
+        channel = self.channel_references[name] if name in self.channel_references else None
+        if channel is None:
+            return self.fetch_channel('general')
+        return channel
 
     def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
         for bot in bots:
@@ -42,8 +116,83 @@ class CoreBot(discord.Client):
                 raise TypeError("Bot is not callable")
         return self
 
+    def dispatch(self, event, *args, manual=False, **kwargs):
+        self.nt += 1
+        if not manual:
+            if 'before:'+str(event) in self.event_listeners:
+                self.dispatch_event('before:'+str(event), *args, **kwargs)
+            super().dispatch(event, *args, **kwargs)
+            if str(event) in self.event_listeners:
+                self.dispatch_event(str(event), *args, **kwargs)
+            if 'after:'+str(event) in self.event_listeners:
+                self.dispatch_event('after:'+str(event), *args, **kwargs)
+        else:
+            if str(event) in self.event_listeners:
+                self.dispatch_event(str(event), *args, **kwargs)
+
+    def dispatch_event(self, event, *args, **kwargs):
+        for listener in self.event_listeners[event]:
+            create_task(listener(self, event, *args, **kwargs), loop=self.loop)
+
+    def config_get(self, *keys):
+        obj = self.configuration
+        for key in keys:
+            if key in obj:
+                obj = obj[key]
+            else:
+                return None
+        return obj
+
     async def on_ready(self):
+        if os.path.exists('config.yml'):
+            with open('config.yml') as reader:
+                self.configuration = yaml.load(reader)
+        print("Connected to the following servers")
+        if 'primary_server' in self.configuration:
+            self.primary_server = discord.utils.get(
+                self.servers,
+                id=str(self.configuration['primary_server'])
+            )
+            if self.primary_server is None:
+                sys.exit("Primary server set, but no matching server was found")
+            else:
+                print("Validated primary server:", self.primary_server.name)
+        else:
+            print("Warning: No primary server set in configuration. Role permissions cannot be validated in PM's")
+        first = True
+        for server in list(self.servers):
+            print(server.name, server.id)
+            if self.primary_server is not None and server.id != self.primary_server.id:
+                try:
+                    await self.send_message(
+                        discord.utils.get(
+                            server.channels,
+                            name='general',
+                            type=discord.ChannelType.text
+                        ),
+                        "Unfortunately, this instance of Beymax is not configured"
+                        " to run on multiple servers. Please contact the owner"
+                        " of this instance, or run your own instance of Beymax."
+                        " Goodbye!"
+                    )
+                except:
+                    pass
+                await self.leave_server(server)
+            elif self.primary_server is None:
+                if first:
+                    first = False
+                else:
+                    print("Warning: Joining to multiple servers is not supported behavior")
         print("Commands:", [cmd for cmd in self.commands])
+        print(
+            "Tasks:",
+            '\n'.join([
+                '%s every %d seconds (Runs %s)' % (
+                    taskname,
+                    *self.tasks[taskname]
+                ) for taskname in self.tasks
+            ])
+        )
         self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
@@ -54,15 +203,37 @@ class CoreBot(discord.Client):
             channel.name:channel for channel in self.get_all_channels()
             if channel.type == 4 # Placeholder. ChannelType.category is not in discord.py yet
         }
-        self.general = self._general
-        self._bug_channel = self._general #Change which channels these use
-        self.bug_channel = self._general #Change which channels these use
-        self.dev_channel = self._general #Change which channels these use
-        self._story_channel = self._general #Change which channels these use
-        self.story_channel = self._general #Change which channels these use
-        self.primary_server = self._general.server
-        self.update_times = [0] * len(self.tasks) # set all tasks to update at next trigger
+        self.update_times = load_db('tasks.json')
+        taskkey = ''.join(sorted(self.tasks))
+        if 'key' not in self.update_times or self.update_times['key'] != taskkey:
+            print("Invalidating task time cache")
+            self.update_times = {'key':taskkey, 'tasks':{}}
+            save_db(self.update_times, 'tasks.json')
+        else:
+            print("Not invalidating cache")
         self.permissions = None
+        self.channel_references['general'] = self._general
+        if 'channels' in self.configuration:
+            for name in self.channel_references:
+                if name in self.configuration['channels']:
+                    channel = discord.utils.get(
+                        self.get_all_channels(),
+                        name=self.configuration['channels'][name],
+                        type=discord.ChannelType.text
+                    )
+                    if channel is None:
+                        channel = discord.utils.get(
+                            self.get_all_channels(),
+                            id=self.configuration['channels'][name],
+                            type=discord.ChannelType.text
+                        )
+                    if channel is None:
+                        raise NameError("No channel by name of "+self.configuration['channels'][name])
+                    self.channel_references[name] = channel
+                else:
+                    print("Warning: Channel reference", name, "is not defined")
+        print(self.channel_references)
+        self.ignored_users = set(load_db('ignores.json', []))
         if os.path.exists('permissions.yml'):
             with open('permissions.yml') as reader:
                 self.permissions = yaml.load(reader)
@@ -88,15 +259,18 @@ class CoreBot(discord.Client):
             self.permissions['roles'] = {
                 discord.utils.find(
                     lambda role: role.name == obj['role'] or role.id == obj['role'],
-                    self.primary_server.roles
+                    [_role for server in self.servers for _role in server.roles]
                 ).id:obj for obj in self.permissions['permissions']
                 if 'role' in obj
             }
-            tmp = [
-                (self.getid(user),obj) for obj in self.permissions['permissions']
-                if 'users' in obj
-                for user in obj['users']
-            ]
+            try:
+                tmp = [
+                    (self.getid(user),obj) for obj in self.permissions['permissions']
+                    if 'users' in obj
+                    for user in obj['users']
+                ]
+            except NameError as e:
+                raise SystemExit("Unable to find user") from e
             self.permissions['users'] = {}
             for uid, rule in tmp:
                 if uid not in self.permissions['users']:
@@ -122,6 +296,7 @@ class CoreBot(discord.Client):
 
     async def close(self):
         save_db(self.users, 'users.json')
+        self.dispatch('cleanup')
         await super().close()
 
     async def send_message(self, destination, content, *, delim='\n', **kwargs):
@@ -172,22 +347,27 @@ class CoreBot(discord.Client):
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
         if username in self.users:
             return self.users[username]['id']
-        result = self.primary_server.get_member_named(username)
+        result = (list(filter(
+            lambda x:x is not None,
+            [server.get_member(username) for server in self.servers]
+            + [server.get_member_named(username) for server in self.servers]
+            )) + [None])[0]
         if result is not None:
+            if result.id != username and '#' not in username:
+                raise NameError("Username '%s' not valid, must containe #discriminator" % username)
             return result.id
-        result = self.primary_server.get_member(username)
-        if result is not None:
-            return result.id
-        sys.exit("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
+        raise NameError("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
     def build_permissions_chain(self, user):
         # Assemble the chain of permissions rules for a given user
         chain = []
         if user.id in self.permissions['users']:
             chain += self.permissions['users'][user.id]
-        if hasattr(user, 'roles'):
+        if self.primary_server is not None:
+            user = self.primary_server.get_member(user.id)
+        if hasattr(user, 'roles') and hasattr(user, 'server'):
             user_roles = set(user.roles)
-            for role in self.primary_server.role_hierarchy:
+            for role in user.server.role_hierarchy:
                 if role in user_roles and role.id in self.permissions['roles']:
                     chain.append(self.permissions['roles'][role.id])
         return [item for item in chain] + [self.permissions['defaults']]
@@ -210,9 +390,9 @@ class CoreBot(discord.Client):
             #build the chain, if it wasn't given as an argument
             chain = self.build_permissions_chain(user)
         for obj in chain:
-            if 'allow' in obj and cmd in obj['allow']:
+            if 'allow' in obj and (cmd in obj['allow'] or '$all' in obj['allow']):
                 return True, obj['_grant']
-            elif 'deny' in obj and cmd in obj['deny']:
+            elif 'deny' in obj and (cmd in obj['deny'] or '$all' in obj['deny']):
                 return False, obj['_grant']
             elif cmd.startswith('_') and 'underscore' in obj:
                 return obj['underscore'], obj['_grant']
@@ -236,57 +416,72 @@ class CoreBot(discord.Client):
             content[0] = content[0].lower()
         except:
             return
-        if content[0] in self.commands: #if the first argument is a command
-            if self.check_permissions_chain(content[0][1:], message.author)[0]:
-                print("Command in channel", message.channel, "from", message.author, ":", content)
-                await self.commands[content[0]](self, message, content)
-            else:
-                print("Denied", message.author, "using command", content[0], "in", message.channel)
-                await self.send_message(
-                    message.channel,
-                    "You do not have permissions to use this command\n" +
-                    # Add additional message if this is a DM and they may actually
-                    # have permissions for this command
-                    (("If you have permissions granted to you by a role, "
-                     "I cannot check those in private messages\n")
-                     if isinstance(message.channel, discord.PrivateChannel)
-                     else ""
-                    ) +
-                    "To check your permissions, use the `!permissions` command"
-                )
+        if message.author.id in self.ignored_users:
+            print("Ignoring message from", message.author,":", content)
+        elif content[0] in self.commands: #if the first argument is a command
+            # dispatch command event
+            print("Dispatching command")
+            self.dispatch(content[0], message, content)
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            for check, func in self.special:
+            for event, check in self.special.items():
                 if check(self, message):
-                    print("Running special", func.__qualname__)
-                    await func(self, message, content)
+                    print("Running special", event)
+                    self.dispatch(event, message, content)
                     break
         # Check if it is time to run any tasks
         #
         current = time.time()
-        for i, (interval, task) in enumerate(self.tasks):
-            last = self.update_times[i]
+        ran_task = False
+        for task, (interval, qualname) in self.tasks.items():
+            last = 0
+            if 'tasks' in self.update_times and task in self.update_times['tasks']:
+                last = self.update_times['tasks'][task]
             if current - last > interval:
-                print("Running task", task.__qualname__)
-                await task(self)
-                self.update_times[i] = current
+                print("Running task", task, '(', qualname, ')')
+                self.dispatch(task)
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.reserve_channel('dev')
+
+    @bot.add_command('!_task')
+    async def cmd_task(self, message, content):
+        """
+        `!_task <task name>` : Manually runs the named task
+        """
+        key = ' '.join(content[1:])
+        if not key.startswith('task:'):
+            key = 'task:'+key
+        if key in self.tasks:
+            print("Manually running task", key, '(', self.tasks[key][1], ')')
+            self.dispatch(key)
+        else:
+            await self.send_message(
+                message.channel,
+                "No such task"
+            )
+
+    @bot.add_command('!_nt')
+    async def cmd_nt(self, message, content):
+        await self.send_message(
+            message.channel,
+            '%d events have been dispatched' % self.nt
+        )
+
     @bot.add_command('!output-dev')
     async def cmd_dev(self, message, content):
         """
         `!output-dev` : Any messages that would always go to general will go to testing grounds
         """
-        self.general = self.dev_channel
-        self.bug_channel = self.dev_channel
-        self.story_channel = self.dev_channel
+        self._channel_references = {k:v for k,v in self.channel_references.items()}
+        self.channel_references = {k:self.fetch_channel('dev') for k in self.channel_references}
         await self.send_message(
-            self.dev_channel,
+            self.fetch_channel('dev'),
             "Development mode enabled. All messages will be sent to testing grounds"
         )
 
@@ -295,11 +490,9 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `!output-prod` : Restores normal message routing
         """
-        self.general = self._general
-        self.bug_channel = self._bug_channel
-        self.story_channel = self._story_channel
+        self.channel_references = {k:v for k,v in self._channel_references.items()}
         await self.send_message(
-            self.dev_channel,
+            self.fetch_channel('dev'),
             "Production mode enabled. All messages will be sent to general"
         )
 
@@ -310,7 +503,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         Example: `!_announce I am really cool`
         """
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             message.content.strip().replace('!_announce', '')
         )
 
@@ -334,7 +527,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 cmd,
                 rule
             ))
-        if isinstance(message.channel, discord.PrivateChannel):
+        if isinstance(message.channel, discord.PrivateChannel) and self.primary_server is None:
             body.append(
                 "You may have additional permissions granted to you by a role"
                 " but I cannot check those within a private chat. Try the"
@@ -344,5 +537,130 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.author,
             '\n'.join(body)
         )
+
+    @bot.add_command('!ignore')
+    async def cmd_ignore(self, message, content):
+        """
+        `!ignore <user id or user#tag>` : Ignore all commands by the given user
+        until the next time I'm restarted
+        Example: `!ignore Username#1234` Ignores all commands from Username#1234
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!ignore <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                if uid in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is already ignored"
+                    )
+                    return
+                self.ignored_users.add(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
+                for server in self.servers:
+                    user = server.get_member(uid)
+                    if self.config_get('ignore_role') != None:
+                        blacklist_role = self.config_get('ignore_role')
+                        for role in server.roles:
+                            if role.id == blacklist_role or role.name == blacklist_role:
+                                await self.add_roles(
+                                    user,
+                                    role
+                                )
+                    try:
+                        await self.send_message(
+                            discord.utils.get(
+                                server.channels,
+                                name='general',
+                                type=discord.ChannelType.text
+                            ),
+                            "%s has asked me to ignore %s. %s can no longer issue any commands"
+                            " until they have been `!pardon`-ed" % (
+                                str(message.author),
+                                str(user),
+                                getname(user)
+                            )
+                        )
+                    except:
+                        pass
+                await self.send_message(
+                    user,
+                    "I have been asked to ignore you by %s. Please contact them"
+                    " to petition this decision." % (str(message.author))
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
+    @bot.add_command('!pardon')
+    async def cmd_pardon(self, message, content):
+        """
+        `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
+        commands again.
+        Example: `!pardon Username#1234` pardons Username#1234
+        """
+        if len(content) != 2:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!pardon <user id or user#tag>`"
+            )
+        else:
+            try:
+                uid = self.getid(content[1])
+                if uid not in self.ignored_users:
+                    await self.send_message(
+                        message.channel,
+                        "This user is not currently ignored"
+                    )
+                    return
+                self.ignored_users.remove(uid)
+                save_db(
+                    list(self.ignored_users),
+                    'ignores.json'
+                )
+                for server in self.servers:
+                    user = server.get_member(uid)
+                    if self.config_get('ignore_role') != None:
+                        blacklist_role = self.config_get('ignore_role')
+                        for role in server.roles:
+                            if role.id == blacklist_role or role.name == blacklist_role:
+                                await self.remove_roles(
+                                    user,
+                                    role
+                                )
+                    try:
+                        await self.send_message(
+                            discord.utils.get(
+                                server.channels,
+                                name='general',
+                                type=discord.ChannelType.text
+                            ),
+                            "%s has pardoned %s" % (
+                                str(message.author),
+                                str(user)
+                            )
+                        )
+                    except:
+                        pass
+                await self.send_message(
+                    user,
+                    "You have been pardoned by %s. I will resume responding to "
+                    "your commands." % (str(message.author))
+                )
+            except NameError:
+                await self.send_message(
+                    message.channel,
+                    "I couldn't find that user. Please provide a user id or user#tag"
+                )
+
 
     return bot
