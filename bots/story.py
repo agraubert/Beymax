@@ -115,6 +115,8 @@ def EnableStory(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.reserve_channel('story')
+
     @bot.add_command('!_stories')
     async def cmd_story(self, message, content):
         """
@@ -133,7 +135,7 @@ def EnableStory(bot):
 
     def checker(self, message):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        return message.channel.id == self.story_channel.id and state['user'] != '~<IDLE>' and not message.content.startswith('!')
+        return message.channel.id == self.fetch_channel('story').id and state['user'] != '~<IDLE>' and not message.content.startswith('!')
 
     @bot.add_special(checker)
     async def state_router(self, message, content):
@@ -229,7 +231,7 @@ def EnableStory(bot):
                     ' ones that I handle personally'
                 )
                 await self.send_message(
-                    self.story_channel,
+                    self.fetch_channel('story'),
                     '%s is now playing %s\n'
                     'The game will begin shortly' % (
                         message.author.mention,
@@ -239,7 +241,7 @@ def EnableStory(bot):
                 # Post to general
                 await asyncio.sleep(2)
                 await self.send_message(
-                    self.story_channel,
+                    self.fetch_channel('story'),
                     '```'+self.player.readchunk()+'```'
                 )
             else:
