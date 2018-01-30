@@ -9,3 +9,35 @@ defaults:
     - bug:user
     - owupdate
   underscore: false
+## Set the permissions block to specify the rules for permissions
+# permissions:
+
+## This block allows the listed commands, as well as all underscore commands to the role named 'admin'
+#   -
+#     role: admin
+#     allow:
+#       - kill-beymax
+#       - satisfied
+#       - output-dev
+#       - output-prod
+#       - bug:label
+#       - bug:status
+#       - bug:user
+#       - owupdate
+#     underscore: true
+
+## This block denies all commands to the role named 'blacklisted'. '$all' can be used in deny or allow blocks
+#   -
+#     role: blacklisted
+#     deny:
+#       - $all
+#     underscore: false
+
+## This block would allow some_command as well as all underscore commands to be used by username#1234 and the user with id 'someones_user_id'
+  # -
+  #   users:
+  #     - username#1234
+  #     - someones_user_id
+  #   allow:
+  #     - some_command
+  #   underscore: true
