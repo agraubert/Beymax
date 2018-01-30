@@ -11,17 +11,24 @@ import asyncio
 import random
 random.seed()
 
-#schemas:
-#stats: {id: {tag:battletag, rank:last_ranking}}
-#users:
-# struct = {
-#     'id': message.author.id,
-#     'fullname' = str(message.author)
-#     'mention': message.author.mention,
-#     'name': self.getname(message.author)
-# }
-#birthdays = {id:{month, day, year}}
-#parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
+"""Note:
+This file is what we consider the 'reference implimentation' of Beymax.
+bots/core.py and bots/utils.py contain the development framework upon which
+all of Beymax is built. The remaining bots/*.py files build unique feature sets
+out of this framework. This file is where we tie it all together. Starting from
+the CoreBot (defined in bots/core.py) we add in a few additional just-for-fun
+features (greetings, statuses, etc) which we wanted on our server, but which we didn't
+think justified an entire feature set. Then we enable all of the other features
+using EnableAll, and the various Enable___ functions. Lastly, the bot is launched
+by reading a token out of token.txt
+
+You are free to use any of the features in this file and others to get your bot
+setup as you wish. Note that bots/help.py is considered server-specific and just
+generally bad. We appologize and intend to deprecate or fix this code in the future
+
+If you have any trouble, feel free to reach out to us by opening an issue on our
+github repo https://github.com/agraubert/beymax
+"""
 
 def select_status():
     #return a randomly selected status message from the list
