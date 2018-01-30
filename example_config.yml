@@ -14,3 +14,6 @@
 
 ## Set bug_role to the name or id of a role you want mentioned whenever a user submits a !bug report
 # bug_role: name_or_id_of_role
+
+## Set party_category to the name or id of a channel category in your server where you want parties to be created
+# party_category: name_or_id_of_category

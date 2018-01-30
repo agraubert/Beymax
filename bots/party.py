@@ -105,6 +105,19 @@ def EnableParties(bot):
                 # )
 
                 #Temporary workaround for party creation within categories
+                target_category = None
+                category_reference = self.config_get('party_category')
+                if category_reference is not None:
+                    for channel in message.server.channels:
+                        #FIXME: CategoryType instead of 4
+                        if channel.type == 4 and (
+                            channel.id == category_reference or
+                            channel.name == category_reference
+                        ):
+                            target_category = channel.id
+                    if target_category is None:
+                        raise NameError("No category '%s'"%category_reference)
+
                 @asyncio.coroutine
                 def tmp_create_channel():
                     permissions_payload = [
@@ -122,7 +135,7 @@ def EnableParties(bot):
                             'name': name,
                             'type': str(discord.ChannelType.voice),
                             'permission_overwrites': permissions_payload,
-                            'parent_id': self.categories['Voice Channels'].id
+                            'parent_id': target_category
                         }
                         return self.http.request(
                             Route(

@@ -30,6 +30,8 @@ def EnableBugs(bot):
                 # primaryServerMasterRace
                 if role.id == role_target or role.name == role_target:
                     role_mention = role.mention
+            if role_mention == '':
+                raise NameError("No role '%s'" % role_target)
         await self.send_message(
             self.fetch_channel('bugs'),
             'New issue reported: %s\n' #@Developer
