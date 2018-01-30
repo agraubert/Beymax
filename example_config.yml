@@ -11,3 +11,6 @@
 
 ## Set ignore_role to the name or id of a role if you want that role to be applied when you !ignore someone
 # ignore_role: name_or_id_of_role
+
+## Set bug_role to the name or id of a role you want mentioned whenever a user submits a !bug report
+# bug_role: name_or_id_of_role
