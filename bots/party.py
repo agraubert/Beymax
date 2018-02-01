@@ -105,6 +105,19 @@ def EnableParties(bot):
                 # )
 
                 #Temporary workaround for party creation within categories
+                target_category = None
+                category_reference = self.config_get('party_category')
+                if category_reference is not None:
+                    for channel in message.server.channels:
+                        #FIXME: CategoryType instead of 4
+                        if channel.type == 4 and (
+                            channel.id == category_reference or
+                            channel.name == category_reference
+                        ):
+                            target_category = channel.id
+                    if target_category is None:
+                        raise NameError("No category '%s'"%category_reference)
+
                 @asyncio.coroutine
                 def tmp_create_channel():
                     permissions_payload = [
@@ -122,7 +135,7 @@ def EnableParties(bot):
                             'name': name,
                             'type': str(discord.ChannelType.voice),
                             'permission_overwrites': permissions_payload,
-                            'parent_id': self.categories['Voice Channels'].id
+                            'parent_id': target_category
                         }
                         return self.http.request(
                             Route(
@@ -243,13 +256,13 @@ def EnableParties(bot):
         save_db(parties, 'parties.json')
         if len(pruned) == 1:
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 '%s has been disbanded. If you would like to create another party, use the `!party` command'
                  % pruned[0]
             )
         elif len(pruned) > 1:
             await self.send_message(
-                self.general,
+                self.fetch_channel('general'),
                 'The following parties have been disbanded:\n'
                 '\n'.join(pruned)+
                 '\nIf you would like to create another party, use the `!party` command'

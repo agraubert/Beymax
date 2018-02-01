@@ -11,17 +11,24 @@ import asyncio
 import random
 random.seed()
 
-#schemas:
-#stats: {id: {tag:battletag, rank:last_ranking}}
-#users:
-# struct = {
-#     'id': message.author.id,
-#     'fullname' = str(message.author)
-#     'mention': message.author.mention,
-#     'name': self.getname(message.author)
-# }
-#birthdays = {id:{month, day, year}}
-#parties: ['name':channel name, 'id':channel.id, 'server':message.server.id,'primed':False,'creator':message.author.id,'time': time.time()]
+"""Note:
+This file is what we consider the 'reference implimentation' of Beymax.
+bots/core.py and bots/utils.py contain the development framework upon which
+all of Beymax is built. The remaining bots/*.py files build unique feature sets
+out of this framework. This file is where we tie it all together. Starting from
+the CoreBot (defined in bots/core.py) we add in a few additional just-for-fun
+features (greetings, statuses, etc) which we wanted on our server, but which we didn't
+think justified an entire feature set. Then we enable all of the other features
+using EnableAll, and the various Enable___ functions. Lastly, the bot is launched
+by reading a token out of token.txt
+
+You are free to use any of the features in this file and others to get your bot
+setup as you wish. Note that bots/help.py is considered server-specific and just
+generally bad. We appologize and intend to deprecate or fix this code in the future
+
+If you have any trouble, feel free to reach out to us by opening an issue on our
+github repo https://github.com/agraubert/beymax
+"""
 
 def select_status():
     #return a randomly selected status message from the list
@@ -43,10 +50,12 @@ def select_status():
         1
     )[0]
 
-class Beymax(CoreBot):
 
-    async def on_ready(self):
-        await super().on_ready() #first run the CoreBot initialization
+def ConstructBeymax(): #enable Beymax-Specific commands
+    beymax = CoreBot()
+
+    @beymax.subscribe('after:ready')
+    async def ready_up(self, event):
         print('Logged in as') #then run Beymax-Specific startup (print info)
         print(self.user.name)
         print(self.user.id)
@@ -57,28 +66,16 @@ class Beymax(CoreBot):
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name, channel.type)
-        self.dev_channel = discord.utils.get( #set dev_channel to testing_grounds
-            self.get_all_channels(),
-            name='testing_grounds',
-            type=discord.ChannelType.text
-        )
-        self._bug_channel = discord.utils.get( #set bug_channel to bots_n_bugs
-            self.get_all_channels(),
-            name='bots_n_bugs',
-            type=discord.ChannelType.text
-        )
-        self.bug_channel = self._bug_channel
         print("Ready to serve!")
+        self.dispatch('task:update_status') # manually set status at startup
 
-    async def on_member_join(self, member): #greet new members
+    @beymax.subscribe('member_join')
+    async def greet_member(self, event, member): #greet new members
         await self.send_message(
-            self.general,
+            self.fetch_channel('general'),
             "Welcome, "+member.mention+"!\n"+
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi"
         )
-
-def ConstructBeymax(): #enable Beymax-Specific commands
-    beymax = Beymax()
 
     @beymax.add_command('!kill-beymax', '!satisfied')
     async def cmd_shutdown(self, message, content):
@@ -92,7 +89,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         `!_greet` : Manually triggers a greeting (I will greet you)
         """
-        await self.on_member_join(message.author)
+        self.dispatch('member_join', message.author)
 
     @beymax.add_task(3600) # 1 hour
     async def update_status(self, *args):

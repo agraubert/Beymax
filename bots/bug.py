@@ -6,6 +6,8 @@ def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
+    bot.reserve_channel('bugs')
+
     @bot.add_command('!bug')
     async def cmd_bug(self, message, content):
         """
@@ -20,10 +22,21 @@ def EnableBugs(bot):
             'comments':[],
             'label': ' '.join(content[1:])
         })
+        role_mention = ''
+        role_target = self.config_get('bug_role')
+        if role_target is not None:
+            for role in self.fetch_channel('bugs').server.roles:
+                # Not that this will make literally 0 sense in a multi-server environment
+                # primaryServerMasterRace
+                if role.id == role_target or role.name == role_target:
+                    role_mention = role.mention
+            if role_mention == '':
+                raise NameError("No role '%s'" % role_target)
         await self.send_message(
-            self.bug_channel,
-            'New issue reported: <@&308683717419991043>\n' #@Developer
+            self.fetch_channel('bugs'),
+            'New issue reported: %s\n' #@Developer
             '[%d] [Pending] %s : %s' % (
+                role_mention,
                 len(bugs)-1,
                 message.author.mention,
                 bugs[-1]['content']
@@ -91,7 +104,7 @@ def EnableBugs(bot):
                     )
                 )
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'New comment on issue:\n'
                     '[%d] [%s] %s : %s\n'
                     'Comment: [%s] : %s' % (
@@ -130,7 +143,7 @@ def EnableBugs(bot):
             else:
                 bugs[bugid]['status'] = ' '.join(content[2:])
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'Issue status changed:\n'
                     '[%d] [%s] %s : %s' % (
                         bugid,
@@ -166,7 +179,7 @@ def EnableBugs(bot):
             else:
                 label = ' '.join(content[2:])
                 await self.send_message(
-                    self.bug_channel,
+                    self.fetch_channel('bugs'),
                     'Issue label changed:\n'
                     '[%d] [%s] %s : %s\n'
                     'New label: %s' % (

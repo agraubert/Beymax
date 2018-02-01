@@ -56,7 +56,7 @@ def EnableCash(bot):
                     }
                 )
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     '@everyone %s has generously donated $%0.2f towards %s, which puts us'
                     ' at %.0f%% of the $%d goal.\n'
                     'There is $%0.2f left to raise by %d/%d/%d\n'
@@ -146,7 +146,7 @@ def EnableCash(bot):
                         'account': account
                     }
                     await self.send_message(
-                        self.general,
+                        self.fetch_channel('general'),
                         '%s has started a new funding project:\n'
                         'Raise $%d by %s for %s\n'
                         'If you would like to donate, venmo `%s` and mention `%s`'
@@ -204,7 +204,7 @@ def EnableCash(bot):
                 )
             else:
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "The funding project for %s has ended at %.0f%% of its $%d goal" % (
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
@@ -248,7 +248,7 @@ def EnableCash(bot):
             ended |= end['year'] == today.year and end['month'] == today.month and end['day'] < today.day
             if ended:
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "The funding project for %s has ended at %.0f%% of its $%d goal" % (
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
@@ -280,7 +280,7 @@ def EnableCash(bot):
                 del cash[project]
             elif time.time() - data['notified'] > 2628001: #~1 month
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "Funds are still being collected for %s\n"
                     "Current progress: $%0.2f/$%d (%.0f%%)\n"
                     "Project ends: %d/%d/%d\n"

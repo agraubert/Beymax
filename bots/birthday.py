@@ -43,7 +43,7 @@ def EnableBirthday(bot):
             day = data['day']
             if today.day == day and today.month == month:
                 await self.send_message(
-                    self.general,
+                    self.fetch_channel('general'),
                     "@everyone congratulate %s, for today is their birthday!"
                     " They are %d!" % (
                         self.users[uid]['mention'] if uid in self.users else "someone",
