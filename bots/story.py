@@ -259,7 +259,7 @@ def EnableStory(bot):
     return bot
 
     def xp_for(level):
-        if level <= 1:
+        if level <= 2:
             return 10
         else:
             return (2*xp_for(level-1)-xp_for(level-2))+5
