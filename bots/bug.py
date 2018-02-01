@@ -22,10 +22,21 @@ def EnableBugs(bot):
             'comments':[],
             'label': ' '.join(content[1:])
         })
+        role_mention = ''
+        role_target = self.config_get('bug_role')
+        if role_target is not None:
+            for role in self.fetch_channel('bugs').server.roles:
+                # Not that this will make literally 0 sense in a multi-server environment
+                # primaryServerMasterRace
+                if role.id == role_target or role.name == role_target:
+                    role_mention = role.mention
+            if role_mention == '':
+                raise NameError("No role '%s'" % role_target)
         await self.send_message(
             self.fetch_channel('bugs'),
-            'New issue reported: <@&308683717419991043>\n' #@Developer
+            'New issue reported: %s\n' #@Developer
             '[%d] [Pending] %s : %s' % (
+                role_mention,
                 len(bugs)-1,
                 message.author.mention,
                 bugs[-1]['content']

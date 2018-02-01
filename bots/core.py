@@ -199,10 +199,6 @@ class CoreBot(discord.Client):
             name='general',
             type=discord.ChannelType.text
         )
-        self.categories = {
-            channel.name:channel for channel in self.get_all_channels()
-            if channel.type == 4 # Placeholder. ChannelType.category is not in discord.py yet
-        }
         self.update_times = load_db('tasks.json')
         taskkey = ''.join(sorted(self.tasks))
         if 'key' not in self.update_times or self.update_times['key'] != taskkey:

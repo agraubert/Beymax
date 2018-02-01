@@ -1,0 +1,19 @@
+## Set the channels key below to refer to set up channel references for your server
+# channels:
+##  Use the format 'reference_name:channel_name_or_id'
+## The below example will set references in the code to 'dev' or 'bugs' channels to your server's general channel
+#   dev: general
+#   bugs: general
+
+## Set the primary_server if you want to make role permissions available via PM
+## This will also prevent your instance from joining other servers
+# primary_server: your_server_id
+
+## Set ignore_role to the name or id of a role if you want that role to be applied when you !ignore someone
+# ignore_role: name_or_id_of_role
+
+## Set bug_role to the name or id of a role you want mentioned whenever a user submits a !bug report
+# bug_role: name_or_id_of_role
+
+## Set party_category to the name or id of a channel category in your server where you want parties to be created
+# party_category: name_or_id_of_category

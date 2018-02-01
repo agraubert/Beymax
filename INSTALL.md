@@ -58,9 +58,9 @@ don't know what a shell is, you're going to have a bad time
         arguments to `Beymax.EnableAll()`. Each argument to that function enables a
         different set of features, and you can comment out/delete the lines to remove features
         you do not want.
-        * In `main.py` in the `on_ready()` function, you may wish to change the Channels
-        that are assigned to `dev_channel` and `_bug_channel`, as your **Server** will probably
-        use different names
+        * View the `example_config.yml` file. Copy it to `config.yaml` and make
+        changes as desired. This will help you get Beymax running as desired for your
+        **Server**
         * In all files in the `bots` folder (except `utils.py`), you may wish to change
         the commands used. Each `@bot.add_command()` function takes commands as arguments,
         and you can freely change those to change which words will trigger the bot
