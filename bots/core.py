@@ -28,6 +28,7 @@ class CoreBot(discord.Client):
                 if self.check_permissions_chain(content[0][1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     await func(self, message, content)
+                    self.dispatch('command', content[0], message.author)
                 else:
                     print("Denied", message.author, "using command", content[0], "in", message.channel)
                     await self.send_message(

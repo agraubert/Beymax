@@ -120,6 +120,11 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             message,
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
+        self.dispatch(
+            'grant_xp',
+            message.author,
+            2
+        )
 
     beymax.EnableAll( #enable all sub-bots
         EnableUtils,

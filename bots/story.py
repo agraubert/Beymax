@@ -172,12 +172,19 @@ def EnableStory(bot):
                     'Your score is %d' % self.player.score
                 )
             elif content == 'quit':
+                self.player.write('score')
+                self.player.readchunk()
                 self.player.quit()
                 await self.send_message(
                     message.channel,
                     'You have quit your game. Your score was %d' % self.player.score
                 )
                 state['user'] = '~<IDLE>'
+                self.dispatch(
+                    'grant_xp',
+                    message.author,
+                    self.player.score * 10 #maybe normalize this since each game scores differently
+                )
                 del state['transcript']
                 del self.player
                 save_db(state, 'game.json')
@@ -222,8 +229,8 @@ def EnableStory(bot):
                     message.author,
                     'Here are the controls for the story-mode system:\n'
                     'Any message you type in the story channel will be interpreted'
-                    ' as input to the game *unless* your message starts with `!`'
-                    ' (discord commands) or `$` (story commands)\n'
+                    ' as input to the game **unless** your message starts with `!`'
+                    ' (my commands)\n'
                     '`$` : Simply type `$` to enter a blank line to the game\n'
                     '`quit` : Quits the game in progress\n'
                     '`score` : View your score\n'
@@ -264,6 +271,30 @@ def EnableStory(bot):
         else:
             return (2*xp_for(level-1)-xp_for(level-2))+5
 
+    @bot.subscribe('grant_xp')
+    async def grant_xp(self, evt, user, xp):
+        players = load_db('players.json')
+        if user.id not in players:
+            players[user.id] = {
+                'level':1,
+                'xp':0,
+                'balance':10
+            }
+        player = players[user.id]
+        current_level = player['level']
+        while player['xp'] >= xp_for(player['level']+1):
+            player['xp'] -= xp_for(player['level']+1)
+            player['level'] += 1
+        if player['level'] > current_level:
+            await self.send_message(
+                user,
+                "Congratulations on reaching level %d! Your weekly token payout"
+                " and maximum token balance have both been increased. To check"
+                " your balance, type `!balance`" % player['level']
+            )
+        players[user.id] = player
+        self.save_db(players, 'players.json')
+
     @bot.add_command('!_balance')
     async def cmd_balance(self, message, content):
         """
@@ -293,3 +324,55 @@ def EnableStory(bot):
         `!_bid <amount> <game>` : Place a bid to play the next game
         """
         pass
+
+    @bot.subscribe('command')
+    async def record_command(self, evt, command, user):
+        week = load_db('weekly.json')
+        if user.id not in week:
+            week[user.id] = {}
+        if 'commands' not in week[user.id]:
+            week[user.id]['commands'] = [command]
+            self.dispatch(
+                'grant_xp',
+                user,
+                5
+            )
+        elif command not in week[user.id]['commands']:
+            week[user.id]['commands'].append(command)
+            self.dispatch(
+                'grant_xp',
+                user,
+                5
+            )
+        save_db(week, 'weekly.json')
+
+    @bot.add_task(604800) # 1 week
+    async def reset_week(self):
+        #{uid: {}}
+        week = load_db('weekly.json')
+        players = load_db('players.json')
+        xp = []
+        for uid in weekly:
+            if 'active' in weekly[uid]:
+                xp.append([user, 5])
+            user = self.fetch_channel('story').server.get_member(uid) #icky!
+            payout = players[user.id]['level']
+            if players[user.id]['balance'] < 20*players[user.id]['level']:
+                payout *= 2
+            players[uid]['balance'] += payout
+            await self.send_message(
+                self.fetch_channel('story').server.get_member(uid), #icky!
+                "Your allowance was %d tokens this week. Your balance is now %d "
+                "tokens" % (
+                    payout,
+                    players[uid]['balance']
+                )
+            )
+        save_db(players, 'players.json')
+        save_db({}, 'weekly.json')
+        for user, payout in xp:
+            self.dispatch(
+                'grant_xp',
+                user,
+                payout
+            )
