@@ -116,6 +116,7 @@ def EnableStory(bot):
         raise TypeError("This function must take a CoreBot")
 
     bot.reserve_channel('story')
+    bot._pending_activity = set()
 
     @bot.add_command('!_stories')
     async def cmd_story(self, message, content):
@@ -180,6 +181,7 @@ def EnableStory(bot):
                     'You have quit your game. Your score was %d' % self.player.score
                 )
                 state['user'] = '~<IDLE>'
+                print("Granting xp for score payout")
                 self.dispatch(
                     'grant_xp',
                     message.author,
@@ -263,8 +265,6 @@ def EnableStory(bot):
             )
 
 
-    return bot
-
     def xp_for(level):
         if level <= 2:
             return 10
@@ -272,7 +272,12 @@ def EnableStory(bot):
             return (2*xp_for(level-1)-xp_for(level-2))+5
 
     @bot.subscribe('grant_xp')
-    async def grant_xp(self, evt, user, xp):
+    async def grant_some_xp(self, evt, user, xp):
+        print(
+            "<dev>: %d xp has been granted to %s" % (
+                xp, str(user)
+            )
+        )
         players = load_db('players.json')
         if user.id not in players:
             players[user.id] = {
@@ -281,6 +286,7 @@ def EnableStory(bot):
                 'balance':10
             }
         player = players[user.id]
+        player['xp'] += xp
         current_level = player['level']
         while player['xp'] >= xp_for(player['level']+1):
             player['xp'] -= xp_for(player['level']+1)
@@ -293,12 +299,12 @@ def EnableStory(bot):
                 " your balance, type `!balance`" % player['level']
             )
         players[user.id] = player
-        self.save_db(players, 'players.json')
+        save_db(players, 'players.json')
 
-    @bot.add_command('!_balance')
+    @bot.add_command('!balance')
     async def cmd_balance(self, message, content):
         """
-        `!_balance` : Displays your current token balance
+        `!balance` : Displays your current token balance
         """
         players = load_db('players.json')
         if message.author.id not in players:
@@ -309,7 +315,7 @@ def EnableStory(bot):
             }
         player = players[message.author.id]
         await self.send_message(
-            message.channel,
+            message.author,
             "You are currently level %d and have a balance of %d tokens\n"
             "You have %d xp to go to reach the next level" % (
                 player['level'],
@@ -330,8 +336,10 @@ def EnableStory(bot):
         week = load_db('weekly.json')
         if user.id not in week:
             week[user.id] = {}
+        print(week)
         if 'commands' not in week[user.id]:
             week[user.id]['commands'] = [command]
+            print("granting xp for first command", command)
             self.dispatch(
                 'grant_xp',
                 user,
@@ -339,6 +347,7 @@ def EnableStory(bot):
             )
         elif command not in week[user.id]['commands']:
             week[user.id]['commands'].append(command)
+            print("granting xp for new command", command)
             self.dispatch(
                 'grant_xp',
                 user,
@@ -346,16 +355,40 @@ def EnableStory(bot):
             )
         save_db(week, 'weekly.json')
 
+    @bot.subscribe('after:message')
+    async def record_activity(self, evt, message):
+        self._pending_activity.add(message.author.id)
+
+    @bot.subscribe('cleanup')
+    async def save_activity(self, evt):
+        week = load_db('weekly')
+        print(week, self._pending_activity)
+        for uid in self._pending_activity:
+            if uid not in week:
+                week[uid]={'active':'yes'}
+            else:
+                week[uid]['active']='yes'
+        self._pending_activity = set()
+        print(week)
+        save_db(week, 'weekly.json')
+
     @bot.add_task(604800) # 1 week
     async def reset_week(self):
         #{uid: {}}
         week = load_db('weekly.json')
         players = load_db('players.json')
+        print("Resetting the week")
         xp = []
-        for uid in weekly:
-            if 'active' in weekly[uid]:
-                xp.append([user, 5])
+        for uid in week:
             user = self.fetch_channel('story').server.get_member(uid) #icky!
+            if 'active' in week[uid] or uid in self._pending_activity:
+                xp.append([user, 5])
+            if uid not in players:
+                players[uid] = {
+                    'level':1,
+                    'xp':0,
+                    'balance':10
+                }
             payout = players[user.id]['level']
             if players[user.id]['balance'] < 20*players[user.id]['level']:
                 payout *= 2
@@ -368,11 +401,15 @@ def EnableStory(bot):
                     players[uid]['balance']
                 )
             )
+        self._pending_activity = set()
         save_db(players, 'players.json')
         save_db({}, 'weekly.json')
         for user, payout in xp:
+            print("granting xp for activity payout")
             self.dispatch(
                 'grant_xp',
                 user,
                 payout
             )
+
+    return bot

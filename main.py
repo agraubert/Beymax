@@ -70,6 +70,8 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             print(channel.name, channel.type)
         print("Ready to serve!")
         self.dispatch('task:update_status') # manually set status at startup
+        from bots.utils import load_db
+        print(load_db('weekly.json'))
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
@@ -84,7 +86,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         `!satisfied` : Shuts down beymax
         """
-        await self.close()
+        await self.shutdown()
 
     @beymax.add_command('!_greet')
     async def cmd_greet(self, message, content):
@@ -120,6 +122,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             message,
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
+        print("granting reaction xp")
         self.dispatch(
             'grant_xp',
             message.author,

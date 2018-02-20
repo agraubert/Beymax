@@ -119,21 +119,27 @@ class CoreBot(discord.Client):
 
     def dispatch(self, event, *args, manual=False, **kwargs):
         self.nt += 1
+        output = []
         if not manual:
             if 'before:'+str(event) in self.event_listeners:
-                self.dispatch_event('before:'+str(event), *args, **kwargs)
+                output += self.dispatch_event('before:'+str(event), *args, **kwargs)
             super().dispatch(event, *args, **kwargs)
             if str(event) in self.event_listeners:
-                self.dispatch_event(str(event), *args, **kwargs)
+                output += self.dispatch_event(str(event), *args, **kwargs)
             if 'after:'+str(event) in self.event_listeners:
-                self.dispatch_event('after:'+str(event), *args, **kwargs)
+                output += self.dispatch_event('after:'+str(event), *args, **kwargs)
         else:
             if str(event) in self.event_listeners:
-                self.dispatch_event(str(event), *args, **kwargs)
+                output += self.dispatch_event(str(event), *args, **kwargs)
+        return output
 
     def dispatch_event(self, event, *args, **kwargs):
-        for listener in self.event_listeners[event]:
+        return [
             create_task(listener(self, event, *args, **kwargs), loop=self.loop)
+            for listener in self.event_listeners[event]
+        ]
+
+
 
     def config_get(self, *keys):
         obj = self.configuration
@@ -291,10 +297,13 @@ class CoreBot(discord.Client):
                     self.permissions['roles'][role]['role']
                 )
 
-    async def close(self):
+    async def shutdown(self):
         save_db(self.users, 'users.json')
-        self.dispatch('cleanup')
-        await super().close()
+        tasks = self.dispatch('cleanup')
+        if len(tasks):
+            print("Waiting for ", len(tasks), "cleanup tasks to complete")
+            await asyncio.wait(tasks)
+        await self.close()
 
     async def send_message(self, destination, content, *, delim='\n', **kwargs):
         #built in chunking
