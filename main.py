@@ -72,7 +72,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         self.dispatch('task:update_status') # manually set status at startup
         from bots.utils import Database
         async with Database('weekly.json') as weekly:
-            print(weekly)
+            print("Weekly xp structure:", weekly)
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
@@ -123,7 +123,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             message,
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
-        print("granting reaction xp")
+        # print("granting reaction xp")
         self.dispatch(
             'grant_xp',
             message.author,
