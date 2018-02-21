@@ -32,6 +32,12 @@ def EnableBirthday(bot):
                 message.channel,
                 "Okay, I'll remember that"
             )
+            if self.user.id not in birthdays:
+                birthdays[self.user.id] = {
+                    'month': 7,
+                    'day': 6,
+                    'year': 2017
+                }
             save_db(birthdays, 'birthdays.json')
 
     @bot.add_task(43200) #12 hours
