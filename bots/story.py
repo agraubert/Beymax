@@ -164,7 +164,8 @@ def EnableStory(bot):
                     self.player.write('\n')
                     await self.send_message(
                         message.channel,
-                        '```'+self.player.readchunk()+'```'
+                        self.player.readchunk(),
+                        quote='```'
                     )
                 elif content == 'score':
                     self.player.write('score')
@@ -222,7 +223,8 @@ def EnableStory(bot):
                     self.player.write(content)
                     await self.send_message(
                         message.channel,
-                        '```'+self.player.readchunk()+'```'
+                        self.player.readchunk(),
+                        quote='```'
                     )
             else:
                 await self.send_message(
@@ -520,7 +522,8 @@ def EnableStory(bot):
                             await asyncio.sleep(2)
                             await self.send_message(
                                 self.fetch_channel('story'),
-                                '```'+self.player.readchunk()+'```'
+                                self.player.readchunk(),
+                                quote='```'
                             )
                             return
                     state['user'] = '~<IDLE>'
