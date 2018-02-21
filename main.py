@@ -70,8 +70,11 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             print(channel.name, channel.type)
         print("Ready to serve!")
         self.dispatch('task:update_status') # manually set status at startup
-        from bots.utils import load_db
-        print(load_db('weekly.json'))
+        from bots.utils import Database
+        async with Database('weekly.json') as weekly:
+            print(weekly)
+            weekly['test'] = 7
+            weekly.save()
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members

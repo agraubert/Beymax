@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import load_db, save_db
+from .utils import Database
 import os
 import requests
 from requests.exceptions import RequestException
@@ -83,36 +83,36 @@ def EnableOverwatch(bot):
         """
         if os.path.isfile('stats_interim.json'):
             return
-        state = load_db('stats.json')
-        for uid, data in state.items():
-            tag = data['tag']
-            rating = data['rating']
-            old_tier = data['tier'] if 'tier' in data else 'Unranked'
-            try:
-                current, img, tier = get_mmr(tag)
-                state[uid]['rating'] = current
-                state[uid]['avatar'] = img
-                state[uid]['tier'] = tier
-                currentRank = rank(tier)
-                oldRank = rank(old_tier)
-                if currentRank > oldRank:
-                    body = "Everyone put your hands together for "
-                    body += self.users[uid]['mention'] if uid in self.users else tag
-                    body += " who just reached "
-                    body += tier
-                    body += " in Overwatch!"
-                    if 'avatar' in state[uid]:
-                        body += '\n'+state[uid]['avatar']
-                    if currentRank >= 4:
-                        # Ping the channel for anyone who reached platinum or above
-                        body = body.replace('Everyone', '@everyone')
-                    await self.send_message(
-                        self.fetch_channel('general'), #for now
-                        body
-                    )
-            except RequestException:
-                pass
-        save_db(state, 'stats.json')
+        async with Database('stats.json') as state:
+            for uid, data in state.items():
+                tag = data['tag']
+                rating = data['rating']
+                old_tier = data['tier'] if 'tier' in data else 'Unranked'
+                try:
+                    current, img, tier = get_mmr(tag)
+                    state[uid]['rating'] = current
+                    state[uid]['avatar'] = img
+                    state[uid]['tier'] = tier
+                    currentRank = rank(tier)
+                    oldRank = rank(old_tier)
+                    if currentRank > oldRank:
+                        body = "Everyone put your hands together for "
+                        body += self.users[uid]['mention'] if uid in self.users else tag
+                        body += " who just reached "
+                        body += tier
+                        body += " in Overwatch!"
+                        if 'avatar' in state[uid]:
+                            body += '\n'+state[uid]['avatar']
+                        if currentRank >= 4:
+                            # Ping the channel for anyone who reached platinum or above
+                            body = body.replace('Everyone', '@everyone')
+                        await self.send_message(
+                            self.fetch_channel('general'), #for now
+                            body
+                        )
+                except RequestException:
+                    pass
+            state.save()
 
     @bot.add_command('!owupdate')
     async def cmd_update(self, message, content):
@@ -134,15 +134,15 @@ def EnableOverwatch(bot):
         else:
             username = content[1].replace('#', '-')
             try:
-                state = load_db(path)
-                get_mmr(username)
-                state[message.author.id] = {
-                    'tag': username,
-                    'rating': 0,
-                    'avatar':'',
-                    'tier':'Unranked'
-                }
-                save_db(state, path)
+                async with Database(path) as state:
+                    get_mmr(username)
+                    state[message.author.id] = {
+                        'tag': username,
+                        'rating': 0,
+                        'avatar':'',
+                        'tier':'Unranked'
+                    }
+                    state.save()
                 await self.send_message(
                     message.channel,
                     "Alright! I'll keep track of your stats"
@@ -162,50 +162,50 @@ def EnableOverwatch(bot):
         """
         `!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
         """
-        state = load_db('stats.json')
-        if len(state):
-            for uid, data in state.items():
-                tag = data['tag']
-                rating = data['rating']
-                old_tier = data['tier'] if 'tier' in data else 'Unranked'
-                try:
-                    current, img, tier = get_mmr(tag)
-                    state[uid]['rating'] = current
-                    state[uid]['avatar'] = img
-                    state[uid]['tier'] = tier
-                except RequestException:
-                    pass
-            ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
-            ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
-            await self.send_message(
-                self.fetch_channel('general'), # for now
-                "It's that time again, folks!\n"
-                "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
-            )
-            index = {
-                ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
-            }
-            for tag,uid,tier,rating,rn in ranked:
+        async with Database('stats.json') as state:
+            if len(state):
+                for uid, data in state.items():
+                    tag = data['tag']
+                    rating = data['rating']
+                    old_tier = data['tier'] if 'tier' in data else 'Unranked'
+                    try:
+                        current, img, tier = get_mmr(tag)
+                        state[uid]['rating'] = current
+                        state[uid]['avatar'] = img
+                        state[uid]['tier'] = tier
+                    except RequestException:
+                        pass
+                ranked = [(data['tag'], uid, data['tier'], int(data['rating']), rank(data['tier'])) for uid, data in state.items()]
+                ranked.sort(key=lambda x:(x[-1], x[-2])) #prolly easier just to sort by mmr
+                await self.send_message(
+                    self.fetch_channel('general'), # for now
+                    "It's that time again, folks!\n"
+                    "The current Overwatch season has come to an end.  Let's see how well all of you did, shall we?"
+                )
+                index = {
+                    ranked[i][0]:postfix(str(len(ranked)-i)) for i in range(len(ranked))
+                }
+                for tag,uid,tier,rating,rn in ranked:
+                    await self.send_message(
+                        self.fetch_channel('general'),
+                        "In "+index[tag]+" place, "+
+                        (self.users[uid]['mention'] if uid in self.users else tag)+
+                        " who made "+tier+
+                        " with a rating of "+str(rating)+"\n"
+                        +encourage(rn) + (
+                            ('\n'+state[uid]['avatar']) if 'avatar' in state[uid]
+                            else ''
+                        )
+                    )
                 await self.send_message(
                     self.fetch_channel('general'),
-                    "In "+index[tag]+" place, "+
-                    (self.users[uid]['mention'] if uid in self.users else tag)+
-                    " who made "+tier+
-                    " with a rating of "+str(rating)+"\n"
-                    +encourage(rn) + (
-                        ('\n'+state[uid]['avatar']) if 'avatar' in state[uid]
-                        else ''
-                    )
+                    "Let's give everyone a round of applause.  Great show from everybody!\n"
+                    "I can't wait to see how you all do next time! [Competitive ranks reset]"
                 )
-            await self.send_message(
-                self.fetch_channel('general'),
-                "Let's give everyone a round of applause.  Great show from everybody!\n"
-                "I can't wait to see how you all do next time! [Competitive ranks reset]"
-            )
-        for uid in state:
-            state[uid]['rating'] = 0
-            state[uid]['tier'] = 'Unranked'
-        save_db(state, 'stats_interim.json')
+            for uid in state:
+                state[uid]['rating'] = 0
+                state[uid]['tier'] = 'Unranked'
+            await sate.save_to('stats_interim.json')
         if os.path.isfile('stats.json'):
             os.remove('stats.json')
 
@@ -218,20 +218,20 @@ def EnableOverwatch(bot):
         shutil.move('stats_interim.json', 'stats.json')
         body = "The new Overwatch season has started! Here are the users I'm "
         body += "currently tracking statistics for:\n"
-        stats = load_db('stats.json')
-        for uid in stats:
-            body += '%s as %s\n' % (
-                self.users[uid]['name'] if uid in self.users else 'someone',
-                stats[uid]['tag']
+        async with Database('stats.json') as stats:
+            for uid in stats:
+                body += '%s as %s\n' % (
+                    self.users[uid]['name'] if uid in self.users else 'someone',
+                    stats[uid]['tag']
+                )
+                stats[uid]['rating'] = 0
+                stats[uid]['tier'] = 'Unranked'
+            body += "If anyone else would like to be tracked, use the `!ow` command."
+            body += " Good luck to you all!"
+            await self.send_message(
+                self.fetch_channel('general'),
+                body
             )
-            stats[uid]['rating'] = 0
-            stats[uid]['tier'] = 'Unranked'
-        body += "If anyone else would like to be tracked, use the `!ow` command."
-        body += " Good luck to you all!"
-        await self.send_message(
-            self.fetch_channel('general'),
-            body
-        )
-        save_db(stats, 'stats.json')
+            stats.save(0)
 
     return bot
