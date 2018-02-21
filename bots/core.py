@@ -658,5 +658,62 @@ def EnableUtils(bot): #prolly move to it's own bot
                     "I couldn't find that user. Please provide a user id or user#tag"
                 )
 
+    @bot.add_command('!idof')
+    async def cmd_idof(self, message, content):
+        """
+        `!idof <entity>` : Gets a list of all known entities by that name
+        Example: `!idof general` would list all users, channels, and roles with that name
+        """
+        servers = [message.server] if message.server is not None else self.servers
+        result = []
+        query = ' '.join(content[1:]).lower()
+        for server in servers:
+            first = True
+            if query in server.name.lower():
+                if first:
+                    first = False
+                    result.append('From server `%s`' % server.name)
+                result.append('Server `%s` : %s' % (server.name, server.id))
+            for channel in server.channels:
+                if query in channel.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Channel `%s` : %s' % (channel.name, channel.id))
+            for role in server.roles:
+                if query in role.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Role `%s` : %s' % (role.name, role.id))
+            for member in server.members:
+                if member.nick is not None and query in member.nick.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Member `%s` aka `%s` : %s' % (
+                        str(member),
+                        member.nick,
+                        member.id
+                    ))
+                elif query in member.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Member `%s`: %s' % (
+                        str(member),
+                        member.id
+                    ))
+        if len(result):
+            await self.send_message(
+                message.channel,
+                '\n'.join(result)
+            )
+        else:
+            await self.send_message(
+                message.channel,
+                "I was unable to find any entities by that name"
+            )
+
 
     return bot
