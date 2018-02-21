@@ -9,7 +9,7 @@ locks = {}
 class Database(dict):
     def __init__(self, filename, default=None):
         super().__init__(self)
-        if default is not none and not isinstance(default, dict):
+        if default is not None and not isinstance(default, dict):
             raise TypeError("Cannot use a Database object on non-dictionary type")
         self.filename = filename
         self.default=default
@@ -46,7 +46,7 @@ class Database(dict):
 class ListDatabase(list):
     def __init__(self, filename, default=None):
         super().__init__(self)
-        if default is not none and not isinstance(default, list):
+        if default is not None and not isinstance(default, list):
             raise TypeError("Cannot use a ListDatabase object on non-list type")
         self.filename = filename
         self.default=default
@@ -88,7 +88,7 @@ class ListDatabase(list):
 def load_db(filename, default=None):
     warnings.warn(
         "load_db is deprecated as it is not async safe",
-        warnings.DeprecationWarning,
+        DeprecationWarning,
         2
     )
     try:

@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import getname, Database
+from .utils import getname, Database, load_db, save_db
 import discord
 import asyncio
 import os
@@ -181,7 +181,7 @@ def EnableStory(bot):
                         'You have quit your game. Your score was %d' % self.player.score
                     )
                     state['user'] = '~<IDLE>'
-                    print("Granting xp for score payout")
+                    # print("Granting xp for score payout")
                     self.dispatch(
                         'grant_xp',
                         message.author,
@@ -273,11 +273,11 @@ def EnableStory(bot):
 
     @bot.subscribe('grant_xp')
     async def grant_some_xp(self, evt, user, xp):
-        print(
-            "<dev>: %d xp has been granted to %s" % (
-                xp, str(user)
-            )
-        )
+        # print(
+        #     "<dev>: %d xp has been granted to %s" % (
+        #         xp, str(user)
+        #     )
+        # )
         async with Database('players.json') as players:
             if user.id not in players:
                 players[user.id] = {
@@ -336,10 +336,10 @@ def EnableStory(bot):
         async with Database('weekly.json') as week:
             if user.id not in week:
                 week[user.id] = {}
-            print(week)
+            # print(week)
             if 'commands' not in week[user.id]:
                 week[user.id]['commands'] = [command]
-                print("granting xp for first command", command)
+                # print("granting xp for first command", command)
                 self.dispatch(
                     'grant_xp',
                     user,
@@ -347,7 +347,7 @@ def EnableStory(bot):
                 )
             elif command not in week[user.id]['commands']:
                 week[user.id]['commands'].append(command)
-                print("granting xp for new command", command)
+                # print("granting xp for new command", command)
                 self.dispatch(
                     'grant_xp',
                     user,
@@ -357,26 +357,27 @@ def EnableStory(bot):
 
     @bot.subscribe('after:message')
     async def record_activity(self, evt, message):
-        self._pending_activity.add(message.author.id)
+        if message.author.id != self.user.id:
+            self._pending_activity.add(message.author.id)
 
     @bot.subscribe('cleanup')
     async def save_activity(self, evt):
         async with Database('weekly.json') as week:
-            print(week, self._pending_activity)
+            # print(week, self._pending_activity)
             for uid in self._pending_activity:
                 if uid not in week:
                     week[uid]={'active':'yes'}
                 else:
                     week[uid]['active']='yes'
             self._pending_activity = set()
-            print(week)
+            # print(week)
             week.save()
 
     @bot.add_task(604800) # 1 week
     async def reset_week(self):
         #{uid: {}}
         async with Database('players.json') as players:
-            async with Database('weekly.json') as weekly:
+            async with Database('weekly.json') as week:
                 print("Resetting the week")
                 xp = []
                 for uid in week:
@@ -405,7 +406,7 @@ def EnableStory(bot):
                 players.save()
                 os.remove('weekly.json')
                 for user, payout in xp:
-                    print("granting xp for activity payout")
+                    # print("granting xp for activity payout")
                     self.dispatch(
                         'grant_xp',
                         user,

@@ -73,8 +73,6 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         from bots.utils import Database
         async with Database('weekly.json') as weekly:
             print(weekly)
-            weekly['test'] = 7
-            weekly.save()
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members

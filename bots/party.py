@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database, sanitize
+from .utils import ListDatabase, sanitize
 import discord
 from discord.http import Route
 import asyncio
