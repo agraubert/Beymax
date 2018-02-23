@@ -334,19 +334,33 @@ class CoreBot(discord.Client):
             elif len(msg) > 1024:
                 # Otherwise, send it if the current message has reached the
                 # 1KB chunking target
-                last_msg = await super().send_message(
-                    destination,
-                    quote+msg+quote,
-                    **kwargs
-                )
+                try:
+                    last_msg = await super().send_message(
+                        destination,
+                        quote+msg+quote,
+                        **kwargs
+                    )
+                except discord.errors.HTTPException as e:
+                    print("Failed to deliver message:", e.text)
+                    await super().send_message(
+                        self.fetch_channel('dev'),
+                        "Failed to deliver a message to "+str(destination)
+                        )
                 tmp = []
                 await asyncio.sleep(1)
         if len(tmp):
             #send any leftovers (guaranteed <2KB)
-            last_msg = await super().send_message(
-                destination,
-                quote+msg+quote
-            )
+            try:
+                last_msg = await super().send_message(
+                    destination,
+                    quote+msg+quote
+                )
+            except discord.errors.HTTPException as e:
+                print("Failed to deliver message:", e.text)
+                await super().send_message(
+                    self.fetch_channel('dev'),
+                    "Failed to deliver a message to "+str(destination)
+                )
         return last_msg
 
     def getid(self, username):
