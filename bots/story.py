@@ -8,6 +8,7 @@ import queue
 import threading
 import time
 import re
+from math import ceil
 
 more_patterns = [
     re.compile(r'\*+(MORE|more)\*+')
@@ -111,6 +112,8 @@ class Player:
         os.close(self.stdoutRead)
         os.close(self.stdoutWrite)
 
+def avg(n):
+    return sum(n)/len(n)
 
 def EnableStory(bot):
     if not isinstance(bot, CoreBot):
@@ -189,21 +192,45 @@ def EnableStory(bot):
                             self.player.write('score')
                             self.player.readchunk()
                             self.player.quit()
+                            async with Database('scores.json') as scores:
+                                if state['game'] not in scores:
+                                    scores[state['game']] = []
+                                scores[state['game']].append([
+                                    self.player.score,
+                                    state['user']
+                                ])
+                                scores.save()
+                                modifier = avg(
+                                    [score[0] for game in scores for score in scores[game]]
+                                ) / max(1, avg(
+                                    [score[0] for score in scores[state['game']]]
+                                ))
+                                norm_score = ceil(self.player.score * modifier)
+                                if self.player.score > 0:
+                                    norm_score = max(norm_score, 1)
                             await self.send_message(
                                 message.channel,
-                                'You have quit your game. Your score was %d\n'
+                                'Your game has ended. Your score was %d\n'
                                 'Thanks for playing! You will receive %d tokens' % (
                                     self.player.score,
-                                    self.player.score
+                                    norm_score
                                 )
                             )
-                            players[message.author.id]['balance'] += self.player.score
-                            state['user'] = '~<IDLE>'
+                            if self.player.score > max([score[0] for score in scores[state['game']]]):
+                                await self.send_message(
+                                    self.fetch_channel('story'),
+                                    "%s has just set the high score on %s at %d points" % (
+                                        message.author.mention,
+                                        state['game'],
+                                        self.player.score
+                                    )
+                                )
+                            players[state['user']]['balance'] += norm_score
                             # print("Granting xp for score payout")
                             self.dispatch(
                                 'grant_xp',
                                 message.author,
-                                self.player.score * 10 #maybe normalize this since each game scores differently
+                                norm_score * 10 #maybe normalize this since each game scores differently
                             )
                     del state['transcript']
                     state['user'] = '~<IDLE>'
@@ -332,6 +359,13 @@ def EnableStory(bot):
         Example: `!bid 1 zork1`
         """
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            if message.author.id == state['user']:
+                await self.send_message(
+                    message.channel,
+                    "You can't place a bid while you're already playing a game."
+                    " Why not give someone else a turn?"
+                )
+                return
             async with Database('players.json') as players:
                 bid = content[1]
                 try:
@@ -582,6 +616,72 @@ def EnableStory(bot):
             # print(week)
             week.save()
 
+    @bot.add_command('!timeleft')
+    async def cmd_timeleft(self, message, content):
+        """
+        `!timeleft` : Gets the remaining time for the current game
+        """
+        async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
+            if state['user'] == '~<IDLE>':
+                await self.send_message(
+                    message.channel,
+                    "Currently, nobody is playing a game"
+                )
+            else:
+                delta = (state['time'] + 172800) - time.time()
+                d_days = delta // 86400
+                delta = delta % 86400
+                d_hours = delta // 3600
+                delta = delta % 3600
+                d_minutes = delta // 60
+                d_seconds = delta % 60
+                await self.send_message(
+                    message.channel,
+                    "%s's game of %s will end in %d days, %d hours, %d minutes, "
+                    "and %d seconds" % (
+                        self.users[state['user']]['fullname'],
+                        state['game'],
+                        d_days,
+                        d_hours,
+                        d_minutes,
+                        d_seconds
+                    )
+                )
+
+    @bot.add_command('!highscore')
+    async def cmd_highscore(self, message, content):
+        """
+        `!highscore <game>` : Gets the current highscore for that game
+        Example: `!highscore zork1`
+        """
+        if len(content) < 2:
+            await self.send_message(
+                message.channel,
+                "Please provide a game name with this command"
+            )
+            return
+        async with Database('scores.json') as scores:
+            if content[1] in scores:
+                score, uid = sorted(
+                    scores[content[1]],
+                    key=lambda x:x[0],
+                    reverse=True
+                )[0]
+                await self.send_message(
+                    message.channel,
+                    "High score for %s: %d set by %s" % (
+                        content[1],
+                        score,
+                        self.users[uid]['mention']
+                    )
+                )
+            else:
+                await self.send_message(
+                    message.channel,
+                    "No scores for this game yet"
+                )
+
+
     @bot.add_task(604800) # 1 week
     async def reset_week(self):
         #{uid: {}}
@@ -642,20 +742,45 @@ def EnableStory(bot):
                         self.player.write('score')
                         self.player.readchunk()
                         self.player.quit()
+                        async with Database('scores.json') as scores:
+                            if state['game'] not in scores:
+                                scores[state['game']] = []
+                            scores[state['game']].append([
+                                self.player.score,
+                                state['user']
+                            ])
+                            scores.save()
+                            modifier = avg(
+                                [score[0] for game in scores for score in scores[game]]
+                            ) / max(1, avg(
+                                [score[0] for score in scores[state['game']]]
+                            ))
+                            norm_score = ceil(self.player.score * modifier)
+                            if self.player.score > 0:
+                                norm_score = max(norm_score, 1)
                         await self.send_message(
                             user,
                             'Your game has ended. Your score was %d\n'
                             'Thanks for playing! You will receive %d tokens' % (
                                 self.player.score,
-                                self.player.score
+                                norm_score
                             )
                         )
-                        players[state['user']]['balance'] += self.player.score
+                        if self.player.score > max([score[0] for score in scores[state['game']]]):
+                            await self.send_message(
+                                self.fetch_channel('story'),
+                                "%s has just set the high score on %s at %d points" % (
+                                    self.users[state['user']]['mention'],
+                                    state['game'],
+                                    self.player.score
+                                )
+                            )
+                        players[state['user']]['balance'] += norm_score
                         # print("Granting xp for score payout")
                         self.dispatch(
                             'grant_xp',
                             user,
-                            self.player.score * 10 #maybe normalize this since each game scores differently
+                            norm_score * 10 #maybe normalize this since each game scores differently
                         )
                         state['user'] = '~<IDLE>'
                 del state['transcript']
