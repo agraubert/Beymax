@@ -475,12 +475,7 @@ def EnableStory(bot):
                         "You do not have enough tokens to extend this session"
                     )
                 else:
-                    state['time'] = time.time() - (
-                        86400 + max(
-                            0,
-                            (state['time'] + 172800) - time.time()
-                        )
-                    )
+                    state['time'] += 86400
                     # 1 day + the remaining time
                     players[state['user']]['balance'] -= state['reup']
                     state['reup'] += 1
