@@ -6,6 +6,7 @@ import os
 import subprocess
 import queue
 import threading
+import time
 import re
 
 more_patterns = [
@@ -118,10 +119,10 @@ def EnableStory(bot):
     bot.reserve_channel('story')
     bot._pending_activity = set()
 
-    @bot.add_command('!_stories')
+    @bot.add_command('!games')
     async def cmd_story(self, message, content):
         """
-        `!_stories` : Lists the available stories
+        `!games` : Lists the available games
         """
         games = [
             f[:-3] for f in os.listdir('games') if f.endswith('.z5')
@@ -129,7 +130,7 @@ def EnableStory(bot):
         await self.send_message(
             message.channel,
             '\n'.join(
-                ["Here are the stories thar are available:"]+
+                ["Here are the games that are available:"]+
                 games
             )
         )
@@ -163,7 +164,8 @@ def EnableStory(bot):
                     self.player.write('\n')
                     await self.send_message(
                         message.channel,
-                        '```'+self.player.readchunk()+'```'
+                        self.player.readchunk(),
+                        quote='```'
                     )
                 elif content == 'score':
                     self.player.write('score')
@@ -173,30 +175,56 @@ def EnableStory(bot):
                         'Your score is %d' % self.player.score
                     )
                 elif content == 'quit':
-                    self.player.write('score')
-                    self.player.readchunk()
-                    self.player.quit()
-                    await self.send_message(
-                        message.channel,
-                        'You have quit your game. Your score was %d' % self.player.score
-                    )
-                    state['user'] = '~<IDLE>'
-                    # print("Granting xp for score payout")
-                    self.dispatch(
-                        'grant_xp',
-                        message.author,
-                        self.player.score * 10 #maybe normalize this since each game scores differently
-                    )
+                    async with Database('players.json') as players:
+                        if 'played' in state and not state['played']:
+                            await self.send_message(
+                                message.channel,
+                                "You quit your game without playing. "
+                                "You are being refunded %d tokens" % (
+                                    state['refund']
+                                )
+                            )
+                            players[message.author.id]['balance'] += state['refund']
+                        else:
+                            self.player.write('score')
+                            self.player.readchunk()
+                            self.player.quit()
+                            await self.send_message(
+                                message.channel,
+                                'You have quit your game. Your score was %d\n'
+                                'Thanks for playing! You will receive %d tokens' % (
+                                    self.player.score,
+                                    self.player.score
+                                )
+                            )
+                            players[message.author.id]['balance'] += self.player.score
+                            state['user'] = '~<IDLE>'
+                            # print("Granting xp for score payout")
+                            self.dispatch(
+                                'grant_xp',
+                                message.author,
+                                self.player.score * 10 #maybe normalize this since each game scores differently
+                            )
                     del state['transcript']
+                    state['user'] = '~<IDLE>'
                     del self.player
                     state.save()
+                    if 'bids' not in state or len(state['bids']) == 1:
+                        await self.send_message(
+                            self.fetch_channel('story'),
+                            "The game is now idle and will be awarded to the first bidder"
+                        )
+                    else:
+                        self.dispatch('startgame')
                 else:
+                    state['played'] = True
                     state['transcript'].append(content)
                     state.save()
                     self.player.write(content)
                     await self.send_message(
                         message.channel,
-                        '```'+self.player.readchunk()+'```'
+                        self.player.readchunk(),
+                        quote='```'
                     )
             else:
                 await self.send_message(
@@ -219,40 +247,13 @@ def EnableStory(bot):
                     f[:-3] for f in os.listdir('games') if f.endswith('.z5')
                 }
                 if content[1] in games:
-                    state['user'] = message.author.id
-                    state['transcript'] = []
-                    state['game'] = content[1]
+                    state['bids'] = [{
+                        'user':message.author.id,
+                        'game':content[1],
+                        'amount':0
+                    }]
                     state.save()
-                    self.player = Player(content[1])
-                    # in future:
-                    # See if there's a way to change permissions of an existing channel
-                    # For now, just delete other player's messages
-                    await self.send_message(
-                        message.author,
-                        'Here are the controls for the story-mode system:\n'
-                        'Any message you type in the story channel will be interpreted'
-                        ' as input to the game **unless** your message starts with `!`'
-                        ' (my commands)\n'
-                        '`$` : Simply type `$` to enter a blank line to the game\n'
-                        '`quit` : Quits the game in progress\n'
-                        '`score` : View your score\n'
-                        'Some games may have their own commands in addition to these'
-                        ' ones that I handle personally'
-                    )
-                    await self.send_message(
-                        self.fetch_channel('story'),
-                        '%s is now playing %s\n'
-                        'The game will begin shortly' % (
-                            message.author.mention,
-                            content[1]
-                        )
-                    )
-                    # Post to general
-                    await asyncio.sleep(2)
-                    await self.send_message(
-                        self.fetch_channel('story'),
-                        '```'+self.player.readchunk()+'```'
-                    )
+                    self.dispatch('startgame')
                 else:
                     await self.send_message(
                         message.channel,
@@ -324,12 +325,220 @@ def EnableStory(bot):
                 )
             )
 
-    @bot.add_command('!_bid')
+    @bot.add_command('!bid')
     async def cmd_bid(self, message, content):
         """
-        `!_bid <amount> <game>` : Place a bid to play the next game
+        `!bid <amount> <game>` : Place a bid to play the next game
+        Example: `!bid 1 zork1`
         """
-        pass
+        async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            async with Database('players.json') as players:
+                bid = content[1]
+                try:
+                    bid = int(bid)
+                except ValueError:
+                    await self.send_message(
+                        message.channel,
+                        "'%s' is not a valid amount of tokens" % bid
+                    )
+                    return
+                game = content[2]
+                games = {
+                    f[:-3] for f in os.listdir('games') if f.endswith('.z5')
+                }
+                if 'bids' not in state:
+                    state['bids'] = [{'user':'', 'amount':0, 'game':''}]
+                # print(state)
+                # print(players)
+                # print(bid)
+                # print(game)
+                if bid <= state['bids'][-1]['amount']:
+                    if len(state['bids'][-1]['user']):
+                        await self.send_message(
+                            message.channel,
+                            "The current highest bid is %d tokens. Your bid must"
+                            " be at least %d tokens." % (
+                                state['bids'][-1]['amount'],
+                                state['bids'][-1]['amount'] + 1
+                            )
+                        )
+                        return
+                    else:
+                        await self.send_message(
+                            message.channel,
+                            "The minimum bid is 1 token"
+                        )
+                        return
+                if message.author.id not in players:
+                    players[message.author.id] = {
+                        'level':1,
+                        'xp':0,
+                        'balance':10
+                    }
+                if bid > players[message.author.id]['balance']:
+                    await self.send_message(
+                        message.channel,
+                        "You do not have enough tokens to make that bid."
+                        "To check your token balance, use `!balance`"
+                    )
+                    return
+                if game not in games:
+                    await self.send_message(
+                        message.channel,
+                        "That is not a valid game. To see the list of games that"
+                        " are available, use `!games`"
+                    )
+                    return
+                await self.send_message(
+                    message.channel,
+                    "Your bid has been placed. If you are not outbid, your"
+                    " game will begin after the current game has ended"
+                )
+                user = self.fetch_channel('story').server.get_member(state['bids'][-1]['user'])
+                if user:
+                    await self.send_message(
+                        user,
+                        "You have been outbid by %s with a bid of %d tokens."
+                        " If you would like to place another bid, use "
+                        "`!bid %d %s`" % (
+                            getname(message.author),
+                            bid,
+                            bid+1,
+                            state['bids'][-1]['game']
+                        )
+                    )
+                state['bids'].append({
+                    'user':message.author.id,
+                    'amount':bid,
+                    'game':game
+                })
+                state.save()
+                if state['user'] == '~<IDLE>':
+                    self.dispatch('startgame')
+
+    @bot.add_command('!reup')
+    async def cmd_reup(self, message, content):
+        """
+        `!reup` : Extends your current game session by 1 day
+        """
+        async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
+            async with Database('players.json') as players:
+                if 'reup' not in state:
+                    state['reup'] = 1
+                if state['user'] != message.author.id:
+                    await self.send_message(
+                        message.channel,
+                        "You are not currently playing a game"
+                    )
+                elif 'played' in state and not state['played']:
+                    await self.send_message(
+                        message.channel,
+                        "You should play your game first"
+                    )
+                elif players[state['user']]['balance'] < state['reup']:
+                    await self.send_message(
+                        message.channel,
+                        "You do not have enough tokens to extend this session"
+                    )
+                else:
+                    state['time'] = time.time() - (
+                        86400 + max(
+                            0,
+                            (state['time'] + 172800) - time.time()
+                        )
+                    )
+                    # 1 day + the remaining time
+                    players[state['user']]['balance'] -= state['reup']
+                    state['reup'] += 1
+                    await self.send_message(
+                        self.fetch_channel('story'),
+                        "The current game session has been extended"
+                    )
+
+    @bot.subscribe('startgame')
+    async def start_game(self, evt):
+        async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
+            async with Database('players.json') as players:
+                if state['user'] == '~<IDLE>':
+                    for bid in reversed(state['bids']):
+                        if bid['user'] != '':
+                            if bid['user'] not in players:
+                                players[bid['user']] = {
+                                    'level':1,
+                                    'xp':0,
+                                    'balance':10
+                                }
+                            user = self.fetch_channel('story').server.get_member(bid['user'])
+                            if bid['amount'] > players[bid['user']]['balance']:
+                                await self.send_message(
+                                    user,
+                                    "You do not have enough tokens to cover your"
+                                    " bid of %d. Your bid is forfeit and the game"
+                                    " shall pass to the next highest bidder" % (
+                                        bid['amount']
+                                    )
+                                )
+                                continue
+                            players[bid['user']]['balance'] -= bid['amount']
+                            players.save()
+                            state['user'] = bid['user']
+                            state['transcript'] = []
+                            state['game'] = bid['game']
+                            state['played'] = False
+                            state['refund'] = max(0, bid['amount'] - 1)
+                            state['time'] = time.time()
+                            state['bids'] = [{'user':'', 'amount':0, 'game':''}]
+                            state.save()
+                            self.player = Player(bid['game'])
+                            # in future:
+                            # See if there's a way to change permissions of an existing channel
+                            # For now, just delete other player's messages
+                            await self.send_message(
+                                user,
+                                'You have up to 2 days to finish your game, after'
+                                ' which, your game will automatically end\n'
+                                'Here are the controls for the story-mode system:\n'
+                                'Any message you type in the story channel will be interpreted'
+                                ' as input to the game **unless** your message starts with `!`'
+                                ' (my commands)\n'
+                                '`$` : Simply type `$` to enter a blank line to the game\n'
+                                'That can be useful if the game is stuck or '
+                                'if it ignored your last input\n'
+                                '`quit` : Quits the game in progress\n'
+                                'This is also how you end the game if you finish it\n'
+                                '`score` : View your score\n'
+                                'Some games may have their own commands in addition to these'
+                                ' ones that I handle personally'
+                            )
+                            await self.send_message(
+                                self.fetch_channel('story'),
+                                '%s is now playing %s\n'
+                                'The game will begin shortly' % (
+                                    user.mention,
+                                    bid['game']
+                                )
+                            )
+                            # Post to general
+                            await asyncio.sleep(2)
+                            await self.send_message(
+                                self.fetch_channel('story'),
+                                self.player.readchunk(),
+                                quote='```'
+                            )
+                            return
+                    state['user'] = '~<IDLE>'
+                    state['transcript'] = []
+                    state['game'] = ''
+                    state['reup'] = 1
+                    state['bids'] = [{'user':'', 'amount':0, 'game':''}]
+                    state.save()
+                    await self.send_message(
+                        self.fetch_channel('story'),
+                        "None of the bidders for the current game session could"
+                        " honor their bids. The game is now idle and will be"
+                        " awarded to the first bidder"
+                    )
+
 
     @bot.subscribe('command')
     async def record_command(self, evt, command, user):
@@ -413,4 +622,71 @@ def EnableStory(bot):
                         payout
                     )
 
+    @bot.add_task(1800) # 30 minutes
+    async def check_game(self):
+        async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
+            now = time.time()
+            if state['user'] != '~<IDLE>' and now - state['time'] >= 172800: # 2 days
+                async with Database('players.json') as players:
+                    user = self.fetch_channel('story').server.get_member(state['user'])
+                    if 'played' in state and not state['played']:
+                        await self.send_message(
+                            user,
+                            "Your game has ended without being played. "
+                            "You are being refunded %d tokens" % (
+                                state['refund']
+                            )
+                        )
+                        players[state['user']]['balance'] += state['refund']
+                    else:
+                        self.player.write('score')
+                        self.player.readchunk()
+                        self.player.quit()
+                        await self.send_message(
+                            user,
+                            'Your game has ended. Your score was %d\n'
+                            'Thanks for playing! You will receive %d tokens' % (
+                                self.player.score,
+                                self.player.score
+                            )
+                        )
+                        players[state['user']]['balance'] += self.player.score
+                        # print("Granting xp for score payout")
+                        self.dispatch(
+                            'grant_xp',
+                            user,
+                            self.player.score * 10 #maybe normalize this since each game scores differently
+                        )
+                        state['user'] = '~<IDLE>'
+                del state['transcript']
+                state['user'] = '~<IDLE>'
+                del self.player
+                state.save()
+                if 'bids' not in state or len(state['bids']) == 1:
+                    await self.send_message(
+                        self.fetch_channel('story'),
+                        "The game is now idle and will be awarded to the first bidder"
+                    )
+                else:
+                    self.dispatch('startgame')
+            elif state['user'] != '~<IDLE>' and now - state['time'] >= 151200: # 6 hours left
+                await self.send_message(
+                    self.fetch_channel('story').server.get_member(state['user']),
+                    "Your current game of %s is about to expire. If you wish to extend"
+                    " your game session, you can `!reup` at a cost of %d tokens,"
+                    " which will grant you an additional day" % (
+                        state['game'],
+                        state['reup']
+                    )
+                )
+            elif ('played' not in state or state['played']) and state['user'] != '~<IDLE>' and now - state['time'] >= 86400: # 1 day left
+                await self.send_message(
+                    self.fetch_channel('story').server.get_member(state['user']),
+                    "Your current game of %s will expire in less than 1 day. If you"
+                    " wish to extend your game session, you can `!reup` at a cost of"
+                    " %d tokens, which will grant you an additional day" % (
+                        state['game'],
+                        state['reup']
+                    )
+                )
     return bot

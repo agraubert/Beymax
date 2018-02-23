@@ -305,7 +305,7 @@ class CoreBot(discord.Client):
             await asyncio.wait(tasks)
         await self.close()
 
-    async def send_message(self, destination, content, *, delim='\n', **kwargs):
+    async def send_message(self, destination, content, *, delim='\n', quote='', **kwargs):
         #built in chunking
         body = content.split(delim)
         tmp = []
@@ -336,7 +336,7 @@ class CoreBot(discord.Client):
                 # 1KB chunking target
                 last_msg = await super().send_message(
                     destination,
-                    msg,
+                    quote+msg+quote,
                     **kwargs
                 )
                 tmp = []
@@ -345,7 +345,7 @@ class CoreBot(discord.Client):
             #send any leftovers (guaranteed <2KB)
             last_msg = await super().send_message(
                 destination,
-                msg
+                quote+msg+quote
             )
         return last_msg
 
