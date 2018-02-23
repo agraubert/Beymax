@@ -34,7 +34,7 @@ def EnableBirthday(bot):
             )
             if self.user.id not in birthdays:
                 birthdays[self.user.id] = {
-                    'month': 7,
+                    'month': 5,
                     'day': 6,
                     'year': 2017
                 }
