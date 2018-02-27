@@ -8,7 +8,7 @@ import queue
 import threading
 import time
 import re
-from math import ceil
+from math import ceil, floor
 
 class GameEnded(OSError):
     pass
@@ -18,7 +18,7 @@ more_patterns = [
 ]
 
 score_patterns = [
-    re.compile(r'([0-9]+)/[0-9+]'),
+    re.compile(r'([0-9]+)/[0-9]+'),
     re.compile(r'Score:[ ]*([-]*[0-9]+)'),
     re.compile(r'([0-9]+):[0-9]+ [AaPp][Mm]')
 ]
@@ -30,7 +30,8 @@ clean_patterns = [
     re.compile(r'Turns:[ ]*[0-9]+'),
     # re.compile(r'[0-9]+:[0-9]+ [AaPp][Mm]'),
     re.compile(r' [0-9]+ \.'),
-    re.compile(r'^([>.][>.\s]*)')
+    re.compile(r'^([>.][>.\s]*)'),
+    re.compile(r'Warning: @[\w_]+ called .*? \(PC = \w+\) \(will ignore further occurrences\)')
 ] + more_patterns + score_patterns
 
 def multimatch(text, patterns):
@@ -71,13 +72,14 @@ class Player:
             self.buffer.put(self.readline())
 
     def readline(self):
-        intake = self.remainder
-        while b'\n' not in intake:
-            intake += os.read(self.stdoutRead, 64)
-            print("Buffered intake:", intake)
-        lines = intake.split(b'\n')
-        self.remainder = b'\n'.join(lines[1:])
-        return lines[0].decode().rstrip()
+        # intake = self.remainder
+        # while b'\n' not in intake:
+        #     intake += os.read(self.stdoutRead, 64)
+        #     print("Buffered intake:", intake)
+        # lines = intake.split(b'\n')
+        # self.remainder = b'\n'.join(lines[1:])
+        # return lines[0].decode().rstrip()
+        return os.read(self.stdoutRead, 256).decode()
 
     def readchunk(self, clean=True, timeout=None):
         if timeout is not None:
@@ -94,22 +96,32 @@ class Player:
         except queue.Empty:
             pass
 
+        #now merge up lines
+        # print("Raw content:", ''.join(content))
+        # import pdb; pdb.set_trace()
+        content = [line.rstrip() for line in ''.join(content).split('\n')]
+
         # clean metadata
         if multimatch(content[-1], more_patterns):
             self.write('\n')
+            time.sleep(0.25)
             content += self.readchunk(False)
 
-        if clean:
-            for i in range(len(content)):
-                line = content[i]
-                result = multimatch(line, score_patterns)
-                if result:
-                    self.score = int(result.group(1))
+        # print("Merged content:", content)
+
+        if not clean:
+            return content
+
+        for i in range(len(content)):
+            line = content[i]
+            result = multimatch(line, score_patterns)
+            if result:
+                self.score = int(result.group(1))
+            result = multimatch(line, clean_patterns)
+            while result:
+                line = result.re.sub('', line)
                 result = multimatch(line, clean_patterns)
-                while result:
-                    line = result.re.sub('', line)
-                    result = multimatch(line, clean_patterns)
-                content[i] = line
+            content[i] = line
         return '\n'.join(line for line in content if len(line.rstrip()))
 
     def quit(self):
@@ -194,6 +206,12 @@ def EnableStory(bot):
                                 "The game has ended"
                             )
                             self.dispatch('endgame', message.author, message.channel)
+                    elif content == 'save':
+                        await self.send_message(
+                            message.channel,
+                            "Unfortunately, saved games are not supported at "
+                            "this time."
+                        )
                     elif content == 'score':
                         self.player.write('score')
                         self.player.readchunk()
@@ -521,9 +539,15 @@ def EnableStory(bot):
                         ) / max(1, avg(
                             [score[0] for score in scores[state['game']]]
                         ))
-                        norm_score = ceil(self.player.score * modifier)
-                        if self.player.score > 0:
-                            norm_score = max(norm_score, 1)
+                    norm_score = ceil(self.player.score * modifier)
+                    norm_score += floor(
+                        len(state['transcript']) / 25 * min(
+                            modifier,
+                            1
+                        )
+                    )
+                    if self.player.score > 0:
+                        norm_score = max(norm_score, 1)
                     await self.send_message(
                         dest,
                         'Your game has ended. Your score was %d\n'
@@ -541,13 +565,14 @@ def EnableStory(bot):
                                 self.player.score
                             )
                         )
-                    players[state['user']]['balance'] += norm_score
-                    # print("Granting xp for score payout")
-                    self.dispatch(
-                        'grant_xp',
-                        user,
-                        norm_score * 10 #maybe normalize this since each game scores differently
-                    )
+                    if norm_score > 0:
+                        players[state['user']]['balance'] += norm_score
+                        # print("Granting xp for score payout")
+                        self.dispatch(
+                            'grant_xp',
+                            user,
+                            norm_score * 10 #maybe normalize this since each game scores differently
+                        )
             del state['transcript']
             state['user'] = '~<IDLE>'
             del self.player
@@ -680,6 +705,7 @@ def EnableStory(bot):
                     user,
                     5
                 )
+            week[user.id]['active'] = True
             week.save()
 
     @bot.subscribe('after:message')
@@ -693,9 +719,9 @@ def EnableStory(bot):
             # print(week, self._pending_activity)
             for uid in self._pending_activity:
                 if uid not in week:
-                    week[uid]={'active':'yes'}
+                    week[uid]={'active':True}
                 else:
-                    week[uid]['active']='yes'
+                    week[uid]['active']=True
             self._pending_activity = set()
             # print(week)
             week.save()
@@ -775,8 +801,6 @@ def EnableStory(bot):
                 xp = []
                 for uid in week:
                     user = self.fetch_channel('story').server.get_member(uid) #icky!
-                    if 'active' in week[uid] or uid in self._pending_activity:
-                        xp.append([user, 5])
                     if uid not in players:
                         players[uid] = {
                             'level':1,
@@ -787,14 +811,17 @@ def EnableStory(bot):
                     if players[user.id]['balance'] < 20*players[user.id]['level']:
                         payout *= 2
                     players[uid]['balance'] += payout
-                    await self.send_message(
-                        self.fetch_channel('story').server.get_member(uid), #icky!
-                        "Your allowance was %d tokens this week. Your balance is now %d "
-                        "tokens" % (
-                            payout,
-                            players[uid]['balance']
+                    if 'active' in week[uid] or uid in self._pending_activity:
+                        xp.append([user, 5])
+                        #only notify if they were active. Otherwise don't bother them
+                        await self.send_message(
+                            self.fetch_channel('story').server.get_member(uid), #icky!
+                            "Your allowance was %d tokens this week. Your balance is now %d "
+                            "tokens" % (
+                                payout,
+                                players[uid]['balance']
+                            )
                         )
-                    )
                 self._pending_activity = set()
                 players.save()
                 os.remove('weekly.json')
