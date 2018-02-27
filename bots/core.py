@@ -19,6 +19,7 @@ class CoreBot(discord.Client):
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
+    special_order = []
 
     def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
         if not len(cmds):
@@ -76,6 +77,7 @@ class CoreBot(discord.Client):
             if event in self.special:
                 raise NameError("This special event already exists! Change the name of the special function")
             self.special[event] = check
+            self.special_order.append(event)
 
             @self.subscribe(event)
             async def run_special(self, evt, message, content):
@@ -445,8 +447,8 @@ class CoreBot(discord.Client):
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            for event, check in self.special.items():
-                if check(self, message):
+            for event in self.special_order:
+                if self.special[event](self, message):
                     print("Running special", event)
                     self.dispatch(event, message, content)
                     break
