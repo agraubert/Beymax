@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import sanitize, load_db
+from .utils import sanitize, ListDatabase, Database
 import discord
 import asyncio
 import sys
@@ -249,23 +249,24 @@ class HelpSession:
         cmd = sanitize(message, '`~!@#$%^&*()-_=+{[]}\\|,.<>/?;:\'"').lower()
         print("Digest content:", cmd)
         if self.stage == 'default':
-            choice = binwords(
-                cmd,
-                bots=['bots', 'apps', 'robots'],
-                octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
-                beymax_commands=[command[1:] for command in self.client.commands],
-                channels=['channels', 'groups', 'messages', 'channel'],
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ],
-                help=['help'],
-            )
+            async with ListDatabase('parties.json') as parties:
+                choice = binwords(
+                    cmd,
+                    bots=['bots', 'apps', 'robots'],
+                    octavia=['octavia', 'tenno', 'dj', 'music'],
+                    beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                    beymax_commands=[command[1:] for command in self.client.commands],
+                    channels=['channels', 'groups', 'messages', 'channel'],
+                    general=['general'],
+                    jukebox=['jukebox'],
+                    testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                    rpgs=['rpgs', 'rpg'],
+                    afk=['afk'],
+                    party=['party'] + [
+                        party['name'].split() for party in parties
+                    ],
+                    help=['help'],
+                )
             if choice is None:
                 await self.client.send_message(
                     self.user,
@@ -326,25 +327,26 @@ class HelpSession:
             else:
                 await self.stage_terminal()
         elif self.stage == 'terminal':
-            choice = binwords(
-                cmd,
-                bots=['bots', 'apps', 'robots'],
-                octavia=['octavia', 'tenno', 'dj', 'music'],
-                beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
-                beymax_commands=[command[1:] for command in self.client.commands],
-                channels=['channels', 'groups', 'messages', 'channel'],
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ],
-                help=['help'],
-                yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
-                no=['no', 'nope', 'nah', 'thanks']
-            )
+            async with ListDatabase('parties.json') as parties:
+                choice = binwords(
+                    cmd,
+                    bots=['bots', 'apps', 'robots'],
+                    octavia=['octavia', 'tenno', 'dj', 'music'],
+                    beymax=['beymax', 'baymax', 'jroot', 'dev', 'helper', 'you', 'yourself'],
+                    beymax_commands=[command[1:] for command in self.client.commands],
+                    channels=['channels', 'groups', 'messages', 'channel'],
+                    general=['general'],
+                    jukebox=['jukebox'],
+                    testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                    rpgs=['rpgs', 'rpg'],
+                    afk=['afk'],
+                    party=['party'] + [
+                        party['name'].split() for party in parties
+                    ],
+                    help=['help'],
+                    yes=['yes', 'sure', 'ok', 'yep', 'please', 'okay', 'yeah'],
+                    no=['no', 'nope', 'nah', 'thanks']
+                )
             if choice is None:
                 await self.client.send_message(
                     self.user,
@@ -376,17 +378,18 @@ class HelpSession:
                     "Okay. Glad to be of service"
                 )
         elif self.stage == 'channels':
-            choice = binwords(
-                cmd,
-                general=['general'],
-                jukebox=['jukebox'],
-                testing_grounds=['testing', 'grounds', 'testing_grounds'],
-                rpgs=['rpgs', 'rpg'],
-                afk=['afk'],
-                party=['party'] + [
-                    party['name'].split() for party in load_db('parties.json', [])
-                ]
-            )
+            async with ListDatabase('parties.json') as parties:
+                choice = binwords(
+                    cmd,
+                    general=['general'],
+                    jukebox=['jukebox'],
+                    testing_grounds=['testing', 'grounds', 'testing_grounds'],
+                    rpgs=['rpgs', 'rpg'],
+                    afk=['afk'],
+                    party=['party'] + [
+                        party['name'].split() for party in parties
+                    ]
+                )
             if choice is None:
                 await self.client.send_message(
                     self.user,

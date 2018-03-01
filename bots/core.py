@@ -1,4 +1,4 @@
-from .utils import load_db, save_db, getname, validate_permissions
+from .utils import load_db, save_db, Database, getname, validate_permissions
 import discord
 from discord.compat import create_task
 import asyncio
@@ -19,6 +19,7 @@ class CoreBot(discord.Client):
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
+    special_order = []
 
     def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
         if not len(cmds):
@@ -28,6 +29,7 @@ class CoreBot(discord.Client):
                 if self.check_permissions_chain(content[0][1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     await func(self, message, content)
+                    self.dispatch('command', content[0], message.author)
                 else:
                     print("Denied", message.author, "using command", content[0], "in", message.channel)
                     await self.send_message(
@@ -75,6 +77,7 @@ class CoreBot(discord.Client):
             if event in self.special:
                 raise NameError("This special event already exists! Change the name of the special function")
             self.special[event] = check
+            self.special_order.append(event)
 
             @self.subscribe(event)
             async def run_special(self, evt, message, content):
@@ -118,21 +121,27 @@ class CoreBot(discord.Client):
 
     def dispatch(self, event, *args, manual=False, **kwargs):
         self.nt += 1
+        output = []
         if not manual:
             if 'before:'+str(event) in self.event_listeners:
-                self.dispatch_event('before:'+str(event), *args, **kwargs)
+                output += self.dispatch_event('before:'+str(event), *args, **kwargs)
             super().dispatch(event, *args, **kwargs)
             if str(event) in self.event_listeners:
-                self.dispatch_event(str(event), *args, **kwargs)
+                output += self.dispatch_event(str(event), *args, **kwargs)
             if 'after:'+str(event) in self.event_listeners:
-                self.dispatch_event('after:'+str(event), *args, **kwargs)
+                output += self.dispatch_event('after:'+str(event), *args, **kwargs)
         else:
             if str(event) in self.event_listeners:
-                self.dispatch_event(str(event), *args, **kwargs)
+                output += self.dispatch_event(str(event), *args, **kwargs)
+        return output
 
     def dispatch_event(self, event, *args, **kwargs):
-        for listener in self.event_listeners[event]:
+        return [
             create_task(listener(self, event, *args, **kwargs), loop=self.loop)
+            for listener in self.event_listeners[event]
+        ]
+
+
 
     def config_get(self, *keys):
         obj = self.configuration
@@ -290,12 +299,15 @@ class CoreBot(discord.Client):
                     self.permissions['roles'][role]['role']
                 )
 
-    async def close(self):
+    async def shutdown(self):
         save_db(self.users, 'users.json')
-        self.dispatch('cleanup')
-        await super().close()
+        tasks = self.dispatch('cleanup')
+        if len(tasks):
+            print("Waiting for ", len(tasks), "cleanup tasks to complete")
+            await asyncio.wait(tasks)
+        await self.close()
 
-    async def send_message(self, destination, content, *, delim='\n', **kwargs):
+    async def send_message(self, destination, content, *, delim='\n', quote='', **kwargs):
         #built in chunking
         body = content.split(delim)
         tmp = []
@@ -324,19 +336,33 @@ class CoreBot(discord.Client):
             elif len(msg) > 1024:
                 # Otherwise, send it if the current message has reached the
                 # 1KB chunking target
-                last_msg = await super().send_message(
-                    destination,
-                    msg,
-                    **kwargs
-                )
+                try:
+                    last_msg = await super().send_message(
+                        destination,
+                        quote+msg+quote,
+                        **kwargs
+                    )
+                except discord.errors.HTTPException as e:
+                    print("Failed to deliver message:", e.text)
+                    await super().send_message(
+                        self.fetch_channel('dev'),
+                        "Failed to deliver a message to "+str(destination)
+                        )
                 tmp = []
                 await asyncio.sleep(1)
         if len(tmp):
             #send any leftovers (guaranteed <2KB)
-            last_msg = await super().send_message(
-                destination,
-                msg
-            )
+            try:
+                last_msg = await super().send_message(
+                    destination,
+                    quote+msg+quote
+                )
+            except discord.errors.HTTPException as e:
+                print("Failed to deliver message:", e.text)
+                await super().send_message(
+                    self.fetch_channel('dev'),
+                    "Failed to deliver a message to "+str(destination)
+                )
         return last_msg
 
     def getid(self, username):
@@ -421,8 +447,8 @@ class CoreBot(discord.Client):
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            for event, check in self.special.items():
-                if check(self, message):
+            for event in self.special_order:
+                if self.special[event](self, message):
                     print("Running special", event)
                     self.dispatch(event, message, content)
                     break
