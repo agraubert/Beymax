@@ -588,6 +588,13 @@ def EnableUtils(bot): #prolly move to it's own bot
                 )
                 for server in self.servers:
                     user = server.get_member(uid)
+                    general = self.fetch_channel('general')
+                    if general.server != server:
+                        general = discord.utils.get(
+                            server.channels,
+                            name='general',
+                            type=discord.ChannelType.text
+                        )
                     if self.config_get('ignore_role') != None:
                         blacklist_role = self.config_get('ignore_role')
                         for role in server.roles:
@@ -598,11 +605,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                                 )
                     try:
                         await self.send_message(
-                            discord.utils.get(
-                                server.channels,
-                                name='general',
-                                type=discord.ChannelType.text
-                            ),
+                            general,
                             "%s has asked me to ignore %s. %s can no longer issue any commands"
                             " until they have been `!pardon`-ed" % (
                                 str(message.author),
@@ -651,6 +654,13 @@ def EnableUtils(bot): #prolly move to it's own bot
                 )
                 for server in self.servers:
                     user = server.get_member(uid)
+                    general = self.fetch_channel('general')
+                    if general.server != server:
+                        general = discord.utils.get(
+                            server.channels,
+                            name='general',
+                            type=discord.ChannelType.text
+                        )
                     if self.config_get('ignore_role') != None:
                         blacklist_role = self.config_get('ignore_role')
                         for role in server.roles:
@@ -661,11 +671,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                                 )
                     try:
                         await self.send_message(
-                            discord.utils.get(
-                                server.channels,
-                                name='general',
-                                type=discord.ChannelType.text
-                            ),
+                            general,
                             "%s has pardoned %s" % (
                                 str(message.author),
                                 str(user)
