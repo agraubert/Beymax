@@ -6,6 +6,7 @@ import time
 import os
 import yaml
 import sys
+import threading
 
 class CoreBot(discord.Client):
     nt = 0
@@ -289,6 +290,14 @@ class CoreBot(discord.Client):
                 self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
                     self.permissions['roles'][role]['role']
                 )
+        self.task_worker = threading.Thread(
+            target=CoreBot._run_tasks,
+            args=(self,),
+            daemon=True,
+            name="CoreBot Background Task Thread"
+        )
+
+        self.task_worker.start()
 
     async def close(self):
         save_db(self.users, 'users.json')
@@ -426,17 +435,21 @@ class CoreBot(discord.Client):
                     print("Running special", event)
                     self.dispatch(event, message, content)
                     break
-        # Check if it is time to run any tasks
-        #
-        current = time.time()
-        ran_task = False
-        for task, (interval, qualname) in self.tasks.items():
-            last = 0
-            if 'tasks' in self.update_times and task in self.update_times['tasks']:
-                last = self.update_times['tasks'][task]
-            if current - last > interval:
-                print("Running task", task, '(', qualname, ')')
-                self.dispatch(task)
+
+    def _run_tasks(self):
+        while True:
+            time.sleep(60)
+            # Check if it is time to run any tasks
+            #
+            current = time.time()
+            ran_task = False
+            for task, (interval, qualname) in self.tasks.items():
+                last = 0
+                if 'tasks' in self.update_times and task in self.update_times['tasks']:
+                    last = self.update_times['tasks'][task]
+                if current - last > interval:
+                    print("Running task", task, '(', qualname, ')')
+                    self.dispatch(task)
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
