@@ -232,6 +232,6 @@ def EnableOverwatch(bot):
                 self.fetch_channel('general'),
                 body
             )
-            stats.save(0)
+            stats.save()
 
     return bot
