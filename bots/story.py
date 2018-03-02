@@ -574,6 +574,8 @@ def EnableStory(bot):
                             norm_score * 10 #maybe normalize this since each game scores differently
                         )
             del state['transcript']
+            if 'notified' in state:
+                del state['notified']
             state['user'] = '~<IDLE>'
             del self.player
             state.save()
@@ -841,23 +843,29 @@ def EnableStory(bot):
                 user = self.fetch_channel('story').server.get_member(state['user'])
                 self.dispatch('endgame', user, user)
             elif state['user'] != '~<IDLE>' and now - state['time'] >= 151200: # 6 hours left
-                await self.send_message(
-                    self.fetch_channel('story').server.get_member(state['user']),
-                    "Your current game of %s is about to expire. If you wish to extend"
-                    " your game session, you can `!reup` at a cost of %d tokens,"
-                    " which will grant you an additional day" % (
-                        state['game'],
-                        state['reup'] if 'reup' in state else 1
+                if 'notified' not in state or state['notified'] == 'first':
+                    await self.send_message(
+                        self.fetch_channel('story').server.get_member(state['user']),
+                        "Your current game of %s is about to expire. If you wish to extend"
+                        " your game session, you can `!reup` at a cost of %d tokens,"
+                        " which will grant you an additional day" % (
+                            state['game'],
+                            state['reup'] if 'reup' in state else 1
+                        )
                     )
-                )
+                    state['notified'] = 'second'
+                    state.save()
             elif ('played' not in state or state['played']) and state['user'] != '~<IDLE>' and now - state['time'] >= 86400: # 1 day left
-                await self.send_message(
-                    self.fetch_channel('story').server.get_member(state['user']),
-                    "Your current game of %s will expire in less than 1 day. If you"
-                    " wish to extend your game session, you can `!reup` at a cost of"
-                    " %d tokens, which will grant you an additional day" % (
-                        state['game'],
-                        state['reup'] if 'reup' in state else 1
+                if 'notified' not in state:
+                    await self.send_message(
+                        self.fetch_channel('story').server.get_member(state['user']),
+                        "Your current game of %s will expire in less than 1 day. If you"
+                        " wish to extend your game session, you can `!reup` at a cost of"
+                        " %d tokens, which will grant you an additional day" % (
+                            state['game'],
+                            state['reup'] if 'reup' in state else 1
+                        )
                     )
-                )
+                    state['notified'] = 'first'
+                    state.save()
     return bot
