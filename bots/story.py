@@ -499,6 +499,8 @@ def EnableStory(bot):
                     # 1 day + the remaining time
                     players[state['user']]['balance'] -= state['reup']
                     state['reup'] += 1
+                    if 'notified' in state:
+                        del state['notified']
                     await self.send_message(
                         self.fetch_channel('story'),
                         "The current game session has been extended"
