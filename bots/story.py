@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import getname, Database, load_db, save_db
+from .utils import getname, Database, load_db, save_db, get_attr
 import discord
 import asyncio
 import os
@@ -442,7 +442,7 @@ def EnableStory(bot):
                         " are available, use `!games`"
                     )
                     return
-                user = self.fetch_channel('story').server.get_member(state['bids'][-1]['user'])
+                user = self.get_user(state['bids'][-1]['user'])
                 if user:
                     await self.send_message(
                         user,
@@ -603,7 +603,7 @@ def EnableStory(bot):
                                     'xp':0,
                                     'balance':10
                                 }
-                            user = self.fetch_channel('story').server.get_member(bid['user'])
+                            user = self.get_user(bid['user'])
                             if bid['amount'] > players[bid['user']]['balance']:
                                 await self.send_message(
                                     user,
@@ -804,7 +804,7 @@ def EnableStory(bot):
                 print("Resetting the week")
                 xp = []
                 for uid in week:
-                    user = self.fetch_channel('story').server.get_member(uid) #icky!
+                    user = self.get_user(uid)
                     if uid not in players:
                         players[uid] = {
                             'level':1,
@@ -819,7 +819,7 @@ def EnableStory(bot):
                         xp.append([user, 5])
                         #only notify if they were active. Otherwise don't bother them
                         await self.send_message(
-                            self.fetch_channel('story').server.get_member(uid), #icky!
+                            self.get_user(uid),
                             "Your allowance was %d tokens this week. Your balance is now %d "
                             "tokens" % (
                                 payout,
@@ -842,12 +842,12 @@ def EnableStory(bot):
         async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
             now = time.time()
             if state['user'] != '~<IDLE>' and now - state['time'] >= 172800: # 2 days
-                user = self.fetch_channel('story').server.get_member(state['user'])
+                user = self.get_user(state['user'])
                 self.dispatch('endgame', user, user)
             elif state['user'] != '~<IDLE>' and now - state['time'] >= 151200: # 6 hours left
                 if 'notified' not in state or state['notified'] == 'first':
                     await self.send_message(
-                        self.fetch_channel('story').server.get_member(state['user']),
+                        self.get_user(state['user']),
                         "Your current game of %s is about to expire. If you wish to extend"
                         " your game session, you can `!reup` at a cost of %d tokens,"
                         " which will grant you an additional day" % (
@@ -860,7 +860,7 @@ def EnableStory(bot):
             elif ('played' not in state or state['played']) and state['user'] != '~<IDLE>' and now - state['time'] >= 86400: # 1 day left
                 if 'notified' not in state:
                     await self.send_message(
-                        self.fetch_channel('story').server.get_member(state['user']),
+                        self.get_user(state['user']),
                         "Your current game of %s will expire in less than 1 day. If you"
                         " wish to extend your game session, you can `!reup` at a cost of"
                         " %d tokens, which will grant you an additional day" % (

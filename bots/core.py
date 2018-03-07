@@ -375,6 +375,10 @@ class CoreBot(discord.Client):
     def get_user(self, reference, *servers):
         if not len(servers):
             servers = self.servers
+            if self.primary_server is not None:
+                servers = [self.primary_server] + servers
+                #it's okay that the primary_server is duplicated
+                #But at least this gives it priority
         for server in servers:
             result = server.get_member(reference)
             if result is not None:
