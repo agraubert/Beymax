@@ -204,7 +204,7 @@ def EnableBugs(bot):
     @bot.add_command('!bug:user')
     async def cmd_bug_user(self, message, content):
         """
-        `!bug:user <bug ID> <User ID>` : Subscribes a user to a bug report.
+        `!bug:user <bug ID> <Username or ID>` : Subscribes a user to a bug report.
         Example: `!bug:user 2 310283932341895169` (that's my user ID)
         """
         async with ListDatabase('bugs.json') as bugs:
@@ -217,7 +217,7 @@ def EnableBugs(bot):
                     )
                 else:
                     try:
-                        user = await self.get_user_info(content[2])
+                        user = await self.get_user(content[2])
                         bugs[bugid]['users'].append(user.id)
                         await self.send_message(
                             user,

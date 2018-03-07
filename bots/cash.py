@@ -15,7 +15,7 @@ def EnableCash(bot):
     @bot.add_command('!_payment')
     async def cmd_payment(self, message, content):
         """
-        `!_payment <project> <user ID> $<amount>` : Records a user's payment on a project.
+        `!_payment <project> <username or ID> $<amount>` : Records a user's payment on a project.
         Use `0` as the user ID for anonymous payments.
         Example: `!_payment bots 310283932341895169 $5`
         """

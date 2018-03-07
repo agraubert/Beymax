@@ -82,7 +82,7 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
   Disables getting \@mentioned every time changes are made to this bug. You cannot
   unsubscribe if you created the bug
 
-* `!bug:user <bug id> <user id>`
+* `!bug:user <bug id> <username or id>`
 
   Subscribes the user to the bug
 
@@ -178,10 +178,10 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
   Performs an end-of-season analysis. I currently have no way to automate Beymax
   doing this task as the season end dates are rather unpredictable
 
-* `!_payment <project> <user ID> $<amount>`
+* `!_payment <project> <username or ID> $<amount>`
 
   Records a payment to an ongoing fundraising project.  Currently this must be done
-  manually
+  manually. Report username as `0` to make anonymous
 
 * `!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY | $<goal amount> | <Venmo username>`
 
