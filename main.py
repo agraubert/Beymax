@@ -73,11 +73,14 @@ def ConstructBeymax(): #enable Beymax-Specific commands
     async def greet_member(self, event, member): #greet new members
         await self.send_message(
             self.fetch_channel('general'),
-            "Welcome, "+member.mention+"!\n"+
+            "Welcome, "+member.mention+"!\n"
+            "I am %s, your personal ~~healthcare~~ server companion\n"
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi\n"
             "There are many things I can help you with on this server. "
             "Try typing `!permissions` to find the list of commands you can use "
-            "or `!ouch` to get help with them"
+            "or `!ouch` to get help with them" % (
+                self.user.mention
+            )
         )
 
     @beymax.add_command('!kill-beymax', '!satisfied')
