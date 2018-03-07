@@ -91,7 +91,9 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
   Beymax will PM you with a list of all commands you have are authorized to use.
   Note that permissions gained though roles cannot be verified in a PM, so if you
   use `!permissions` in a PM with Beymax, he will only report default permissions
-  and those assigned to you directly.
+  and those assigned to you directly. **This does not apply** iff you have a
+  primary_server set in the configuration. Beymax will validate roles in PMs only
+  with a primary_server configured
 
 * `!kill-beymax` or `!satisfied`
 
@@ -120,6 +122,36 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
 * `!pardon <user ID or username#discriminator>`
 
   Sets Beymax to resume responding to commands from the provided user
+
+* `!timeleft`
+
+  Gets the time remaining on the current game
+
+* `!games`
+
+  Lists the games available
+
+* `!toggle-comments`
+
+  If there is a game currently being played *by the user issuing this command*,
+  this toggles whether or not other users can speak in the game channel
+
+* `!highscore <game>`
+
+  Reports the highscore of the provided game
+
+* `!idof <name>`
+
+  Gets ids of all servers for any member, role, or channel with a name similar
+  to *name*.
+
+* `!balance`
+
+  Get your current level, xp, and token balance
+
+* `!reup`
+
+  Extends the current game session if you are the player
 
 ### Administrative commands
 
@@ -164,3 +196,16 @@ Looking to set up Beymax on your server? Check the [Setup Guide](https://github.
 
   Changes Beymax's current status message to the provided status. If no status is provided,
   Beymax will pick one from the preset list
+
+* `!_task [name of task]`
+
+  Manually dispatches the named task. Task names are the name of the function used
+  to handle the task
+
+* `!_payout <username or id> {xp,tokens} <amount>`
+
+  Pays the provided user the specified amount of tokens or xp
+
+* `!_nt`
+
+  Reports the number of events that have been dispatched by Beymax so far
