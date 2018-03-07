@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import load_db, save_db
+from .utils import load_db, save_db, get_attr
 import asyncio
 import re
 import datetime
@@ -52,7 +52,7 @@ def EnableBirthday(bot):
                     self.fetch_channel('general'),
                     "@everyone congratulate %s, for today is their birthday!"
                     " They are %d!" % (
-                        self.users[uid]['mention'] if uid in self.users else "someone",
+                        get_attr(self.get_user(uid), 'mention', 'someone'),
                         today.year - data['year']
                     )
                 )

@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import load_db, save_db
+from .utils import load_db, save_db, get_attr
 import asyncio
 import time
 import datetime
@@ -62,7 +62,7 @@ def EnableCash(bot):
                     'There is $%0.2f left to raise by %d/%d/%d\n'
                     'If you would like to donate, '
                     'venmo `%s` and mention `%s` in the payment' % (
-                        self.users[uid]['mention'] if uid in self.users else 'someone',
+                        get_attr(self.get_user(uid), 'mention', 'Someone'),
                         amount,
                         cash[project]['title'],
                         100*(cash[project]['current']/cash[project]['goal']),
@@ -214,7 +214,7 @@ def EnableCash(bot):
                         '\nDonations:\n' +
                         '\n'.join(
                             '%s: $%d' % (
-                                self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                get_attr(self.get_user(contrib['user']), 'mention', 'Anonymous'),
                                 contrib['amount']
                             )
                             for contrib in sorted(
@@ -258,7 +258,7 @@ def EnableCash(bot):
                         '\nDonations:\n' +
                         '\n'.join(
                             '%s: $%d' % (
-                                self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                get_attr(self.get_user(contrib['user']), 'mention', 'Anonymous'),
                                 contrib['amount']
                             )
                             for contrib in sorted(

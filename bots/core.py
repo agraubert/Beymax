@@ -194,7 +194,6 @@ class CoreBot(discord.Client):
                 ) for taskname in self.tasks
             ])
         )
-        self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
@@ -300,7 +299,6 @@ class CoreBot(discord.Client):
         self.task_worker.start()
 
     async def close(self):
-        save_db(self.users, 'users.json')
         self.dispatch('cleanup')
         await super().close()
 
@@ -348,15 +346,21 @@ class CoreBot(discord.Client):
             )
         return last_msg
 
+    def get_user(self, reference, *servers):
+        if not len(servers):
+            servers = self.servers
+        for server in servers:
+            result = server.get_member(reference)
+            if result is not None:
+                return result
+        for server in servers:
+            result = server.get_member_named(reference)
+            if result is not None:
+                return result
+
     def getid(self, username):
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
-        if username in self.users:
-            return self.users[username]['id']
-        result = (list(filter(
-            lambda x:x is not None,
-            [server.get_member(username) for server in self.servers]
-            + [server.get_member_named(username) for server in self.servers]
-            )) + [None])[0]
+        result = self.get_user(username)
         if result is not None:
             if result.id != username and '#' not in username:
                 raise NameError("Username '%s' not valid, must containe #discriminator" % username)
@@ -407,15 +411,6 @@ class CoreBot(discord.Client):
         if message.author == self.user:
             return
         # build the user struct and update the users object
-        # FIXME: We should migrate away from self.users[] and add our own get_user method
-        struct = {
-            'id': message.author.id,
-            'fullname': str(message.author),
-            'mention': message.author.mention,
-            'name': getname(message.author)
-        }
-        self.users[str(message.author)] = struct
-        self.users[message.author.id] = struct
         try:
             content = message.content.strip().split()
             content[0] = content[0].lower()

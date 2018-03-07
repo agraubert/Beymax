@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import load_db, save_db, getname
+from .utils import load_db, save_db, getname, get_attr
 import asyncio
 
 def EnableBugs(bot):
@@ -63,7 +63,7 @@ def EnableBugs(bot):
                     bugid,
                     bugs[bugid]['status'],
                     ' '.join(
-                        self.users[user]['name'] for user in
+                        getname(self.get_user(user)) for user in
                         bugs[bugid]['users']
                     ),
                     bugs[bugid]['label'],
@@ -111,7 +111,7 @@ def EnableBugs(bot):
                         bugid,
                         bugs[bugid]['status'],
                         ' '.join(
-                            self.users[user]['mention'] for user in
+                            get_attr(self.get_user(uid), 'mention', '') for user in
                             bugs[bugid]['users']
                         ),
                         bugs[bugid]['label'],
@@ -149,7 +149,8 @@ def EnableBugs(bot):
                         bugid,
                         bugs[bugid]['status'],
                         ' '.join(
-                            self.users[user]['mention'] for user in
+                            get_attr(self.get_user(user), 'mention', '')
+                            for user in
                             bugs[bugid]['users']
                         ),
                         bugs[bugid]['label'],
@@ -186,7 +187,8 @@ def EnableBugs(bot):
                         bugid,
                         bugs[bugid]['status'],
                         ' '.join(
-                            self.users[user]['mention'] for user in
+                            get_attr(self.get_user(user), 'mention', '')
+                            for user in
                             bugs[bugid]['users']
                         ),
                         bugs[bugid]['label'],

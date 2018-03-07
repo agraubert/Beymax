@@ -18,9 +18,16 @@ def sanitize(string, illegal, replacement=''):
     return string
 
 def getname(user):
+    if user is None:
+        return 'someone'
     if 'nick' in dir(user) and type(user.nick) is str and len(user.nick):
         return user.nick
     return user.name
+
+def get_attr(obj, attr, default):
+    if hasattr(obj, attr):
+        return getattr(obj,attr)
+    return default
 
 def validate_permissions(obj, is_default=False):
     if is_default:
