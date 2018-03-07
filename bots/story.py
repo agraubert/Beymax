@@ -470,6 +470,54 @@ def EnableStory(bot):
                         " game will begin after the current game has ended"
                     )
 
+    @bot.add_command('!_payout')
+    async def cmd_payout(self, message, content):
+        """
+        `!_payout <user> <xp/tokens> <amount>` : Pays xp/tokens to the provided user
+        Example: !_payout some_user_id xp 12
+        """
+        if len(content) != 4:
+            await self.send_message(
+                message.channel,
+                "Syntax is `!_payout <uid> <xp/tokens> <amount>`"
+            )
+        elif self.get_user(content[1]) is None:
+            await self.send_message(
+                message.channel,
+                "1st argument must be a valid username or id"
+            )
+        elif content[2] not in {'xp', 'tokens'}:
+            await self.send_message(
+                message.channel,
+                "2nd argument must be either `xp` or `tokens`"
+            )
+        else:
+            try:
+                amount = int(content[3])
+            except ValueError:
+                await self.send_message(
+                    message.channel,
+                    "'%s' is not a valid amount of tokens" % content[3]
+                )
+                return
+            async with Database('players.json') as players:
+                user = self.get_user(content[1])
+                if user.id not in players:
+                    players[user.id] = {
+                        'level':1,
+                        'xp':0,
+                        'balance':10
+                    }
+                if content[2] == 'tokens':
+                    players[user.id]['balance'] += amount
+                else:
+                    self.dispatch(
+                        'grant_xp',
+                        user,
+                        amount
+                    )
+                players.save()
+
     @bot.add_command('!reup')
     async def cmd_reup(self, message, content):
         """

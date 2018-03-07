@@ -374,7 +374,7 @@ class CoreBot(discord.Client):
 
     def get_user(self, reference, *servers):
         if not len(servers):
-            servers = self.servers
+            servers = list(self.servers)
             if self.primary_server is not None:
                 servers = [self.primary_server] + servers
                 #it's okay that the primary_server is duplicated
