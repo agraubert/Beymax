@@ -6,6 +6,7 @@ from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
+from bots.story import EnableStory
 import discord
 import asyncio
 import random
@@ -53,6 +54,7 @@ def select_status():
 
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
+    beymax = EnableStory(beymax) # Story needs priority on special message recognition
 
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
@@ -68,6 +70,9 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             print(channel.name, channel.type)
         print("Ready to serve!")
         self.dispatch('task:update_status') # manually set status at startup
+        from bots.utils import Database
+        async with Database('weekly.json') as weekly:
+            print("Weekly xp structure:", weekly)
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
@@ -88,7 +93,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         `!satisfied` : Shuts down beymax
         """
-        await self.close()
+        await self.shutdown()
 
     @beymax.add_command('!_greet')
     async def cmd_greet(self, message, content):
@@ -124,6 +129,12 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             message,
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
+        # print("granting reaction xp")
+        self.dispatch(
+            'grant_xp',
+            message.author,
+            2
+        )
 
     beymax.EnableAll( #enable all sub-bots
         EnableUtils,
@@ -133,7 +144,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableOverwatch,
         EnableParties,
         EnablePolls,
-        EnableCash
+        EnableCash,
     )
 
     return beymax

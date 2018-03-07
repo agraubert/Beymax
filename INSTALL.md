@@ -157,7 +157,18 @@ don't know what a shell is, you're going to have a bad time
             rule), the fallback behavior is to allow the command if it is not an
             **Underscore Command**. This is the lowest priority behavior, so it can be
             overridden by any rule, including `defaults`.
-4. Connect your bot to your **Server**
+4. Get extras
+    1. If you plan on using the story/text game system, you'll need to get a few things first:
+        * dfrotz (put `dfrotz` in the same directory as `main.py`):
+        ```bash
+        $ git clone https://github.com/DavidGriffith/frotz.git
+        $ cd frotz
+        $ make dumb
+        ```
+        * Some `.z5` games (put them in a folder called `games` in the same directory
+          as `main.py`)
+            * You can get a good starter pack from [textplayer](https://github.com/danielricks/textplayer)
+5. Connect your bot to your **Server**
     1. At this point, your bot is configured and ready to work. Go back to the
     [Discord Developers page](https://discordapp.com/developers/) from step 2.1
     and navigate to your bot
