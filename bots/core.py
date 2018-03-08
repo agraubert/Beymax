@@ -7,6 +7,7 @@ import os
 import yaml
 import sys
 import threading
+from functools import wraps
 
 class CoreBot(discord.Client):
     nt = 0
@@ -15,7 +16,7 @@ class CoreBot(discord.Client):
     channel_references = {} # reference name -> channel name/id
     event_listeners = {} # event name -> [listener functions (self, event)]
     # changed to set in favor of event API
-    commands = set() # !cmd -> function wrapper. Functions take (self, message, content)
+    commands = {} # !cmd -> docstring. Functions take (self, message, content)
     ignored_users = set()
     users = {} # id/fullname -> {id, fullname, mention, name}
     tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
@@ -26,6 +27,7 @@ class CoreBot(discord.Client):
         if not len(cmds):
             raise ValueError("Must provide at least one command")
         def wrapper(func):
+            @wraps(func)
             async def on_cmd(self, cmd, message, content):
                 if self.check_permissions_chain(content[0][1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
@@ -48,7 +50,7 @@ class CoreBot(discord.Client):
                     )
             for cmd in cmds:
                 on_cmd = self.subscribe(cmd)(on_cmd)
-                self.commands.add(cmd)
+                self.commands[cmd] = func.__doc__
             return on_cmd
 
         return wrapper
@@ -475,7 +477,7 @@ class CoreBot(discord.Client):
                 if current - last > interval:
                     print("Running task", task, '(', qualname, ')')
                     self.dispatch(task)
-                    
+
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
