@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database
+from .utils import Database, get_attr
 import asyncio
 import re
 import datetime
@@ -32,6 +32,12 @@ def EnableBirthday(bot):
                     message.channel,
                     "Okay, I'll remember that"
                 )
+                if self.user.id not in birthdays:
+                    birthdays[self.user.id] = {
+                        'month': 5,
+                        'day': 6,
+                        'year': 2017
+                    }
                 birthdays.save()
 
     @bot.add_task(43200) #12 hours
@@ -44,9 +50,9 @@ def EnableBirthday(bot):
                 if today.day == day and today.month == month:
                     await self.send_message(
                         self.fetch_channel('general'),
-                        "@everyone congratulate %s, for today is their birthday!"
-                        " They are %d!" % (
-                            self.users[uid]['mention'] if uid in self.users else "someone",
+                        "@everyone Today is %s's birthday!"
+                        " They turn %d!" % (
+                            get_attr(self.get_user(uid), 'mention', 'Someone'),
                             today.year - data['year']
                         )
                     )

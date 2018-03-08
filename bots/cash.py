@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database
+from .utils import Database, get_attr
 import asyncio
 import time
 import datetime
@@ -15,7 +15,7 @@ def EnableCash(bot):
     @bot.add_command('!_payment')
     async def cmd_payment(self, message, content):
         """
-        `!_payment <project> <user ID> $<amount>` : Records a user's payment on a project.
+        `!_payment <project> <username or ID> $<amount>` : Records a user's payment on a project.
         Use `0` as the user ID for anonymous payments.
         Example: `!_payment bots 310283932341895169 $5`
         """
@@ -62,7 +62,7 @@ def EnableCash(bot):
                         'There is $%0.2f left to raise by %d/%d/%d\n'
                         'If you would like to donate, '
                         'venmo `%s` and mention `%s` in the payment' % (
-                            self.users[uid]['mention'] if uid in self.users else 'someone',
+                            get_attr(self.get_user(uid), 'mention', 'Someone'),
                             amount,
                             cash[project]['title'],
                             100*(cash[project]['current']/cash[project]['goal']),
@@ -214,7 +214,7 @@ def EnableCash(bot):
                             '\nDonations:\n' +
                             '\n'.join(
                                 '%s: $%d' % (
-                                    self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                    get_attr(self.get_user(contrib['user']), 'mention', 'Anonymous'),
                                     contrib['amount']
                                 )
                                 for contrib in sorted(
@@ -258,7 +258,7 @@ def EnableCash(bot):
                             '\nDonations:\n' +
                             '\n'.join(
                                 '%s: $%d' % (
-                                    self.users[contrib['user']]['mention'] if contrib['user'] in self.users else 'Anonymous',
+                                    get_attr(self.get_user(contrib['user']), 'mention', 'Anonymous'),
                                     contrib['amount']
                                 )
                                 for contrib in sorted(

@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database
+from .utils import Database, get_attr, getname
 import os
 import requests
 from requests.exceptions import RequestException
@@ -97,7 +97,7 @@ def EnableOverwatch(bot):
                     oldRank = rank(old_tier)
                     if currentRank > oldRank:
                         body = "Everyone put your hands together for "
-                        body += self.users[uid]['mention'] if uid in self.users else tag
+                        body += get_attr(self.get_user(uid), 'mention', tag)
                         body += " who just reached "
                         body += tier
                         body += " in Overwatch!"
@@ -189,7 +189,7 @@ def EnableOverwatch(bot):
                     await self.send_message(
                         self.fetch_channel('general'),
                         "In "+index[tag]+" place, "+
-                        (self.users[uid]['mention'] if uid in self.users else tag)+
+                        get_attr(self.get_user(uid), 'mention', tag)+
                         " who made "+tier+
                         " with a rating of "+str(rating)+"\n"
                         +encourage(rn) + (
@@ -221,7 +221,7 @@ def EnableOverwatch(bot):
         async with Database('stats.json') as stats:
             for uid in stats:
                 body += '%s as %s\n' % (
-                    self.users[uid]['name'] if uid in self.users else 'someone',
+                    getname(self.get_user(uid)),
                     stats[uid]['tag']
                 )
                 stats[uid]['rating'] = 0

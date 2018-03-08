@@ -6,6 +6,7 @@ import time
 import os
 import yaml
 import sys
+import threading
 
 class CoreBot(discord.Client):
     nt = 0
@@ -202,7 +203,6 @@ class CoreBot(discord.Client):
                 ) for taskname in self.tasks
             ])
         )
-        self.users = load_db('users.json')
         self._general = discord.utils.get(
             self.get_all_channels(),
             name='general',
@@ -298,9 +298,16 @@ class CoreBot(discord.Client):
                 self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
                     self.permissions['roles'][role]['role']
                 )
+        self.task_worker = threading.Thread(
+            target=CoreBot._run_tasks,
+            args=(self,),
+            daemon=True,
+            name="CoreBot Background Task Thread"
+        )
+
+        self.task_worker.start()
 
     async def shutdown(self):
-        save_db(self.users, 'users.json')
         tasks = self.dispatch('cleanup')
         if len(tasks):
             print("Waiting for ", len(tasks), "cleanup tasks to complete")
@@ -365,15 +372,25 @@ class CoreBot(discord.Client):
                 )
         return last_msg
 
+    def get_user(self, reference, *servers):
+        if not len(servers):
+            servers = list(self.servers)
+            if self.primary_server is not None:
+                servers = [self.primary_server] + servers
+                #it's okay that the primary_server is duplicated
+                #But at least this gives it priority
+        for server in servers:
+            result = server.get_member(reference)
+            if result is not None:
+                return result
+        for server in servers:
+            result = server.get_member_named(reference)
+            if result is not None:
+                return result
+
     def getid(self, username):
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
-        if username in self.users:
-            return self.users[username]['id']
-        result = (list(filter(
-            lambda x:x is not None,
-            [server.get_member(username) for server in self.servers]
-            + [server.get_member_named(username) for server in self.servers]
-            )) + [None])[0]
+        result = self.get_user(username)
         if result is not None:
             if result.id != username and '#' not in username:
                 raise NameError("Username '%s' not valid, must containe #discriminator" % username)
@@ -424,15 +441,6 @@ class CoreBot(discord.Client):
         if message.author == self.user:
             return
         # build the user struct and update the users object
-        # FIXME: We should migrate away from self.users[] and add our own get_user method
-        struct = {
-            'id': message.author.id,
-            'fullname': str(message.author),
-            'mention': message.author.mention,
-            'name': getname(message.author)
-        }
-        self.users[str(message.author)] = struct
-        self.users[message.author.id] = struct
         try:
             content = message.content.strip().split()
             content[0] = content[0].lower()
@@ -452,17 +460,21 @@ class CoreBot(discord.Client):
                     print("Running special", event)
                     self.dispatch(event, message, content)
                     break
-        # Check if it is time to run any tasks
-        #
-        current = time.time()
-        ran_task = False
-        for task, (interval, qualname) in self.tasks.items():
-            last = 0
-            if 'tasks' in self.update_times and task in self.update_times['tasks']:
-                last = self.update_times['tasks'][task]
-            if current - last > interval:
-                print("Running task", task, '(', qualname, ')')
-                self.dispatch(task)
+
+    def _run_tasks(self):
+        while True:
+            time.sleep(60)
+            # Check if it is time to run any tasks
+            #
+            current = time.time()
+            ran_task = False
+            for task, (interval, qualname) in self.tasks.items():
+                last = 0
+                if 'tasks' in self.update_times and task in self.update_times['tasks']:
+                    last = self.update_times['tasks'][task]
+                if current - last > interval:
+                    print("Running task", task, '(', qualname, ')')
+                    self.dispatch(task)
 
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
@@ -689,6 +701,63 @@ def EnableUtils(bot): #prolly move to it's own bot
                     message.channel,
                     "I couldn't find that user. Please provide a user id or user#tag"
                 )
+
+    @bot.add_command('!idof')
+    async def cmd_idof(self, message, content):
+        """
+        `!idof <entity>` : Gets a list of all known entities by that name
+        Example: `!idof general` would list all users, channels, and roles with that name
+        """
+        servers = [message.server] if message.server is not None else self.servers
+        result = []
+        query = ' '.join(content[1:]).lower()
+        for server in servers:
+            first = True
+            if query in server.name.lower():
+                if first:
+                    first = False
+                    result.append('From server `%s`' % server.name)
+                result.append('Server `%s` : %s' % (server.name, server.id))
+            for channel in server.channels:
+                if query in channel.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Channel `%s` : %s' % (channel.name, channel.id))
+            for role in server.roles:
+                if query in role.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Role `%s` : %s' % (role.name, role.id))
+            for member in server.members:
+                if member.nick is not None and query in member.nick.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Member `%s` aka `%s` : %s' % (
+                        str(member),
+                        member.nick,
+                        member.id
+                    ))
+                elif query in member.name.lower():
+                    if first:
+                        first = False
+                        result.append('From server `%s`' % server.name)
+                    result.append('Member `%s`: %s' % (
+                        str(member),
+                        member.id
+                    ))
+        if len(result):
+            await self.send_message(
+                message.channel,
+                '\n'.join(result)
+            )
+        else:
+            await self.send_message(
+                message.channel,
+                "I was unable to find any entities by that name"
+            )
 
 
     return bot

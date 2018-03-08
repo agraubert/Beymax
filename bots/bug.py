@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import ListDatabase, getname
+from .utils import ListDatabase, getname, get_attr
 import asyncio
 
 def EnableBugs(bot):
@@ -63,7 +63,7 @@ def EnableBugs(bot):
                         bugid,
                         bugs[bugid]['status'],
                         ' '.join(
-                            self.users[user]['name'] for user in
+                            getname(self.get_user(user)) for user in
                             bugs[bugid]['users']
                         ),
                         bugs[bugid]['label'],
@@ -111,7 +111,7 @@ def EnableBugs(bot):
                             bugid,
                             bugs[bugid]['status'],
                             ' '.join(
-                                self.users[user]['mention'] for user in
+                                get_attr(self.get_user(uid), 'mention', '') for user in
                                 bugs[bugid]['users']
                             ),
                             bugs[bugid]['label'],
@@ -149,7 +149,7 @@ def EnableBugs(bot):
                             bugid,
                             bugs[bugid]['status'],
                             ' '.join(
-                                self.users[user]['mention'] for user in
+                                get_attr(self.get_user(user), 'mention', '') for user in
                                 bugs[bugid]['users']
                             ),
                             bugs[bugid]['label'],
@@ -186,7 +186,7 @@ def EnableBugs(bot):
                             bugid,
                             bugs[bugid]['status'],
                             ' '.join(
-                                self.users[user]['mention'] for user in
+                                get_attr(self.get_user(user), 'mention', '') for user in
                                 bugs[bugid]['users']
                             ),
                             bugs[bugid]['label'],
@@ -204,7 +204,7 @@ def EnableBugs(bot):
     @bot.add_command('!bug:user')
     async def cmd_bug_user(self, message, content):
         """
-        `!bug:user <bug ID> <User ID>` : Subscribes a user to a bug report.
+        `!bug:user <bug ID> <Username or ID>` : Subscribes a user to a bug report.
         Example: `!bug:user 2 310283932341895169` (that's my user ID)
         """
         async with ListDatabase('bugs.json') as bugs:
@@ -217,7 +217,7 @@ def EnableBugs(bot):
                     )
                 else:
                     try:
-                        user = await self.get_user_info(content[2])
+                        user = await self.get_user(content[2])
                         bugs[bugid]['users'].append(user.id)
                         await self.send_message(
                             user,
