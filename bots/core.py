@@ -440,6 +440,10 @@ class CoreBot(discord.Client):
     async def on_message(self, message):
         if message.author == self.user:
             return
+        if self.get_user(message.author.id) is None:
+            #User is not a member of any known server
+            #silently ignore
+            return
         # build the user struct and update the users object
         try:
             content = message.content.strip().split()
