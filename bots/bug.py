@@ -111,7 +111,7 @@ def EnableBugs(bot):
                             bugid,
                             bugs[bugid]['status'],
                             ' '.join(
-                                get_attr(self.get_user(uid), 'mention', '') for user in
+                                get_attr(self.get_user(user), 'mention', '') for user in
                                 bugs[bugid]['users']
                             ),
                             bugs[bugid]['label'],
