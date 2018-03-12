@@ -801,7 +801,7 @@ def EnableStory(bot):
                     message.channel,
                     "%s's game of %s will end in %d days, %d hours, %d minutes, "
                     "and %d seconds" % (
-                        self.users[state['user']]['fullname'],
+                        str(self.get_user(state['user'])),
                         state['game'],
                         d_days,
                         d_hours,
@@ -834,7 +834,7 @@ def EnableStory(bot):
                     "High score for %s: %d set by %s" % (
                         content[1],
                         score,
-                        self.users[uid]['mention']
+                        get_attr(self.get_user(uid), 'mention', '')
                     )
                 )
             else:
