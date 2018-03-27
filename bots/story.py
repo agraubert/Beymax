@@ -6,9 +6,12 @@ import os
 import subprocess
 import queue
 import threading
+from string import printable
 import time
 import re
 from math import ceil, floor
+
+printable_set = set(printable)
 
 class GameEnded(OSError):
     pass
@@ -228,6 +231,17 @@ def EnableStory(bot):
                     elif content == 'quit':
                         self.dispatch('endgame', message.author, message.channel)
                     else:
+                        unfiltered_len = len(content)
+                        content = ''.join(
+                            char for char in content if char in printable_set
+                        )
+                        if len(content) != unfiltered_len:
+                            await self.send_message(
+                                message.channel,
+                                "I had to filter out part of your command. "
+                                "Here's what I'm actually sending to the game: "
+                                "`%s`" % content
+                            )
                         state['played'] = True
                         state['transcript'].append(content)
                         state.save()
