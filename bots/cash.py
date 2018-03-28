@@ -6,6 +6,11 @@ import asyncio
 import time
 import datetime
 
+def ShorthandType(arg):
+    if len(arg.split()) > 1:
+        raise ArgumentTypeError('Cannot contain spaces')
+    return arg
+
 # cash : {project : {goal, current, title, contributions, notified, end, account}}
 def EnableCash(bot):
     if not isinstance(bot, CoreBot):
@@ -66,11 +71,6 @@ def EnableCash(bot):
                     )
                 )
                 cash.save()
-
-def ShorthandType(arg):
-    if len(arg.split()) > 1:
-        raise ArgumentTypeError('Cannot contain spaces')
-    return arg
 
     @bot.add_command(
         '!_project',
