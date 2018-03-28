@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import getname, Database, load_db, save_db, get_attr
+from .args import Arg, UserType
 import discord
 import asyncio
 import os
@@ -295,8 +296,8 @@ def EnableStory(bot):
                 )
                 state.save()
 
-    @bot.add_command('!_start')
-    async def cmd_start(self, message, content):
+    @bot.add_command('!_start', Arg('game', help="The game to play"))
+    async def cmd_start(self, message, args):
         """
         `!_start <game name>` : Starts an interactive text adventure
         Example: `!_start zork1`
@@ -306,10 +307,10 @@ def EnableStory(bot):
                 games = {
                     f[:-3] for f in os.listdir('games') if f.endswith('.z5')
                 }
-                if content[1] in games:
+                if args.game in games:
                     state['bids'] = [{
                         'user':message.author.id,
-                        'game':content[1],
+                        'game':args.game,
                         'amount':0
                     }]
                     state.save()
@@ -385,8 +386,12 @@ def EnableStory(bot):
                 )
             )
 
-    @bot.add_command('!bid')
-    async def cmd_bid(self, message, content):
+    @bot.add_command(
+        '!bid',
+        Arg('amount', type=int, help='Amount of tokens to bid'),
+        Arg('game', help="The game to play")
+    )
+    async def cmd_bid(self, message, args):
         """
         `!bid <amount> <game>` : Place a bid to play the next game
         Example: `!bid 1 zork1`
@@ -400,16 +405,8 @@ def EnableStory(bot):
                 )
                 return
             async with Database('players.json') as players:
-                bid = content[1]
-                try:
-                    bid = int(bid)
-                except ValueError:
-                    await self.send_message(
-                        message.channel,
-                        "'%s' is not a valid amount of tokens" % bid
-                    )
-                    return
-                game = content[2]
+                bid = args.amount
+                game = args.game
                 games = {
                     f[:-3] for f in os.listdir('games') if f.endswith('.z5')
                 }
@@ -484,53 +481,33 @@ def EnableStory(bot):
                         " game will begin after the current game has ended"
                     )
 
-    @bot.add_command('!_payout')
-    async def cmd_payout(self, message, content):
+    @bot.add_command(
+        '!_payout',
+        Arg('user', type=UserType(bot), help="Username or ID"),
+        Arg('type', choices=['xp', 'tokens'], help="Type of payout (xp or tokens)"),
+        Arg('amount', type=int, help="Amount to pay")
+    )
+    async def cmd_payout(self, message, args):
         """
         `!_payout <user> <xp/tokens> <amount>` : Pays xp/tokens to the provided user
         Example: !_payout some_user_id xp 12
         """
-        if len(content) != 4:
-            await self.send_message(
-                message.channel,
-                "Syntax is `!_payout <uid> <xp/tokens> <amount>`"
-            )
-        elif self.get_user(content[1]) is None:
-            await self.send_message(
-                message.channel,
-                "1st argument must be a valid username or id"
-            )
-        elif content[2] not in {'xp', 'tokens'}:
-            await self.send_message(
-                message.channel,
-                "2nd argument must be either `xp` or `tokens`"
-            )
-        else:
-            try:
-                amount = int(content[3])
-            except ValueError:
-                await self.send_message(
-                    message.channel,
-                    "'%s' is not a valid amount of tokens" % content[3]
+        async with Database('players.json') as players:
+            if args.user.id not in players:
+                players[args.user.id] = {
+                    'level':1,
+                    'xp':0,
+                    'balance':10
+                }
+            if args.type == 'tokens':
+                players[user.id]['balance'] += args.amount
+            else:
+                self.dispatch(
+                    'grant_xp',
+                    args.user,
+                    args.amount
                 )
-                return
-            async with Database('players.json') as players:
-                user = self.get_user(content[1])
-                if user.id not in players:
-                    players[user.id] = {
-                        'level':1,
-                        'xp':0,
-                        'balance':10
-                    }
-                if content[2] == 'tokens':
-                    players[user.id]['balance'] += amount
-                else:
-                    self.dispatch(
-                        'grant_xp',
-                        user,
-                        amount
-                    )
-                players.save()
+            players.save()
 
     @bot.add_command('!reup')
     async def cmd_reup(self, message, content):
@@ -824,29 +801,23 @@ def EnableStory(bot):
                     )
                 )
 
-    @bot.add_command('!highscore')
-    async def cmd_highscore(self, message, content):
+    @bot.add_command('!highscore', Arg('game', help="The game to get the highscore of"))
+    async def cmd_highscore(self, message, args):
         """
         `!highscore <game>` : Gets the current highscore for that game
         Example: `!highscore zork1`
         """
-        if len(content) < 2:
-            await self.send_message(
-                message.channel,
-                "Please provide a game name with this command"
-            )
-            return
         async with Database('scores.json') as scores:
-            if content[1] in scores:
+            if args.game in scores:
                 score, uid = sorted(
-                    scores[content[1]],
+                    scores[args.game],
                     key=lambda x:x[0],
                     reverse=True
                 )[0]
                 await self.send_message(
                     message.channel,
                     "High score for %s: %d set by %s" % (
-                        content[1],
+                        args.game,
                         score,
                         get_attr(self.get_user(uid), 'mention', '')
                     )

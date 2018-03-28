@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import Database, get_attr
+from .args import Arg, DateType
 import asyncio
 import re
 import datetime
@@ -8,37 +9,36 @@ def EnableBirthday(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    @bot.add_command('!birthday')
-    async def cmd_birthday(self, message, content):
+    @bot.add_command(
+        '!birthday',
+        Arg(
+            'birthday',
+            type=DateType,
+            help="Your birthday in MM/DD/YYYY format"
+        )
+    )
+    async def cmd_birthday(self, message, args):
         """
         `!birthday <your birthday>` : Informs me of your birthday so I
          can congratulate you when it comes. Example: `!birthday 1/1/1970`
         """
-        if len(content) < 2 or not re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1]):
+        async with Database('birthdays.json') as birthdays:
+            birthdays[message.author.id] = {
+                'month': args.birthday.month,
+                'day': args.birthday.day,
+                'year': args.birthday.year
+            }
             await self.send_message(
                 message.channel,
-                "Please tell me your birthday in MM/DD/YYYY format. For"
-                " example: `!birthday 1/1/1970`"
+                "Okay, I'll remember that"
             )
-        else:
-            result = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', content[1])
-            async with Database('birthdays.json') as birthdays:
-                birthdays[message.author.id] = {
-                    'month': int(result.group(1)),
-                    'day': int(result.group(2)),
-                    'year': int(result.group(3))
+            if self.user.id not in birthdays:
+                birthdays[self.user.id] = {
+                    'month': 5,
+                    'day': 6,
+                    'year': 2017
                 }
-                await self.send_message(
-                    message.channel,
-                    "Okay, I'll remember that"
-                )
-                if self.user.id not in birthdays:
-                    birthdays[self.user.id] = {
-                        'month': 5,
-                        'day': 6,
-                        'year': 2017
-                    }
-                birthdays.save()
+            birthdays.save()
 
     @bot.add_task(43200) #12 hours
     async def check_birthday(self):

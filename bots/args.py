@@ -1,36 +1,7 @@
 import argparse
 from collections import namedtuple
-
-#Syntax:
-# spec = Argspec(
-#     '!command',
-#     Arg(
-#         'arg1',
-#         type=str,
-#         help="Other Argparse Args"
-#     ),
-#     Arg(
-#         'foo',
-#         help='bar'
-#     ),
-#     #Note: Don't use optionals unless you expect users to use --flags in commands
-#     #Use positionals with Nargs
-#     add_help=False
-# )
-#
-# result, args = spec(content[1:])
-# if not result:
-#     await self.send_message(
-#         channel,
-#         spec.fail(args)
-#     )
-#     return
-# # otherwise, use args as normal
-
-# standard types:
-# (syntax) Type(client, *args, **kwargs)
-# ServerType, RoleType, ChannelType, UserType
-# Types search all servers and channels by names, ids, and nicks (for users)
+from datetime import datetime
+import re
 
 def ljoin(args, op='or'):
     output = ', '.join(args[:-1])
@@ -41,10 +12,11 @@ def ljoin(args, op='or'):
     return output + args[-1]
 
 class EType(object):
-    def __init__(self, client, by_name=True, by_id=True):
+    def __init__(self, client, by_name=True, by_id=True, nullable=False):
         self.client = client
         self.name = by_name
         self.id = by_id
+        self.null = nullable
         self.fields = []
         if self.id:
             self.fields.append('id')
@@ -56,6 +28,8 @@ class EType(object):
             for item in iterable:
                 if hasattr(item, field) and getattr(item, field) == arg:
                     return item
+        if self.null:
+            return False
 
 class ServerType(EType):
     def __call__(self, arg):
@@ -109,8 +83,8 @@ class ChannelType(ServerComponentType):
         )
 
 class UserType(ServerComponentType):
-    def __init__(self, client, by_name=True, by_id=True, by_nick=True):
-        super().__init__(client, by_name=by_name, by_id=by_id)
+    def __init__(self, client, by_name=True, by_id=True, by_nick=True, nullable=False):
+        super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
         self.nick = by_nick
         if self.nick:
             self.fields.append('nick')
@@ -129,6 +103,21 @@ class UserType(ServerComponentType):
             )
         )
 
+def DateType(arg):
+    try:
+        return datetime.strptime(arg, '%d/%m/%Y')
+    except:
+        raise argparse.ArgumentTypeError('`%s` not in MM/DD/YYYY format' % arg)
+
+def DollarType(arg):
+    if arg[0] == '$':
+        arg = arg[1:]
+    try:
+        return float(arg)
+    except:
+        pass
+    raise argparse.ArgumentTypeError('`%s` not in $0.00 format' % arg)
+
 class PrebuiltException(Exception):
     def __init__(self, message):
         self.message = message
@@ -138,22 +127,35 @@ Argtuple = namedtuple('Arg', ['args', 'kwargs'])
 def Arg(*args, remainder=False, **kwargs):
     if remainder:
         kwargs['nargs'] = argparse.REMAINDER
+    if 'metavar' in kwargs and kwargs['metavar'] != '':
+        kwargs['metavar'] = '<%s>' % kwargs['metavar']
+    elif 'metavar' not in kwargs:
+        kwargs['metavar'] = '<%s>' % args[0]
     return Argtuple(args, kwargs)
 
 class Argspec(argparse.ArgumentParser):
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, add_help=False, **kwargs)
         for arg in args:
-            self.add_argument(*arg.args, **arg.kwargs)
+            if 'type' in arg.kwargs and arg.kwargs['type'] == 'extra':
+                del arg.kwargs['type']
+                self.add_argument(*arg.args, **arg.kwargs)
+                self.add_argument(
+                    'extra',
+                    nargs=argparse.REMAINDER,
+                    metavar=''
+                )
+            else:
+                self.add_argument(*arg.args, **arg.kwargs)
 
     def _parse_known_args(self, arg_strings, namespace):
         try:
             return super()._parse_known_args(arg_strings, namespace)
         except argparse.ArgumentError as error:
             raise PrebuiltException(
-                '{usage}\nArgument {arg}{help}\n{message}'.format(
-                    usage=self.format_usage(),
-                    arg=error.argument_name,
+                '{usage}`\nArgument **{arg}**{help}\n{message}'.format(
+                    usage=self.format_usage().replace('usage: ', 'usage: `'),
+                    arg=re.sub(r'[<>]','',error.argument_name),
                     help=': '+error.args[0].help if error.args[0].help is not None else '',
                     message=error.message
                 )
@@ -161,7 +163,7 @@ class Argspec(argparse.ArgumentParser):
 
     def error(self, message):
         raise PrebuiltException(
-            self.format_usage()+"\n"+message
+            self.format_usage().replace('usage: ', 'usage: `')+"`\n"+re.sub(r'[<>]','',message)
         )
 
     def __call__(self, *args, delimiter=None):
@@ -170,4 +172,9 @@ class Argspec(argparse.ArgumentParser):
         try:
             return (True, super().parse_args(args))
         except PrebuiltException as e:
+            if delimiter is not None:
+                e.message += (
+                    '\nPlease note: This command uses `%s` to separate arguments'
+                    ' instead of regular spaces' % delimiter
+                )
             return (False, e.message)

@@ -503,12 +503,12 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     bot.reserve_channel('dev')
 
-    @bot.add_command('!_task')
-    async def cmd_task(self, message, content):
+    @bot.add_command('!_task', Arg('task', type='extra', help='task_name'))
+    async def cmd_task(self, message, args):
         """
         `!_task <task name>` : Manually runs the named task
         """
-        key = ' '.join(content[1:])
+        key = ' '.join([args.task] + args.extra)
         if not key.startswith('task:'):
             key = 'task:'+key
         if key in self.tasks:
@@ -550,6 +550,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             "Production mode enabled. All messages will be sent to general"
         )
 
+    #Not using argparse API as it does not preserve whitespace
     @bot.add_command('!_announce')
     async def cmd_announce(self, message, content):
         """
@@ -592,137 +593,115 @@ def EnableUtils(bot): #prolly move to it's own bot
             '\n'.join(body)
         )
 
-    @bot.add_command('!ignore')
-    async def cmd_ignore(self, message, content):
+    @bot.add_command('!ignore', Arg('user', type=UserType(bot, by_name=False, by_nick=False), help="Username or ID"))
+    async def cmd_ignore(self, message, args):
         """
         `!ignore <user id or user#tag>` : Ignore all commands by the given user
         until the next time I'm restarted
         Example: `!ignore Username#1234` Ignores all commands from Username#1234
         """
-        if len(content) != 2:
+        uid = args.user.id
+        if uid in self.ignored_users:
             await self.send_message(
                 message.channel,
-                "Syntax is `!ignore <user id or user#tag>`"
+                "This user is already ignored"
             )
-        else:
-            try:
-                uid = self.getid(content[1])
-                if uid in self.ignored_users:
-                    await self.send_message(
-                        message.channel,
-                        "This user is already ignored"
+            return
+        self.ignored_users.add(uid)
+        save_db(
+            list(self.ignored_users),
+            'ignores.json'
+        )
+        for server in self.servers:
+            user = server.get_member(uid)
+            if user is not None:
+                general = self.fetch_channel('general')
+                if general.server != server:
+                    general = discord.utils.get(
+                        server.channels,
+                        name='general',
+                        type=discord.ChannelType.text
                     )
-                    return
-                self.ignored_users.add(uid)
-                save_db(
-                    list(self.ignored_users),
-                    'ignores.json'
-                )
-                for server in self.servers:
-                    user = server.get_member(uid)
-                    general = self.fetch_channel('general')
-                    if general.server != server:
-                        general = discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        )
-                    if self.config_get('ignore_role') != None:
-                        blacklist_role = self.config_get('ignore_role')
-                        for role in server.roles:
-                            if role.id == blacklist_role or role.name == blacklist_role:
-                                await self.add_roles(
-                                    user,
-                                    role
-                                )
-                    try:
-                        await self.send_message(
-                            general,
-                            "%s has asked me to ignore %s. %s can no longer issue any commands"
-                            " until they have been `!pardon`-ed" % (
-                                str(message.author),
-                                str(user),
-                                getname(user)
+                if self.config_get('ignore_role') != None:
+                    blacklist_role = self.config_get('ignore_role')
+                    for role in server.roles:
+                        if role.id == blacklist_role or role.name == blacklist_role:
+                            await self.add_roles(
+                                user,
+                                role
                             )
+                try:
+                    await self.send_message(
+                        general,
+                        "%s has asked me to ignore %s. %s can no longer issue any commands"
+                        " until they have been `!pardon`-ed" % (
+                            str(message.author),
+                            str(user),
+                            getname(user)
                         )
-                    except:
-                        pass
-                await self.send_message(
-                    user,
-                    "I have been asked to ignore you by %s. Please contact them"
-                    " to petition this decision." % (str(message.author))
-                )
-            except NameError:
-                await self.send_message(
-                    message.channel,
-                    "I couldn't find that user. Please provide a user id or user#tag"
-                )
+                    )
+                except:
+                    pass
+        await self.send_message(
+            args.user,
+            "I have been asked to ignore you by %s. Please contact them"
+            " to petition this decision." % (str(message.author))
+        )
 
-    @bot.add_command('!pardon')
-    async def cmd_pardon(self, message, content):
+    @bot.add_command('!pardon', Arg('user', type=UserType(bot, by_name=False, by_nick=False), help="Username or ID"))
+    async def cmd_pardon(self, message, args):
         """
         `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
         commands again.
         Example: `!pardon Username#1234` pardons Username#1234
         """
-        if len(content) != 2:
+        uid = args.user.id
+        if uid not in self.ignored_users:
             await self.send_message(
                 message.channel,
-                "Syntax is `!pardon <user id or user#tag>`"
+                "This user is not currently ignored"
             )
-        else:
-            try:
-                uid = self.getid(content[1])
-                if uid not in self.ignored_users:
-                    await self.send_message(
-                        message.channel,
-                        "This user is not currently ignored"
+            return
+        self.ignored_users.remove(uid)
+        save_db(
+            list(self.ignored_users),
+            'ignores.json'
+        )
+        for server in self.servers:
+            user = server.get_member(uid)
+            if user is not None:
+                general = self.fetch_channel('general')
+                if general.server != server:
+                    general = discord.utils.get(
+                        server.channels,
+                        name='general',
+                        type=discord.ChannelType.text
                     )
-                    return
-                self.ignored_users.remove(uid)
-                save_db(
-                    list(self.ignored_users),
-                    'ignores.json'
-                )
-                for server in self.servers:
-                    user = server.get_member(uid)
-                    general = self.fetch_channel('general')
-                    if general.server != server:
-                        general = discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        )
-                    if self.config_get('ignore_role') != None:
-                        blacklist_role = self.config_get('ignore_role')
-                        for role in server.roles:
-                            if role.id == blacklist_role or role.name == blacklist_role:
-                                await self.remove_roles(
-                                    user,
-                                    role
-                                )
-                    try:
-                        await self.send_message(
-                            general,
-                            "%s has pardoned %s" % (
-                                str(message.author),
-                                str(user)
+                if self.config_get('ignore_role') != None:
+                    blacklist_role = self.config_get('ignore_role')
+                    for role in server.roles:
+                        if role.id == blacklist_role or role.name == blacklist_role:
+                            await self.remove_roles(
+                                user,
+                                role
                             )
+                try:
+                    await self.send_message(
+                        general,
+                        "%s has pardoned %s" % (
+                            str(message.author),
+                            str(user)
                         )
-                    except:
-                        pass
-                await self.send_message(
-                    user,
-                    "You have been pardoned by %s. I will resume responding to "
-                    "your commands." % (str(message.author))
-                )
-            except NameError:
-                await self.send_message(
-                    message.channel,
-                    "I couldn't find that user. Please provide a user id or user#tag"
-                )
+                    )
+                except:
+                    pass
+        await self.send_message(
+            args.user,
+            "You have been pardoned by %s. I will resume responding to "
+            "your commands." % (str(message.author))
+        )
 
-    @bot.add_command('!idof', Arg('query', help="Entity to search for"), Arg('extra', remainder=True, metavar=''))
+    @bot.add_command('!idof', Arg('query', type='extra', help="Entity to search for"))
     async def cmd_idof(self, message, args):
         """
         `!idof <entity>` : Gets a list of all known entities by that name
@@ -730,7 +709,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         servers = [message.server] if message.server is not None else self.servers
         result = []
-        query = args.query + ' '.join(args.extra).lower()
+        query = ' '.join([args.query] + args.extra).lower()
         for server in servers:
             first = True
             if query in server.name.lower():
