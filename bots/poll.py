@@ -13,7 +13,7 @@ def EnablePolls(bot):
     @bot.add_command(
         '!poll',
         Arg('title', help="Poll Title"),
-        Arg("options", remainder=True, help="Poll options"),
+        Arg("options", nargs='*', help="Poll options"),
         delimiter='|'
     )
     async def cmd_poll(self, message, args):
@@ -21,6 +21,7 @@ def EnablePolls(bot):
         `!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
         Example: `!poll Is Beymax cool? | Yes | Definitely`
         """
+        #The argparse API is killing the blank handling, but I think that's okay
         opts = [
             (opt.rstrip() if '~<blank>' not in opt else opt)
             for opt in args.options
