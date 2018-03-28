@@ -44,7 +44,7 @@ def EnableBugs(bot):
             )
             bugs.save()
 
-    @bot.add_command('!thread', '!bug:thread')
+    @bot.add_command('!thread', aliases=['!bug:thread'])
     async def cmd_thread(self, message, content):
         """
         `!thread <bug ID>` : Displays the full comment thread for a bug.
@@ -81,7 +81,7 @@ def EnableBugs(bot):
                     "Unable to parse the bug ID from the message"
                 )
 
-    @bot.add_command('!comment', '!bug:comment')
+    @bot.add_command('!comment', aliases=['!bug:comment'])
     async def cmd_comment(self, message, content):
         """
         `!comment <bug ID> [Your comments]` : Adds your comments to the bug's

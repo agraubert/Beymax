@@ -1,4 +1,5 @@
 from .utils import load_db, save_db, Database, getname, validate_permissions
+from .args import Arg, Argspec
 import discord
 from discord.compat import create_task
 import asyncio
@@ -7,6 +8,7 @@ import os
 import yaml
 import sys
 import threading
+import shlex
 
 class CoreBot(discord.Client):
     nt = 0
@@ -22,17 +24,29 @@ class CoreBot(discord.Client):
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
     special_order = []
 
-    def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
-        if not len(cmds):
-            raise ValueError("Must provide at least one command")
+    def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
+        if aliases is None:
+            aliases = []
+        for arg in spec:
+            if isinstance(arg, str):
+                raise TypeError("Please define command aliases using the aliases keyword")
         def wrapper(func):
             async def on_cmd(self, cmd, message, content):
-                if self.check_permissions_chain(content[0][1:], message.author)[0]:
+                if self.check_permissions_chain(cmd[1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
+                    if len(spec):
+                        argspec = Argspec(cmd, *spec, **kwargs)
+                        result, content = argspec(*content[1:], delimiter=delimiter)
+                        if not result:
+                            await self.send_message(
+                                message.channel,
+                                content
+                            )
+                            return
                     await func(self, message, content)
-                    self.dispatch('command', content[0], message.author)
+                    self.dispatch('command', cmd, message.author)
                 else:
-                    print("Denied", message.author, "using command", content[0], "in", message.channel)
+                    print("Denied", message.author, "using command", cmd, "in", message.channel)
                     await self.send_message(
                         message.channel,
                         "You do not have permissions to use this command\n" +
@@ -46,7 +60,7 @@ class CoreBot(discord.Client):
                         ) +
                         "To check your permissions, use the `!permissions` command"
                     )
-            for cmd in cmds:
+            for cmd in [command] + aliases:
                 on_cmd = self.subscribe(cmd)(on_cmd)
                 self.commands.add(cmd)
             return on_cmd
@@ -446,7 +460,9 @@ class CoreBot(discord.Client):
             return
         # build the user struct and update the users object
         try:
-            content = message.content.strip().split()
+            lex = shlex.shlex(message.content.strip(), posix=True)
+            lex.whitespace_split = True
+            content = list(lex)
             content[0] = content[0].lower()
         except:
             return
@@ -706,7 +722,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                     "I couldn't find that user. Please provide a user id or user#tag"
                 )
 
-    @bot.add_command('!idof')
+    @bot.add_command('!idof', Arg('query', help="Entity to search for"), Arg('extra', remainder=True, metavar=''))
     async def cmd_idof(self, message, content):
         """
         `!idof <entity>` : Gets a list of all known entities by that name
@@ -714,7 +730,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         servers = [message.server] if message.server is not None else self.servers
         result = []
-        query = ' '.join(content[1:]).lower()
+        query = content.query + ' '.join(content.extra).lower()
         for server in servers:
             first = True
             if query in server.name.lower():

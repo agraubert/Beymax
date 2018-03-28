@@ -88,7 +88,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             )
         )
 
-    @beymax.add_command('!kill-beymax', '!satisfied')
+    @beymax.add_command('!kill-beymax', aliases=['!satisfied'])
     async def cmd_shutdown(self, message, content):
         """
         `!satisfied` : Shuts down beymax
