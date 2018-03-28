@@ -593,7 +593,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             '\n'.join(body)
         )
 
-    @bot.add_command('!ignore', Arg('user', type=UserType(bot, by_name=False, by_nick=False), help="Username or ID"))
+    @bot.add_command('!ignore', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
     async def cmd_ignore(self, message, args):
         """
         `!ignore <user id or user#tag>` : Ignore all commands by the given user
@@ -648,7 +648,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             " to petition this decision." % (str(message.author))
         )
 
-    @bot.add_command('!pardon', Arg('user', type=UserType(bot, by_name=False, by_nick=False), help="Username or ID"))
+    @bot.add_command('!pardon', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
     async def cmd_pardon(self, message, args):
         """
         `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
