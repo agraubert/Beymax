@@ -30,9 +30,9 @@ class CoreBot(discord.Client):
         for arg in spec:
             if isinstance(arg, str):
                 raise TypeError("Please define command aliases using the aliases keyword")
-        if delimiter is not None:
+        if self.config_get('use_shlex') and delimiter is not None:
             print(
-                "Warning: (%s) The use of delimiters is discouraged. Instead, "
+                "Warning: (%s) The use of delimiters is discouraged in shlex mode. Instead, "
                 "have users quote their arguments" % command
             )
         def wrapper(func):
@@ -41,7 +41,16 @@ class CoreBot(discord.Client):
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     if len(spec) or empty:
                         argspec = Argspec(cmd, *spec, **kwargs)
-                        result, content = argspec(*content[1:], delimiter=delimiter)
+                        if not self.config_get('use_shlex'):
+                            delim = delimiter
+                        elif delimiter not in message.content:
+                            delim = None
+                        elif self.config_get('disable_delimiters'):
+                            print("Warning: Ignoring delimiter")
+                            delim = None
+                        else:
+                            delim = delimiter
+                        result, content = argspec(*content[1:], delimiter=delim)
                         if not result:
                             await self.send_message(
                                 message.channel,
@@ -464,13 +473,20 @@ class CoreBot(discord.Client):
             #silently ignore
             return
         # build the user struct and update the users object
-        try:
-            lex = shlex.shlex(message.content.strip(), posix=True)
-            lex.whitespace_split = True
-            content = list(lex)
-            content[0] = content[0].lower()
-        except:
-            return
+        if self.config_get('use_shlex'):
+            try:
+                lex = shlex.shlex(message.content.strip(), posix=True)
+                lex.whitespace_split = True
+                content = list(lex)
+                content[0] = content[0].lower()
+            except:
+                return
+        else:
+            try:
+                content = message.content.strip().split()
+                content[0] = content[0].lower()
+            except:
+                return
         if message.author.id in self.ignored_users:
             print("Ignoring message from", message.author,":", content)
         elif content[0] in self.commands: #if the first argument is a command
