@@ -1,5 +1,5 @@
 from .utils import load_db, save_db, Database, getname, validate_permissions
-from .args import Arg, Argspec
+from .args import Arg, Argspec, UserType
 import discord
 from discord.compat import create_task
 import asyncio
@@ -723,14 +723,14 @@ def EnableUtils(bot): #prolly move to it's own bot
                 )
 
     @bot.add_command('!idof', Arg('query', help="Entity to search for"), Arg('extra', remainder=True, metavar=''))
-    async def cmd_idof(self, message, content):
+    async def cmd_idof(self, message, args):
         """
         `!idof <entity>` : Gets a list of all known entities by that name
         Example: `!idof general` would list all users, channels, and roles with that name
         """
         servers = [message.server] if message.server is not None else self.servers
         result = []
-        query = content.query + ' '.join(content.extra).lower()
+        query = args.query + ' '.join(args.extra).lower()
         for server in servers:
             first = True
             if query in server.name.lower():
