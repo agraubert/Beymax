@@ -7,6 +7,7 @@ from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
 from bots.story import EnableStory
+from bots.args import Arg
 import discord
 import asyncio
 import random
@@ -86,14 +87,14 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             )
         )
 
-    @beymax.add_command('!kill-beymax', aliases=['!satisfied'])
+    @beymax.add_command('!kill-beymax', aliases=['!satisfied'], empty=True)
     async def cmd_shutdown(self, message, content):
         """
         `!satisfied` : Shuts down beymax
         """
         await self.shutdown()
 
-    @beymax.add_command('!_greet')
+    @beymax.add_command('!_greet', empty=True)
     async def cmd_greet(self, message, content):
         """
         `!_greet` : Manually triggers a greeting (I will greet you)
@@ -108,10 +109,10 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             game=discord.Game(name=name)
         )
 
-    @beymax.add_command('!_status')
-    async def cmd_status(self, message, content):
-        if len(content[1:]):
-            name = ' '.join(content[1:]).strip()
+    @beymax.add_command('!_status', Arg('status', remainder=True, help="Manually set this status"))
+    async def cmd_status(self, message, args):
+        if len(args.status):
+            name = ' '.join(args.status).strip()
         else:
             name = select_status()
         await self.change_presence(

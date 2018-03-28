@@ -24,7 +24,7 @@ class CoreBot(discord.Client):
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
     special_order = []
 
-    def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
+    def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         if aliases is None:
             aliases = []
         for arg in spec:
@@ -34,7 +34,7 @@ class CoreBot(discord.Client):
             async def on_cmd(self, cmd, message, content):
                 if self.check_permissions_chain(cmd[1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
-                    if len(spec):
+                    if len(spec) or empty:
                         argspec = Argspec(cmd, *spec, **kwargs)
                         result, content = argspec(*content[1:], delimiter=delimiter)
                         if not result:
@@ -520,14 +520,14 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "No such task"
             )
 
-    @bot.add_command('!_nt')
+    @bot.add_command('!_nt', empty=True)
     async def cmd_nt(self, message, content):
         await self.send_message(
             message.channel,
             '%d events have been dispatched' % self.nt
         )
 
-    @bot.add_command('!output-dev')
+    @bot.add_command('!output-dev', empty=True)
     async def cmd_dev(self, message, content):
         """
         `!output-dev` : Any messages that would always go to general will go to testing grounds
@@ -539,7 +539,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             "Development mode enabled. All messages will be sent to testing grounds"
         )
 
-    @bot.add_command('!output-prod')
+    @bot.add_command('!output-prod', empty=True)
     async def cmd_prod(self, message, content):
         """
         `!output-prod` : Restores normal message routing
@@ -562,7 +562,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.content.strip().replace('!_announce', '')
         )
 
-    @bot.add_command('!permissions')
+    @bot.add_command('!permissions', empty=True)
     async def cmd_perms(self, message, content):
         """
         `!permissions` : Gets a list of commands you have permissions to use

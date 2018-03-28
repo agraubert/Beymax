@@ -178,7 +178,7 @@ def EnableParties(bot):
                 "Please try it again from within a server channel"
             )
 
-    @bot.add_command('!disband')
+    @bot.add_command('!disband', empty=True)
     async def cmd_disband(self, message, content):
         """
         `!disband` : Closes any active party voice channels you have

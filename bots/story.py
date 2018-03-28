@@ -150,7 +150,7 @@ def EnableStory(bot):
     bot.reserve_channel('story')
     bot._pending_activity = set()
 
-    @bot.add_command('!games')
+    @bot.add_command('!games', empty=True)
     async def cmd_story(self, message, content):
         """
         `!games` : Lists the available games
@@ -272,7 +272,7 @@ def EnableStory(bot):
                 await asyncio.sleep(0.5)
                 await self.delete_message(message)
 
-    @bot.add_command('!toggle-comments')
+    @bot.add_command('!toggle-comments', empty=True)
     async def cmd_toggle_comments(self, message, content):
         """
         `!toggle-comments` : Toggles allowing spectator comments in the story_channel
@@ -363,7 +363,7 @@ def EnableStory(bot):
             players[user.id] = player
             players.save()
 
-    @bot.add_command('!balance')
+    @bot.add_command('!balance', empty=True)
     async def cmd_balance(self, message, content):
         """
         `!balance` : Displays your current token balance
@@ -509,7 +509,7 @@ def EnableStory(bot):
                 )
             players.save()
 
-    @bot.add_command('!reup')
+    @bot.add_command('!reup', empty=True)
     async def cmd_reup(self, message, content):
         """
         `!reup` : Extends your current game session by 1 day
@@ -769,7 +769,7 @@ def EnableStory(bot):
             # print(week)
             week.save()
 
-    @bot.add_command('!timeleft')
+    @bot.add_command('!timeleft', empty=True)
     async def cmd_timeleft(self, message, content):
         """
         `!timeleft` : Gets the remaining time for the current game

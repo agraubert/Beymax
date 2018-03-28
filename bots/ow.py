@@ -115,7 +115,7 @@ def EnableOverwatch(bot):
                     pass
             state.save()
 
-    @bot.add_command('!owupdate')
+    @bot.add_command('!owupdate', empty=True)
     async def cmd_update(self, message, content):
         self.dispatch('task:update_overwatch')
 
@@ -152,7 +152,7 @@ def EnableOverwatch(bot):
             raise
 
 
-    @bot.add_command('!_owreset')
+    @bot.add_command('!_owreset', empty=True)
     async def cmd_owreset(self, message, content):
         """
         `!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
@@ -205,7 +205,7 @@ def EnableOverwatch(bot):
             os.remove('stats.json')
 
 
-    @bot.add_command('!_owinit')
+    @bot.add_command('!_owinit', empty=True)
     async def cmd_owinit(self, message, content):
         """
         `!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
