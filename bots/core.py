@@ -30,6 +30,11 @@ class CoreBot(discord.Client):
         for arg in spec:
             if isinstance(arg, str):
                 raise TypeError("Please define command aliases using the aliases keyword")
+        if delimiter is not None:
+            print(
+                "Warning: (%s) The use of delimiters is discouraged. Instead, "
+                "have users quote their arguments" % command
+            )
         def wrapper(func):
             async def on_cmd(self, cmd, message, content):
                 if self.check_permissions_chain(cmd[1:], message.author)[0]:
