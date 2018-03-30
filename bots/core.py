@@ -480,6 +480,26 @@ class CoreBot(discord.Client):
                     print("Running task", task, '(', qualname, ')')
                     self.dispatch(task)
 
+    async def on_server_join(self, server):
+        if self.primary_server is not None and self.primary_server != server:
+            try:
+                await self.send_message(
+                    discord.utils.get(
+                        server.channels,
+                        name='general',
+                        type=discord.ChannelType.text
+                    ),
+                    "Unfortunately, this instance of Beymax is not configured"
+                    " to run on multiple servers. Please contact the owner"
+                    " of this instance, or run your own instance of Beymax."
+                    " Goodbye!"
+                )
+            except:
+                pass
+            await self.leave_server(server)
+        elif len(self.servers) > 1:
+            print("Warning: Joining to multiple servers is not supported behavior")
+
 def EnableUtils(bot): #prolly move to it's own bot
     #add some core commands
     if not isinstance(bot, CoreBot):
