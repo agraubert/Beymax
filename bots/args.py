@@ -105,7 +105,7 @@ class UserType(ServerComponentType):
 
 def DateType(arg):
     try:
-        return datetime.strptime(arg, '%d/%m/%Y')
+        return datetime.strptime(arg, '%m/%d/%Y')
     except:
         raise argparse.ArgumentTypeError('`%s` not in MM/DD/YYYY format' % arg)
 
