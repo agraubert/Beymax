@@ -57,7 +57,25 @@ class CoreBot(discord.Client):
                                 content
                             )
                             return
-                    await func(self, message, content)
+                    try:
+                        await func(self, message, content)
+                    except discord.DiscordException:
+                        await self.send_message(
+                            message.channel,
+                            "I've encountered an error communicating with Discord."
+                            " This may be a transient issue, but if it occurs again"
+                            " you should submit a bug report: `!bug <Discord Exception> %s`"
+                            % (message.content.replace('`', ''))
+                        )
+                        raise
+                    except:
+                        await self.send_message(
+                            message.channel,
+                            "I encountered unexpected error while processing your"
+                            " command. Please submit a bug report: `!bug <Python Exception> %s`"
+                            % (message.content.replace('`', ''))
+                        )
+                        raise
                     self.dispatch('command', cmd, message.author)
                 else:
                     print("Denied", message.author, "using command", cmd, "in", message.channel)
