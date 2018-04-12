@@ -17,3 +17,11 @@
 
 ## Set party_category to the name or id of a channel category in your server where you want parties to be created
 # party_category: name_or_id_of_category
+
+## Set use_shlex to true if you want to split command arguments using quotes.
+## If a command uses a specific delimiter, that delimiter will be used instead and quotes will not be respected
+# use_shlex: true
+
+## Set disable_delimiters to true if you want to override command delimiters when use_shlex is true
+## If a command uses a specific delimiter, ignore it, and use arguments as split by shlex
+# disable_delimiters: true

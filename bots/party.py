@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import ListDatabase, sanitize
+from .args import Arg
 import discord
 from discord.http import Route
 import asyncio
@@ -13,8 +14,8 @@ def EnableParties(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    @bot.add_command('!party')
-    async def cmd_party(self, message, content):
+    @bot.add_command('!party', Arg('name', remainder=True, help="Optional party name"))
+    async def cmd_party(self, message, args):
         """
         `!party [party name]` : Creates a new voice channel (name is optional).
         Example: `!party` or `!party Birthday`
@@ -53,7 +54,7 @@ def EnableParties(bot):
                         % current_party
                     )
                 else:
-                    name = (' '.join(content[1:])+' Party') if len(content) > 1 else 'Party'
+                    name = (' '.join(args.name)+' Party') if len(args.name) > 0 else 'Party'
                     name = sanitize_channel(name)
                     party_names = {party['name'] for party in parties}
                     if name in party_names or name == 'Party':
@@ -177,7 +178,7 @@ def EnableParties(bot):
                 "Please try it again from within a server channel"
             )
 
-    @bot.add_command('!disband')
+    @bot.add_command('!disband', empty=True)
     async def cmd_disband(self, message, content):
         """
         `!disband` : Closes any active party voice channels you have

@@ -61,7 +61,7 @@ don't know what a shell is, you're going to have a bad time
         * View the `example_config.yml` file. Copy it to `config.yaml` and make
         changes as desired. This will help you get Beymax running as desired for your
         **Server**
-        * In all files in the `bots` folder (except `utils.py`), you may wish to change
+        * In all files in the `bots` folder (except `utils.py` and `args.py`), you may wish to change
         the commands used. Each `@bot.add_command()` function takes commands as arguments,
         and you can freely change those to change which words will trigger the bot
         * In `bots/help.py` you may wish to overhaul the help system. Most of Beymax's

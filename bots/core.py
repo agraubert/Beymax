@@ -1,4 +1,5 @@
 from .utils import load_db, save_db, Database, getname, validate_permissions
+from .args import Arg, Argspec, UserType
 import discord
 from discord.compat import create_task
 import asyncio
@@ -7,6 +8,7 @@ import os
 import yaml
 import sys
 import threading
+import shlex
 
 class CoreBot(discord.Client):
     nt = 0
@@ -22,17 +24,43 @@ class CoreBot(discord.Client):
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
     special_order = []
 
-    def add_command(self, *cmds): #decorator. Attaches the decorated function to the given command(s)
-        if not len(cmds):
-            raise ValueError("Must provide at least one command")
+    def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
+        if aliases is None:
+            aliases = []
+        for arg in spec:
+            if isinstance(arg, str):
+                raise TypeError("Please define command aliases using the aliases keyword")
+        if self.config_get('use_shlex') and delimiter is not None:
+            print(
+                "Warning: (%s) The use of delimiters is discouraged in shlex mode. Instead, "
+                "have users quote their arguments" % command
+            )
         def wrapper(func):
             async def on_cmd(self, cmd, message, content):
-                if self.check_permissions_chain(content[0][1:], message.author)[0]:
+                if self.check_permissions_chain(cmd[1:], message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
+                    if len(spec) or empty:
+                        argspec = Argspec(cmd, *spec, **kwargs)
+                        if not self.config_get('use_shlex'):
+                            delim = delimiter
+                        elif delimiter not in message.content:
+                            delim = None
+                        elif self.config_get('disable_delimiters'):
+                            print("Warning: Ignoring delimiter")
+                            delim = None
+                        else:
+                            delim = delimiter
+                        result, content = argspec(*content[1:], delimiter=delim)
+                        if not result:
+                            await self.send_message(
+                                message.channel,
+                                content
+                            )
+                            return
                     await func(self, message, content)
-                    self.dispatch('command', content[0], message.author)
+                    self.dispatch('command', cmd, message.author)
                 else:
-                    print("Denied", message.author, "using command", content[0], "in", message.channel)
+                    print("Denied", message.author, "using command", cmd, "in", message.channel)
                     await self.send_message(
                         message.channel,
                         "You do not have permissions to use this command\n" +
@@ -46,7 +74,7 @@ class CoreBot(discord.Client):
                         ) +
                         "To check your permissions, use the `!permissions` command"
                     )
-            for cmd in cmds:
+            for cmd in [command] + aliases:
                 on_cmd = self.subscribe(cmd)(on_cmd)
                 self.commands.add(cmd)
             return on_cmd
@@ -445,11 +473,20 @@ class CoreBot(discord.Client):
             #silently ignore
             return
         # build the user struct and update the users object
-        try:
-            content = message.content.strip().split()
-            content[0] = content[0].lower()
-        except:
-            return
+        if self.config_get('use_shlex'):
+            try:
+                lex = shlex.shlex(message.content.strip(), posix=True)
+                lex.whitespace_split = True
+                content = list(lex)
+                content[0] = content[0].lower()
+            except:
+                return
+        else:
+            try:
+                content = message.content.strip().split()
+                content[0] = content[0].lower()
+            except:
+                return
         if message.author.id in self.ignored_users:
             print("Ignoring message from", message.author,":", content)
         elif content[0] in self.commands: #if the first argument is a command
@@ -507,12 +544,12 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     bot.reserve_channel('dev')
 
-    @bot.add_command('!_task')
-    async def cmd_task(self, message, content):
+    @bot.add_command('!_task', Arg('task', type='extra', help='task_name'))
+    async def cmd_task(self, message, args):
         """
         `!_task <task name>` : Manually runs the named task
         """
-        key = ' '.join(content[1:])
+        key = ' '.join([args.task] + args.extra)
         if not key.startswith('task:'):
             key = 'task:'+key
         if key in self.tasks:
@@ -524,14 +561,14 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "No such task"
             )
 
-    @bot.add_command('!_nt')
+    @bot.add_command('!_nt', empty=True)
     async def cmd_nt(self, message, content):
         await self.send_message(
             message.channel,
             '%d events have been dispatched' % self.nt
         )
 
-    @bot.add_command('!output-dev')
+    @bot.add_command('!output-dev', empty=True)
     async def cmd_dev(self, message, content):
         """
         `!output-dev` : Any messages that would always go to general will go to testing grounds
@@ -543,7 +580,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             "Development mode enabled. All messages will be sent to testing grounds"
         )
 
-    @bot.add_command('!output-prod')
+    @bot.add_command('!output-prod', empty=True)
     async def cmd_prod(self, message, content):
         """
         `!output-prod` : Restores normal message routing
@@ -554,6 +591,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             "Production mode enabled. All messages will be sent to general"
         )
 
+    #Not using argparse API as it does not preserve whitespace
     @bot.add_command('!_announce')
     async def cmd_announce(self, message, content):
         """
@@ -565,7 +603,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.content.strip().replace('!_announce', '')
         )
 
-    @bot.add_command('!permissions')
+    @bot.add_command('!permissions', empty=True)
     async def cmd_perms(self, message, content):
         """
         `!permissions` : Gets a list of commands you have permissions to use
@@ -596,145 +634,123 @@ def EnableUtils(bot): #prolly move to it's own bot
             '\n'.join(body)
         )
 
-    @bot.add_command('!ignore')
-    async def cmd_ignore(self, message, content):
+    @bot.add_command('!ignore', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
+    async def cmd_ignore(self, message, args):
         """
         `!ignore <user id or user#tag>` : Ignore all commands by the given user
         until the next time I'm restarted
         Example: `!ignore Username#1234` Ignores all commands from Username#1234
         """
-        if len(content) != 2:
+        uid = args.user.id
+        if uid in self.ignored_users:
             await self.send_message(
                 message.channel,
-                "Syntax is `!ignore <user id or user#tag>`"
+                "This user is already ignored"
             )
-        else:
-            try:
-                uid = self.getid(content[1])
-                if uid in self.ignored_users:
-                    await self.send_message(
-                        message.channel,
-                        "This user is already ignored"
+            return
+        self.ignored_users.add(uid)
+        save_db(
+            list(self.ignored_users),
+            'ignores.json'
+        )
+        for server in self.servers:
+            user = server.get_member(uid)
+            if user is not None:
+                general = self.fetch_channel('general')
+                if general.server != server:
+                    general = discord.utils.get(
+                        server.channels,
+                        name='general',
+                        type=discord.ChannelType.text
                     )
-                    return
-                self.ignored_users.add(uid)
-                save_db(
-                    list(self.ignored_users),
-                    'ignores.json'
-                )
-                for server in self.servers:
-                    user = server.get_member(uid)
-                    general = self.fetch_channel('general')
-                    if general.server != server:
-                        general = discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        )
-                    if self.config_get('ignore_role') != None:
-                        blacklist_role = self.config_get('ignore_role')
-                        for role in server.roles:
-                            if role.id == blacklist_role or role.name == blacklist_role:
-                                await self.add_roles(
-                                    user,
-                                    role
-                                )
-                    try:
-                        await self.send_message(
-                            general,
-                            "%s has asked me to ignore %s. %s can no longer issue any commands"
-                            " until they have been `!pardon`-ed" % (
-                                str(message.author),
-                                str(user),
-                                getname(user)
+                if self.config_get('ignore_role') != None:
+                    blacklist_role = self.config_get('ignore_role')
+                    for role in server.roles:
+                        if role.id == blacklist_role or role.name == blacklist_role:
+                            await self.add_roles(
+                                user,
+                                role
                             )
+                try:
+                    await self.send_message(
+                        general,
+                        "%s has asked me to ignore %s. %s can no longer issue any commands"
+                        " until they have been `!pardon`-ed" % (
+                            str(message.author),
+                            str(user),
+                            getname(user)
                         )
-                    except:
-                        pass
-                await self.send_message(
-                    user,
-                    "I have been asked to ignore you by %s. Please contact them"
-                    " to petition this decision." % (str(message.author))
-                )
-            except NameError:
-                await self.send_message(
-                    message.channel,
-                    "I couldn't find that user. Please provide a user id or user#tag"
-                )
+                    )
+                except:
+                    pass
+        await self.send_message(
+            args.user,
+            "I have been asked to ignore you by %s. Please contact them"
+            " to petition this decision." % (str(message.author))
+        )
 
-    @bot.add_command('!pardon')
-    async def cmd_pardon(self, message, content):
+    @bot.add_command('!pardon', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
+    async def cmd_pardon(self, message, args):
         """
         `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
         commands again.
         Example: `!pardon Username#1234` pardons Username#1234
         """
-        if len(content) != 2:
+        uid = args.user.id
+        if uid not in self.ignored_users:
             await self.send_message(
                 message.channel,
-                "Syntax is `!pardon <user id or user#tag>`"
+                "This user is not currently ignored"
             )
-        else:
-            try:
-                uid = self.getid(content[1])
-                if uid not in self.ignored_users:
-                    await self.send_message(
-                        message.channel,
-                        "This user is not currently ignored"
+            return
+        self.ignored_users.remove(uid)
+        save_db(
+            list(self.ignored_users),
+            'ignores.json'
+        )
+        for server in self.servers:
+            user = server.get_member(uid)
+            if user is not None:
+                general = self.fetch_channel('general')
+                if general.server != server:
+                    general = discord.utils.get(
+                        server.channels,
+                        name='general',
+                        type=discord.ChannelType.text
                     )
-                    return
-                self.ignored_users.remove(uid)
-                save_db(
-                    list(self.ignored_users),
-                    'ignores.json'
-                )
-                for server in self.servers:
-                    user = server.get_member(uid)
-                    general = self.fetch_channel('general')
-                    if general.server != server:
-                        general = discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        )
-                    if self.config_get('ignore_role') != None:
-                        blacklist_role = self.config_get('ignore_role')
-                        for role in server.roles:
-                            if role.id == blacklist_role or role.name == blacklist_role:
-                                await self.remove_roles(
-                                    user,
-                                    role
-                                )
-                    try:
-                        await self.send_message(
-                            general,
-                            "%s has pardoned %s" % (
-                                str(message.author),
-                                str(user)
+                if self.config_get('ignore_role') != None:
+                    blacklist_role = self.config_get('ignore_role')
+                    for role in server.roles:
+                        if role.id == blacklist_role or role.name == blacklist_role:
+                            await self.remove_roles(
+                                user,
+                                role
                             )
+                try:
+                    await self.send_message(
+                        general,
+                        "%s has pardoned %s" % (
+                            str(message.author),
+                            str(user)
                         )
-                    except:
-                        pass
-                await self.send_message(
-                    user,
-                    "You have been pardoned by %s. I will resume responding to "
-                    "your commands." % (str(message.author))
-                )
-            except NameError:
-                await self.send_message(
-                    message.channel,
-                    "I couldn't find that user. Please provide a user id or user#tag"
-                )
+                    )
+                except:
+                    pass
+        await self.send_message(
+            args.user,
+            "You have been pardoned by %s. I will resume responding to "
+            "your commands." % (str(message.author))
+        )
 
-    @bot.add_command('!idof')
-    async def cmd_idof(self, message, content):
+    @bot.add_command('!idof', Arg('query', type='extra', help="Entity to search for"))
+    async def cmd_idof(self, message, args):
         """
         `!idof <entity>` : Gets a list of all known entities by that name
         Example: `!idof general` would list all users, channels, and roles with that name
         """
         servers = [message.server] if message.server is not None else self.servers
         result = []
-        query = ' '.join(content[1:]).lower()
+        query = ' '.join([args.query] + args.extra).lower()
         for server in servers:
             first = True
             if query in server.name.lower():

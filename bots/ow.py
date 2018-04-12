@@ -1,5 +1,6 @@
 from .core import CoreBot
 from .utils import Database, get_attr, getname
+from .args import Arg
 import os
 import requests
 from requests.exceptions import RequestException
@@ -114,50 +115,44 @@ def EnableOverwatch(bot):
                     pass
             state.save()
 
-    @bot.add_command('!owupdate')
+    @bot.add_command('!owupdate', empty=True)
     async def cmd_update(self, message, content):
         self.dispatch('task:update_overwatch')
 
-    @bot.add_command('!ow')
-    async def cmd_ow(self, message, content):
+    @bot.add_command('!ow', Arg('username', help="Your battle#tag"))
+    async def cmd_ow(self, message, args):
         """
         `!ow <battle#tag>` : Enables overwatch stats tracking
         Example: `!ow beymax#1234`
         """
         path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
-        if len(content) != 2:
+        username = args.username.replace('#', '-')
+        try:
+            async with Database(path) as state:
+                get_mmr(username)
+                state[message.author.id] = {
+                    'tag': username,
+                    'rating': 0,
+                    'avatar':'',
+                    'tier':'Unranked'
+                }
+                state.save()
             await self.send_message(
                 message.channel,
-                "I need you to provide your battle tag\n"
-                "For example, `!ow beymax#1234`"
+                "Alright! I'll keep track of your stats"
             )
-        else:
-            username = content[1].replace('#', '-')
-            try:
-                async with Database(path) as state:
-                    get_mmr(username)
-                    state[message.author.id] = {
-                        'tag': username,
-                        'rating': 0,
-                        'avatar':'',
-                        'tier':'Unranked'
-                    }
-                    state.save()
-                await self.send_message(
-                    message.channel,
-                    "Alright! I'll keep track of your stats"
-                )
-                await asyncio.sleep(15)
-                self.dispatch('task:update_overwatch')
-            except RequestException:
-                await self.send_message(
-                    message.channel,
-                    "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
-                    "Battle-tags are case-sensitive, so make sure you typed everything correctly"
-                )
-                raise
+            await asyncio.sleep(15)
+            self.dispatch('task:update_overwatch')
+        except RequestException:
+            await self.send_message(
+                message.channel,
+                "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
+                "Battle-tags are case-sensitive, so make sure you typed everything correctly"
+            )
+            raise
 
-    @bot.add_command('!_owreset')
+
+    @bot.add_command('!_owreset', empty=True)
     async def cmd_owreset(self, message, content):
         """
         `!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
@@ -210,7 +205,7 @@ def EnableOverwatch(bot):
             os.remove('stats.json')
 
 
-    @bot.add_command('!_owinit')
+    @bot.add_command('!_owinit', empty=True)
     async def cmd_owinit(self, message, content):
         """
         `!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
