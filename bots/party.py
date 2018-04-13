@@ -80,7 +80,7 @@ def EnableParties(bot):
                             )
                         parties[i] = None
                 parties.update([party for party in parties if party is not None])
-                name = (' '.join(content[1:])+' Party') if len(content) > 1 else 'Party'
+                name = (' '.join(args.name)+' Party') if len(args.name) > 0 else 'Party'
                 name = sanitize_channel(name)
                 party_names = {party['name'] for party in parties}
                 if name in party_names or name == 'Party':

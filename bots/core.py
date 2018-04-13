@@ -45,7 +45,7 @@ class CoreBot(discord.Client):
                         argspec = Argspec(cmd, *spec, **kwargs)
                         if not self.config_get('use_shlex'):
                             delim = delimiter
-                        elif delimiter not in message.content:
+                        elif delimiter is not None and delimiter not in message.content:
                             delim = None
                         elif self.config_get('disable_delimiters'):
                             print("Warning: Ignoring delimiter")
