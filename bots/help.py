@@ -418,7 +418,7 @@ def EnableHelp(bot):
         #     "if you're not sure what sort of things I can do, just say `help`\n"+
         #     "What seems to be the problem?"
         # )
-        await self.send_message(
+        prompt = await self.send_message(
             message.author,
             "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"
             "The help system is currently being rebuilt from scratch, but in the"
@@ -436,7 +436,7 @@ def EnableHelp(bot):
         }
         response = await self.wait_for_message(
             author=message.author,
-            channel=message.author
+            channel=prompt.channel
         )
         if response.content.lower() in commands:
             await self.send_message(
