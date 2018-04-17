@@ -138,8 +138,10 @@ class Argspec(argparse.ArgumentParser):
         super().__init__(name, add_help=False, **kwargs)
         for arg in args:
             if 'type' in arg.kwargs and arg.kwargs['type'] == 'extra':
-                del arg.kwargs['type']
-                self.add_argument(*arg.args, **arg.kwargs)
+                self.add_argument(
+                    *arg.args,
+                    **{k:v for k,v in arg.kwargs.items() if k != 'type'}
+                )
                 self.add_argument(
                     'extra',
                     nargs=argparse.REMAINDER,
