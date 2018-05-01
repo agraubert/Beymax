@@ -141,16 +141,21 @@ def EnableOverwatch(bot):
                 message.channel,
                 "Alright! I'll keep track of your stats"
             )
-            await asyncio.sleep(15)
-            self.dispatch('task:update_overwatch')
+            if 'interim' not in path:
+                await asyncio.sleep(15)
+                self.dispatch('task:update_overwatch')
+        except ValueError:
+            await self.send_message(
+                message.channel,
+                "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
+                "Battle-tags are case-sensitive, so make sure you typed everything correctly"
+            )
         except RequestException:
             await self.send_message(
                 message.channel,
                 "I wasn't able to find your Overwatch ranking via the Overwatch API.\n"
                 "Battle-tags are case-sensitive, so make sure you typed everything correctly"
             )
-            raise
-
 
     @bot.add_command('!_owreset', empty=True)
     async def cmd_owreset(self, message, content):
@@ -200,7 +205,7 @@ def EnableOverwatch(bot):
             for uid in state:
                 state[uid]['rating'] = 0
                 state[uid]['tier'] = 'Unranked'
-            await sate.save_to('stats_interim.json')
+            await state.save_to('stats_interim.json')
         if os.path.isfile('stats.json'):
             os.remove('stats.json')
 
