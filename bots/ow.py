@@ -80,7 +80,7 @@ def EnableOverwatch(bot):
     @bot.add_task(3600) # 1 hour
     async def update_overwatch(self):
         """
-        `!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
+        `$!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
         """
         if os.path.isfile('stats_interim.json'):
             return
@@ -115,15 +115,15 @@ def EnableOverwatch(bot):
                     pass
             state.save()
 
-    @bot.add_command('!owupdate', empty=True)
+    @bot.add_command('owupdate', empty=True)
     async def cmd_update(self, message, content):
         self.dispatch('task:update_overwatch')
 
-    @bot.add_command('!ow', Arg('username', help="Your battle#tag"))
+    @bot.add_command('ow', Arg('username', help="Your battle#tag"))
     async def cmd_ow(self, message, args):
         """
-        `!ow <battle#tag>` : Enables overwatch stats tracking
-        Example: `!ow beymax#1234`
+        `$!ow <battle#tag>` : Enables overwatch stats tracking
+        Example: `$!ow $FULLNAME`
         """
         path = 'stats_interim.json' if os.path.isfile('stats_interim.json') else 'stats.json'
         username = args.username.replace('#', '-')
@@ -152,10 +152,10 @@ def EnableOverwatch(bot):
             raise
 
 
-    @bot.add_command('!_owreset', empty=True)
+    @bot.add_command('_owreset', empty=True)
     async def cmd_owreset(self, message, content):
         """
-        `!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
+        `$!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
         """
         async with Database('stats.json') as state:
             if len(state):
@@ -205,10 +205,10 @@ def EnableOverwatch(bot):
             os.remove('stats.json')
 
 
-    @bot.add_command('!_owinit', empty=True)
+    @bot.add_command('_owinit', empty=True)
     async def cmd_owinit(self, message, content):
         """
-        `!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
+        `$!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
         """
         shutil.move('stats_interim.json', 'stats.json')
         body = "The new Overwatch season has started! Here are the users I'm "

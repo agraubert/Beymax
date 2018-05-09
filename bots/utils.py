@@ -101,6 +101,42 @@ def save_db(data, filename):
     with open(filename, 'w') as writer:
         return json.dump(data, writer)
 
+class Interpolator(dict):
+    def __init__(self, bot, channel):
+        NAME = bot.config_get(
+            'name',
+            default=bot.user.name
+        )
+        NICK = (
+            bot.get_user(bot.user.id, channel.server)
+            if hasattr(channel, 'server')
+            else (
+                bot.get_user(bot.user.id)
+                if bot.primary_server is not None
+                else None
+            )
+        )
+        if NICK is not None:
+            NICK = getname(NICK)
+        if NICK is None:
+            NICK = NAME
+        super().__init__(**{
+            '$NAME': NAME,
+            '$FULLNAME': '%s#%s' % ( bot.user.name, str(bot.user.discriminator)),
+            '$ID': bot.user.id,
+            '$NICK': NICK,
+            '$CHANNEL': (
+                channel.name if hasattr(channel, 'name') and channel.name is not None
+                else (
+                    ', '.join([r.name for r in channel.recipients])
+                    if hasattr(channel, 'recipients')
+                    else "<Unknown Channel>"
+                )
+            ),
+            '$PREFIX': bot.command_prefix,
+            '$!': bot.command_prefix
+        })
+
 def sanitize(string, illegal, replacement=''):
     for char in illegal:
         string = string.replace(char, replacement)

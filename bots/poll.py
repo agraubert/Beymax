@@ -11,15 +11,15 @@ def EnablePolls(bot):
     bot.polls = {}
 
     @bot.add_command(
-        '!poll',
+        'poll',
         Arg('title', help="Poll Title"),
         Arg("options", nargs='*', help="Poll options"),
         delimiter='|'
     )
     async def cmd_poll(self, message, args):
         """
-        `!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
-        Example: `!poll Is Beymax cool? | Yes | Definitely`
+        `$!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
+        Example: `$!poll Is $NAME cool? | Yes | Definitely`
         """
         #The argparse API is killing the blank handling, but I think that's okay
         opts = [

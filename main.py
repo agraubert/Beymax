@@ -80,24 +80,57 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             "Welcome, "+member.mention+"!\n"
             "I am %s, your personal ~~healthcare~~ server companion\n"
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi\n"
-            "There are many things I can help you with on this server. "
-            "Try typing `!permissions` to find the list of commands you can use "
-            "or `!ouch` to get help with them" % (
+            "Try typing `$!permissions` to find the list of commands you can use "
+            "or `$!ouch` to get help with them" % (
                 self.user.mention
             )
         )
+        if not member.bot:
+            await asyncio.sleep(10)
+            message = await self.send_message(
+                member,
+                "We're glad to have you on our server! Would you like a brief "
+                "introduction on what I can do? (Yes/No)"
+            )
+            response = await self.wait_for_message(
+                timeout=60,
+                channel=message.channel,
+                # check=lambda x:x.content.lower() in {'yes', 'no'}
+            )
+            if response is None or response.content.lower() == 'no':
+                await self.send_message(
+                    message.channel,
+                    "Alright. Have fun, and enjoy your stay!"
+                )
+                return
+            elif response.content.lower() != 'yes':
+                await self.send_message(
+                    message.channel,
+                    "I didn't understand your response, but I'll go ahead and"
+                    " give you the rundown anyways"
+                )
+            await self.send_message(
+                message.channel,
+                "You can use the `$!birthday` command so I'll post a message on your birthday. "
+                "If you're an Overwatch player, you can use `$!ow` and I'll keep track of your competitive rank. "
+                "You can use the `$!party` command if you want to make a voice channel for you your friends to hang out for a while. "
+                "And if you're ever bored, try `$!bid` to play a game in the $CHANNEL channel. "
+                "These are just a few of my commands; you can get the full list with `$!permissions`,"
+                " and if you ever need my help with a command, just say `$!ouch`",
+                interp=self.fetch_channel('story')
+            )
 
-    @beymax.add_command('!kill-beymax', aliases=['!satisfied'], empty=True)
+    @beymax.add_command('kill-beymax', aliases=['satisfied'], empty=True)
     async def cmd_shutdown(self, message, content):
         """
-        `!satisfied` : Shuts down beymax
+        `$!satisfied` : Shuts down beymax
         """
         await self.shutdown()
 
-    @beymax.add_command('!_greet', empty=True)
+    @beymax.add_command('_greet', empty=True)
     async def cmd_greet(self, message, content):
         """
-        `!_greet` : Manually triggers a greeting (I will greet you)
+        `$!_greet` : Manually triggers a greeting (I will greet you)
         """
         self.dispatch('member_join', message.author)
 
@@ -109,7 +142,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             game=discord.Game(name=name)
         )
 
-    @beymax.add_command('!_status', Arg('status', remainder=True, help="Manually set this status"))
+    @beymax.add_command('_status', Arg('status', remainder=True, help="Manually set this status"))
     async def cmd_status(self, message, args):
         if len(args.status):
             name = ' '.join(args.status).strip()

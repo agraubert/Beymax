@@ -14,11 +14,11 @@ def EnableParties(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    @bot.add_command('!party', Arg('name', remainder=True, help="Optional party name"))
+    @bot.add_command('party', Arg('name', remainder=True, help="Optional party name"))
     async def cmd_party(self, message, args):
         """
-        `!party [party name]` : Creates a new voice channel (name is optional).
-        Example: `!party` or `!party Birthday`
+        `$!party [party name]` : Creates a new voice channel (name is optional).
+        Example: `$!party` or `!party Birthday`
         """
         if message.server is not None:
             async with ListDatabase('parties.json') as parties:
@@ -181,7 +181,7 @@ def EnableParties(bot):
                 await self.send_message(
                     message.channel,
                     "Alright, %s, I've created the `%s` channel for you.\n"
-                    "When you're finished, you can close the channel with `!disband`\n"
+                    "When you're finished, you can close the channel with `$!disband`\n"
                     "Otherwise, I'll go ahead and close it for you after 24 hours, if nobody's using it"
                     % (
                         message.author.mention,
@@ -204,10 +204,10 @@ def EnableParties(bot):
                 "Please try it again from within a server channel"
             )
 
-    @bot.add_command('!disband', empty=True)
+    @bot.add_command('disband', empty=True)
     async def cmd_disband(self, message, content):
         """
-        `!disband` : Closes any active party voice channels you have
+        `$!disband` : Closes any active party voice channels you have
         """
         if message.server is not None:
             async with ListDatabase('parties.json') as parties:
@@ -237,7 +237,7 @@ def EnableParties(bot):
             if len(pruned) == 1:
                 await self.send_message(
                     message.channel,
-                    '%s has been disbanded. If you would like to create another party, use the `!party` command'
+                    '%s has been disbanded. If you would like to create another party, use the `$!party` command'
                     % pruned[0]
                 )
             elif len(pruned) > 1:
@@ -245,7 +245,7 @@ def EnableParties(bot):
                     message.channel,
                     'The following parties have been disbanded:\n'
                     '\n'.join(pruned)+
-                    '\nIf you would like to create another party, use the `!party` command'
+                    '\nIf you would like to create another party, use the `$!party` command'
                 )
             else:
                 await self.send_message(
@@ -284,7 +284,7 @@ def EnableParties(bot):
         if len(pruned) == 1:
             await self.send_message(
                 self.fetch_channel('general'),
-                '%s has been disbanded. If you would like to create another party, use the `!party` command'
+                '%s has been disbanded. If you would like to create another party, use the `$!party` command'
                  % pruned[0]
             )
         elif len(pruned) > 1:
@@ -292,7 +292,7 @@ def EnableParties(bot):
                 self.fetch_channel('general'),
                 'The following parties have been disbanded:\n'
                 '\n'.join(pruned)+
-                '\nIf you would like to create another party, use the `!party` command'
+                '\nIf you would like to create another party, use the `$!party` command'
             )
 
     return bot

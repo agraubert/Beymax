@@ -10,7 +10,7 @@ def EnableBugs(bot):
     bot.reserve_channel('bugs')
 
     @bot.add_command(
-        '!bug',
+        'bug',
         Arg(
             'message',
             type='extra',
@@ -19,8 +19,8 @@ def EnableBugs(bot):
     )
     async def cmd_bug(self, message, args):
         """
-        `!bug [feedback or bug report]` : Opens a new ticket with your
-        feedback. Example: `!bug Beymax didn't understand me in a help session`
+        `$!bug [feedback or bug report]` : Opens a new ticket with your
+        feedback. Example: `$!bug $NAME didn't understand me in a help session`
         """
         content = ' '.join([args.message] + args.extra)
         async with ListDatabase('bugs.json') as bugs:
@@ -53,11 +53,11 @@ def EnableBugs(bot):
             )
             bugs.save()
 
-    @bot.add_command('!thread', Arg('bug', type=int, help="Bug ID"), aliases=['!bug:thread'])
+    @bot.add_command('thread', Arg('bug', type=int, help="Bug ID"), aliases=['bug:thread'])
     async def cmd_thread(self, message, args):
         """
-        `!thread <bug ID>` : Displays the full comment thread for a bug.
-        Example: `!thread 2`
+        `$!thread <bug ID>` : Displays the full comment thread for a bug.
+        Example: `$!thread 2`
         """
         async with ListDatabase('bugs.json') as bugs:
             if args.bug >= len(bugs):
@@ -84,15 +84,15 @@ def EnableBugs(bot):
                 )
 
     @bot.add_command(
-        '!comment',
+        'comment',
         Arg('bug', type=int, help="Bug ID"),
         Arg('comment', type='extra', help="Your comments"),
-        aliases=['!bug:comment']
+        aliases=['bug:comment']
     )
     async def cmd_comment(self, message, args):
         """
-        `!comment <bug ID> [Your comments]` : Adds your comments to the bug's
-        thread. Example: `!comment 2 The help system is working great!`
+        `$!comment <bug ID> [Your comments]` : Adds your comments to the bug's
+        thread. Example: `$!comment 2 The help system is working great!`
         """
         async with ListDatabase('bugs.json') as bugs:
             bugid = args.bug
@@ -128,14 +128,14 @@ def EnableBugs(bot):
                 bugs.save()
 
     @bot.add_command(
-        '!bug:status',
+        'bug:status',
         Arg('bug', type=int, help="Bug ID"),
         Arg('status', type='extra', help='New Status')
     )
     async def cmd_bug_status(self, message, args):
         """
-        `!bug:status <bug ID> <New status>` : Sets the status for the bug.
-        Example: `!bug:status 2 In Progress`
+        `$!bug:status <bug ID> <New status>` : Sets the status for the bug.
+        Example: `$!bug:status 2 In Progress`
         """
         async with ListDatabase('bugs.json') as bugs:
             bugid = args.bug
@@ -162,14 +162,14 @@ def EnableBugs(bot):
                 bugs.save()
 
     @bot.add_command(
-        '!bug:label',
+        'bug:label',
         Arg('bug', type=int, help='Bug ID'),
         Arg('label', type='extra', help="New Label")
     )
     async def cmd_bug_label(self, message, args):
         """
-        `!bug:label <bug ID> <New label>` : Sets the label for a bug report.
-        Example: `!bug:label 2 Beymax's help system`
+        `$!bug:label <bug ID> <New label>` : Sets the label for a bug report.
+        Example: `$!bug:label 2 $NAME's help system`
         """
         async with ListDatabase('bugs.json') as bugs:
             bugid = args.bug
@@ -199,14 +199,14 @@ def EnableBugs(bot):
                 bugs.save()
 
     @bot.add_command(
-        '!bug:user',
+        'bug:user',
         Arg('bug', type=int, help="Bug ID"),
         Arg('user', type=UserType(bot), help="Username or ID")
     )
     async def cmd_bug_user(self, message, args):
         """
-        `!bug:user <bug ID> <Username or ID>` : Subscribes a user to a bug report.
-        Example: `!bug:user 2 310283932341895169` (that's my user ID)
+        `$!bug:user <bug ID> <Username or ID>` : Subscribes a user to a bug report.
+        Example: `$!bug:user 2 $ID` (that's my user ID)
         """
         async with ListDatabase('bugs.json') as bugs:
             bugid = args.bug
@@ -222,7 +222,7 @@ def EnableBugs(bot):
                     "You have been added to the following issue by %s:\n"
                     '[%d] [%s] : %s\n'
                     'If you would like to unsubscribe from this issue, '
-                    'type `!bug:unsubscribe %d`'% (
+                    'type `$!bug:unsubscribe %d`'% (
                         str(message.author),
                         bugid,
                         bugs[bugid]['status'],
@@ -237,13 +237,13 @@ def EnableBugs(bot):
                 bugs.save()
 
     @bot.add_command(
-        '!bug:unsubscribe',
+        'bug:unsubscribe',
         Arg('bug', type=int, help="Bug ID")
     )
     async def cmd_bug_unsubscribe(self, message, args):
         """
-        `!bug:unsubscribe <bug ID>` : Unsubscribes yourself from a bug report.
-        Example: `!bug:unsubscribe 2`
+        `$!bug:unsubscribe <bug ID>` : Unsubscribes yourself from a bug report.
+        Example: `$!bug:unsubscribe 2`
         """
         async with ListDatabase('bugs.json') as bugs:
             bugid = args.bug
