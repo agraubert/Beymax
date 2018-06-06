@@ -202,7 +202,7 @@ def EnableOverwatch(bot):
             for uid in state:
                 state[uid]['rating'] = 0
                 state[uid]['tier'] = 'Unranked'
-            await sate.save_to('stats_interim.json')
+            await state.save_to('stats_interim.json')
         if os.path.isfile('stats.json'):
             os.remove('stats.json')
 
@@ -214,7 +214,7 @@ def EnableOverwatch(bot):
         Example: `$!_owinit 01/02/2003`
         """
         async with Database('metadata.json') as meta:
-            meta['overwatch_end_date'] = args.timestamp()
+            meta['overwatch_end_date'] = args.end.timestamp()
             meta.save()
         shutil.move('stats_interim.json', 'stats.json')
         body = "The new Overwatch season has started! Here are the users I'm "
