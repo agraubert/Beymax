@@ -3,6 +3,8 @@ from collections import namedtuple
 from datetime import datetime
 import re
 
+mention_pattern = re.compile(r'<@\D?(\d+)>')
+
 def ljoin(args, op='or'):
     output = ', '.join(args[:-1])
     if len(args) > 2:
@@ -83,13 +85,19 @@ class ChannelType(ServerComponentType):
         )
 
 class UserType(ServerComponentType):
-    def __init__(self, client, by_name=True, by_id=True, by_nick=True, nullable=False):
+    def __init__(self, client, by_name=True, by_id=True, by_nick=True, nullable=False, mentions=True):
         super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
         self.nick = by_nick
+        self.mentions = mentions
         if self.nick:
             self.fields.append('nick')
 
     def __call__(self, arg):
+        if self.mentions:
+            result = mention_pattern.match(arg)
+            if result:
+                arg = result.group(1)
+                print("Matched Mention")
         member = self.search_iter(
             [member for server in self.servers() for member in server.members],
             arg
