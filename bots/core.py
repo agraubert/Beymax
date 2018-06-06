@@ -10,6 +10,9 @@ import sys
 import threading
 import shlex
 from functools import wraps
+import re
+
+mention_pattern = re.compile(r'<@.*?(\d+)>')
 
 class CoreBot(discord.Client):
     nt = 0
@@ -372,6 +375,20 @@ class CoreBot(discord.Client):
                 content = content.replace(key, interp[key])
         except:
             print("Interpolation Error: ", {**interp})
+        for match in mention_pattern.finditer(content):
+            uid = match.group(1)
+            do_sub = isinstance(destination, discord.User) and destination.id != uid
+            do_sub |= hasattr(destination, 'server') and self.get_user(uid, destination.server) is None
+            do_sub |= hasattr(destination, 'recipients') and uid not in {user.id for user in destination.recipients}
+            if do_sub:
+                # have to replace the mention with a `@Username`
+                user = self.get_user(uid)
+                if user is not None:
+                    content = content.replace(
+                        match.group(0),
+                        '`@%s#%s`' % (user.name, str(user.discriminator)),
+                        1
+                    )
         body = content.split(delim)
         tmp = []
         last_msg = None

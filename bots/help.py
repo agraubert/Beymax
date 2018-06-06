@@ -421,9 +421,6 @@ def EnableHelp(bot):
         prompt = await self.send_message(
             message.author,
             "Hello! I am $NAME, your personal ~~healthcare~~ **server** companion.\n"
-            "The help system is currently being rebuilt from scratch, but in the"
-            " meantime, I hope that my simplified help interface can be of some"
-            " assistance.\n"
             "Simply type the name of a command that you need help with, or type "
             "`all` to list all of them.\n"
             "What can I help you with?"

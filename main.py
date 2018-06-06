@@ -93,7 +93,6 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                 "introduction on what I can do? (Yes/No)"
             )
             response = await self.wait_for_message(
-                timeout=60,
                 channel=message.channel,
                 # check=lambda x:x.content.lower() in {'yes', 'no'}
             )
