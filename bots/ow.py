@@ -1,12 +1,13 @@
 from .core import CoreBot
 from .utils import Database, get_attr, getname
-from .args import Arg
+from .args import Arg, DateType
 import os
 import requests
 from requests.exceptions import RequestException
 import asyncio
 import random
 import shutil
+from datetime import datetime
 
 random.seed()
 
@@ -79,11 +80,12 @@ def EnableOverwatch(bot):
 
     @bot.add_task(3600) # 1 hour
     async def update_overwatch(self):
-        """
-        `$!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
-        """
         if os.path.isfile('stats_interim.json'):
             return
+        async with Database('metadata.json') as meta:
+            if 'overwatch_end_date' in meta and datetime.today() >= datetime.fromtimestamp(meta['overwatch_end_date']):
+                self.dispatch('ow_season_end')
+                return
         async with Database('stats.json') as state:
             for uid, data in state.items():
                 tag = data['tag']
@@ -117,6 +119,9 @@ def EnableOverwatch(bot):
 
     @bot.add_command('owupdate', empty=True)
     async def cmd_update(self, message, content):
+        """
+        `$!owupdate` : Manually triggers an overwatch stats update (normally once per hour)
+        """
         self.dispatch('task:update_overwatch')
 
     @bot.add_command('ow', Arg('username', help="Your battle#tag"))
@@ -152,11 +157,8 @@ def EnableOverwatch(bot):
             raise
 
 
-    @bot.add_command('_owreset', empty=True)
-    async def cmd_owreset(self, message, content):
-        """
-        `$!_owreset` : Triggers the overwatch end-of-season message and sets stats tracking to interim mode
-        """
+    @bot.subscribe('ow_season_end')
+    async def cmd_owreset(self, event):
         async with Database('stats.json') as state:
             if len(state):
                 for uid, data in state.items():
@@ -205,11 +207,15 @@ def EnableOverwatch(bot):
             os.remove('stats.json')
 
 
-    @bot.add_command('_owinit', empty=True)
-    async def cmd_owinit(self, message, content):
+    @bot.add_command('_owinit', Arg('end', type=DateType, help="Season end date"))
+    async def cmd_owinit(self, message, args):
         """
-        `$!_owinit` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
+        `$!_owinit <End Date MM/DD/YYYY>` : Triggers the overwatch start-of-season message and takes stats tracking out of interim mode
+        Example: `$!_owinit 01/02/2003`
         """
+        async with Database('metadata.json') as meta:
+            meta['overwatch_end_date'] = args.timestamp()
+            meta.save()
         shutil.move('stats_interim.json', 'stats.json')
         body = "The new Overwatch season has started! Here are the users I'm "
         body += "currently tracking statistics for:\n"

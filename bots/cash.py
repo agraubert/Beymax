@@ -83,7 +83,7 @@ def EnableCash(bot):
     )
     async def cmd_project(self, message, args):
         """
-        `$!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY | $<goal amount> | <Venmo username>`
+        `$!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY> | $<goal amount> | <Venmo username>`
         Starts a new fundraising project.
         Example: `$!_project server costs for $NAME | bots 01/02/2003 | $5 | @user-name`
         """
