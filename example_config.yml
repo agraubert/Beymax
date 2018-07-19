@@ -25,3 +25,11 @@
 ## Set disable_delimiters to true if you want to override command delimiters when use_shlex is true
 ## If a command uses a specific delimiter, ignore it, and use arguments as split by shlex
 # disable_delimiters: true
+
+## Set prefix to be the prefix recognized by Beymax for commands
+## Any messages starting with this string will be checked against the command list
+# prefix: "!"
+
+## Set name to be the username you wish to use for Beymax
+## Beymax will change its username if this value has changed since the last startup
+# name: Beymax

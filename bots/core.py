@@ -1,4 +1,4 @@
-from .utils import load_db, save_db, Database, getname, validate_permissions
+from .utils import load_db, save_db, Database, getname, validate_permissions, Interpolator
 from .args import Arg, Argspec, UserType
 import discord
 from discord.compat import create_task
@@ -10,6 +10,9 @@ import sys
 import threading
 import shlex
 from functools import wraps
+import re
+
+mention_pattern = re.compile(r'<@.*?(\d+)>')
 
 class CoreBot(discord.Client):
     nt = 0
@@ -25,6 +28,13 @@ class CoreBot(discord.Client):
     special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
     special_order = []
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if os.path.exists('config.yml'):
+            with open('config.yml') as reader:
+                self.configuration = yaml.load(reader)
+            self.command_prefix = self.config_get('prefix', default='!')
+
     def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         if aliases is None:
             aliases = []
@@ -39,7 +49,7 @@ class CoreBot(discord.Client):
         def wrapper(func):
             @wraps(func)
             async def on_cmd(self, cmd, message, content):
-                if self.check_permissions_chain(cmd[1:], message.author)[0]:
+                if self.check_permissions_chain(self.strip_prefix(cmd), message.author)[0]:
                     print("Command in channel", message.channel, "from", message.author, ":", content)
                     if len(spec) or empty:
                         argspec = Argspec(cmd, *spec, **kwargs)
@@ -66,7 +76,7 @@ class CoreBot(discord.Client):
                             message.channel,
                             "I've encountered an error communicating with Discord."
                             " This may be a transient issue, but if it occurs again"
-                            " you should submit a bug report: `!bug <Discord Exception> %s`"
+                            " you should submit a bug report: `$!bug <Discord Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
                         raise
@@ -74,7 +84,7 @@ class CoreBot(discord.Client):
                         await self.send_message(
                             message.channel,
                             "I encountered unexpected error while processing your"
-                            " command. Please submit a bug report: `!bug <Python Exception> %s`"
+                            " command. Please submit a bug report: `$!bug <Python Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
                         raise
@@ -92,9 +102,11 @@ class CoreBot(discord.Client):
                          self.primary_server is None
                          else ""
                         ) +
-                        "To check your permissions, use the `!permissions` command"
+                        "To check your permissions, use the `$!permissions` command"
                     )
             for cmd in [command] + aliases:
+                if not cmd.startswith(self.command_prefix):
+                    cmd = self.command_prefix + cmd
                 on_cmd = self.subscribe(cmd)(on_cmd)
                 self.commands[cmd] = func.__doc__
             return on_cmd
@@ -168,6 +180,11 @@ class CoreBot(discord.Client):
                 raise TypeError("Bot is not callable")
         return self
 
+    def strip_prefix(self, command):
+        if command.startswith(self.command_prefix):
+            return command[len(self.command_prefix):]
+        return command
+
     def dispatch(self, event, *args, manual=False, **kwargs):
         self.nt += 1
         output = []
@@ -192,19 +209,16 @@ class CoreBot(discord.Client):
 
 
 
-    def config_get(self, *keys):
+    def config_get(self, *keys, default=None):
         obj = self.configuration
         for key in keys:
             if key in obj:
                 obj = obj[key]
             else:
-                return None
+                return default
         return obj
 
     async def on_ready(self):
-        if os.path.exists('config.yml'):
-            with open('config.yml') as reader:
-                self.configuration = yaml.load(reader)
         print("Connected to the following servers")
         if 'primary_server' in self.configuration:
             self.primary_server = discord.utils.get(
@@ -220,27 +234,7 @@ class CoreBot(discord.Client):
         first = True
         for server in list(self.servers):
             print(server.name, server.id)
-            if self.primary_server is not None and server.id != self.primary_server.id:
-                try:
-                    await self.send_message(
-                        discord.utils.get(
-                            server.channels,
-                            name='general',
-                            type=discord.ChannelType.text
-                        ),
-                        "Unfortunately, this instance of Beymax is not configured"
-                        " to run on multiple servers. Please contact the owner"
-                        " of this instance, or run your own instance of Beymax."
-                        " Goodbye!"
-                    )
-                except:
-                    pass
-                await self.leave_server(server)
-            elif self.primary_server is None:
-                if first:
-                    first = False
-                else:
-                    print("Warning: Joining to multiple servers is not supported behavior")
+            self.on_server_join(server)
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",
@@ -362,8 +356,39 @@ class CoreBot(discord.Client):
             await asyncio.wait(tasks)
         await self.close()
 
-    async def send_message(self, destination, content, *, delim='\n', quote='', **kwargs):
+    async def send_message(self, destination, content, *, delim='\n', quote='', interp=None, **kwargs):
         #built in chunking
+        if interp is None:
+            interp = Interpolator(self, destination)
+        elif interp is False:
+            interp = {}
+        elif isinstance(interp, Interpolator):
+            tmp = Interpolator(self, destination)
+            tmp.update(**interp)
+            interp = tmp
+        elif isinstance(interp, discord.Channel):
+            interp = Interpolator(self, interp)
+        elif not isinstance(interp, dict):
+            raise TypeError("Cannot infer interpolation settings from an object of type "+type(interp))
+        try:
+            for key in interp:
+                content = content.replace(key, interp[key])
+        except:
+            print("Interpolation Error: ", {**interp})
+        for match in mention_pattern.finditer(content):
+            uid = match.group(1)
+            do_sub = isinstance(destination, discord.User) and destination.id != uid
+            do_sub |= hasattr(destination, 'server') and self.get_user(uid, destination.server) is None
+            do_sub |= hasattr(destination, 'recipients') and uid not in {user.id for user in destination.recipients}
+            if do_sub:
+                # have to replace the mention with a `@Username`
+                user = self.get_user(uid)
+                if user is not None:
+                    content = content.replace(
+                        match.group(0),
+                        '`@%s#%s`' % (user.name, str(user.discriminator)),
+                        1
+                    )
         body = content.split(delim)
         tmp = []
         last_msg = None
@@ -377,6 +402,7 @@ class CoreBot(discord.Client):
                     destination,
                     msg,
                     delim=' ',
+                    interp=False,
                     **kwargs
                 )
             elif len(msg) > 1536 and delim=='\n':
@@ -386,6 +412,7 @@ class CoreBot(discord.Client):
                     destination,
                     msg,
                     delim='. ',
+                    interp=False,
                     **kwargs
                 )
             elif len(msg) > 1024:
@@ -546,9 +573,9 @@ class CoreBot(discord.Client):
                         name='general',
                         type=discord.ChannelType.text
                     ),
-                    "Unfortunately, this instance of Beymax is not configured"
+                    "Unfortunately, this instance of $NAME is not configured"
                     " to run on multiple servers. Please contact the owner"
-                    " of this instance, or run your own instance of Beymax."
+                    " of this instance, or run your own instance of $NAME."
                     " Goodbye!"
                 )
             except:
@@ -564,10 +591,10 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     bot.reserve_channel('dev')
 
-    @bot.add_command('!_task', Arg('task', type='extra', help='task_name'))
+    @bot.add_command('_task', Arg('task', type='extra', help='task_name'))
     async def cmd_task(self, message, args):
         """
-        `!_task <task name>` : Manually runs the named task
+        `$!_task <task name>` : Manually runs the named task
         """
         key = ' '.join([args.task] + args.extra)
         if not key.startswith('task:'):
@@ -581,57 +608,57 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "No such task"
             )
 
-    @bot.add_command('!_nt', empty=True)
+    @bot.add_command('_nt', empty=True)
     async def cmd_nt(self, message, content):
         await self.send_message(
             message.channel,
             '%d events have been dispatched' % self.nt
         )
 
-    @bot.add_command('!output-dev', empty=True)
+    @bot.add_command('output-dev', empty=True)
     async def cmd_dev(self, message, content):
         """
-        `!output-dev` : Any messages that would always go to general will go to testing grounds
+        `$!output-dev` : Any messages that would always go to general will go to testing grounds
         """
         self._channel_references = {k:v for k,v in self.channel_references.items()}
         self.channel_references = {k:self.fetch_channel('dev') for k in self.channel_references}
         await self.send_message(
             self.fetch_channel('dev'),
-            "Development mode enabled. All messages will be sent to testing grounds"
+            "Development mode enabled. I will send any messages which are not replies to $CHANNEL",
         )
 
-    @bot.add_command('!output-prod', empty=True)
+    @bot.add_command('output-prod', empty=True)
     async def cmd_prod(self, message, content):
         """
-        `!output-prod` : Restores normal message routing
+        `$!output-prod` : Restores normal message routing
         """
         self.channel_references = {k:v for k,v in self._channel_references.items()}
         await self.send_message(
             self.fetch_channel('dev'),
-            "Production mode enabled. All messages will be sent to general"
+            "Production mode enabled. All messages will be directed normally"
         )
 
     #Not using argparse API as it does not preserve whitespace
-    @bot.add_command('!_announce')
+    @bot.add_command('_announce')
     async def cmd_announce(self, message, content):
         """
-        `!_announce <message>` : Forces me to say the given message in general.
-        Example: `!_announce I am really cool`
+        `$!_announce <message>` : Forces me to say the given message in general.
+        Example: `$!_announce I am really cool`
         """
         await self.send_message(
             self.fetch_channel('general'),
-            message.content.strip().replace('!_announce', '')
+            message.content.strip().replace(self.command_prefix+'_announce', '', 1)
         )
 
-    @bot.add_command('!permissions', empty=True)
+    @bot.add_command('permissions', empty=True)
     async def cmd_perms(self, message, content):
         """
-        `!permissions` : Gets a list of commands you have permissions to use
+        `$!permissions` : Gets a list of commands you have permissions to use
         """
         chain = self.build_permissions_chain(message.author)
         cmds = []
         for command in sorted(self.commands):
-            (allow, rule) = self.check_permissions_chain(command[1:], message.author, chain)
+            (allow, rule) = self.check_permissions_chain(self.strip_prefix(command), message.author, chain)
             if allow:
                 cmds.append((
                     command,
@@ -647,19 +674,19 @@ def EnableUtils(bot): #prolly move to it's own bot
             body.append(
                 "You may have additional permissions granted to you by a role"
                 " but I cannot check those within a private chat. Try the"
-                " `!permissions` command in a server channel"
+                " `$!permissions` command in a server channel"
             )
         await self.send_message(
             message.author,
             '\n'.join(body)
         )
 
-    @bot.add_command('!ignore', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
+    @bot.add_command('ignore', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
     async def cmd_ignore(self, message, args):
         """
-        `!ignore <user id or user#tag>` : Ignore all commands by the given user
+        `$!ignore <user id or user#tag>` : Ignore all commands by the given user
         until the next time I'm restarted
-        Example: `!ignore Username#1234` Ignores all commands from Username#1234
+        Example: `$!ignore Username#1234` Ignores all commands from Username#1234
         """
         uid = args.user.id
         if uid in self.ignored_users:
@@ -695,7 +722,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                     await self.send_message(
                         general,
                         "%s has asked me to ignore %s. %s can no longer issue any commands"
-                        " until they have been `!pardon`-ed" % (
+                        " until they have been `$!pardon`-ed" % (
                             str(message.author),
                             str(user),
                             getname(user)
@@ -709,12 +736,12 @@ def EnableUtils(bot): #prolly move to it's own bot
             " to petition this decision." % (str(message.author))
         )
 
-    @bot.add_command('!pardon', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
+    @bot.add_command('pardon', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
     async def cmd_pardon(self, message, args):
         """
-        `!pardon <user id or user#tag>` : Pardons the user and allows them to issue
+        `$!pardon <user id or user#tag>` : Pardons the user and allows them to issue
         commands again.
-        Example: `!pardon Username#1234` pardons Username#1234
+        Example: `$!pardon Username#1234` pardons Username#1234
         """
         uid = args.user.id
         if uid not in self.ignored_users:
@@ -762,11 +789,11 @@ def EnableUtils(bot): #prolly move to it's own bot
             "your commands." % (str(message.author))
         )
 
-    @bot.add_command('!idof', Arg('query', type='extra', help="Entity to search for"))
+    @bot.add_command('idof', Arg('query', type='extra', help="Entity to search for"))
     async def cmd_idof(self, message, args):
         """
-        `!idof <entity>` : Gets a list of all known entities by that name
-        Example: `!idof general` would list all users, channels, and roles with that name
+        `$!idof <entity>` : Gets a list of all known entities by that name
+        Example: `$!idof general` would list all users, channels, and roles with that name
         """
         servers = [message.server] if message.server is not None else self.servers
         result = []

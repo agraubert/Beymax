@@ -17,16 +17,16 @@ def EnableCash(bot):
         raise TypeError("This function must take a CoreBot")
 
     @bot.add_command(
-        '!_payment',
+        '_payment',
         Arg('project', help="Project shorthand name"),
         Arg('user', help="Username or ID (use 0 for anonymous)"),
         Arg('amount', type=DollarType, help="Donation amount")
     )
     async def cmd_payment(self, message, args):
         """
-        `!_payment <project> <username or ID> $<amount>` : Records a user's payment on a project.
+        `$!_payment <project> <username or ID> $<amount>` : Records a user's payment on a project.
         Use `0` as the user ID for anonymous payments.
-        Example: `!_payment bots 310283932341895169 $5`
+        Example: `$!_payment bots $ID $5`
         """
         # cash : {project : {goal, current, title, contributions, notified, end, account}}
         async with Database('cash.json') as cash:
@@ -73,7 +73,7 @@ def EnableCash(bot):
                 cash.save()
 
     @bot.add_command(
-        '!_project',
+        '_project',
         Arg("project", type=ShorthandType, help="Project name (one word only)"),
         Arg("description", help="Project description"),
         Arg("end", type=DateType, help="Project end date (MM/DD/YYYY)"),
@@ -83,9 +83,9 @@ def EnableCash(bot):
     )
     async def cmd_project(self, message, args):
         """
-        `!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY | $<goal amount> | <Venmo username>`
+        `$!_project <Full project name> | <One word short name> | <End date MM/DD/YYYY> | $<goal amount> | <Venmo username>`
         Starts a new fundraising project.
-        Example: `!_project server costs for beymax and octavia | bots 01/02/2003 | $5 | @user-name`
+        Example: `$!_project server costs for $NAME | bots 01/02/2003 | $5 | @user-name`
         """
         #!_project full name | short name | end MM/DD/YY | $goal | venmo
         async with Database('cash.json') as cash:
@@ -135,23 +135,22 @@ def EnableCash(bot):
                 message.author,
                 "You have created the funding project `%s`. Currently, "
                 "you must manually notify me when you get paid. The command"
-                " for this is `!_payment`.\nFor example, if I paid you $10"
-                ", you would use `!_payment %s %s $10` \n(that number is my user id)."
+                " for this is `$!_payment`.\nFor example, if I paid you $10"
+                ", you would use `$!_payment %s $ID $10` \n(that number is my user id)."
                 " To get user IDs, you must be in development mode, then"
                 " right click on a user and select 'Copy ID'.\n"
                 "Use `0` as the user ID to record an anonymous payment" % (
                     short,
                     short,
-                    self.user.id,
                 )
             )
             cash.save()
 
-    @bot.add_command('!_project:end', Arg('project', help="Project shorthand name"))
+    @bot.add_command('_project:end', Arg('project', help="Project shorthand name"))
     async def cmd_end_project(self, message, args):
         """
-        `!_project:end <project short name>` : Ends fundraising for a project.
-        Example: `!project:end bots`
+        `$!_project:end <project short name>` : Ends fundraising for a project.
+        Example: `$!project:end bots`
         """
         async with Database('cash.json') as cash:
             project = args.project

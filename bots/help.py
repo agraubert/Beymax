@@ -407,9 +407,9 @@ def EnableHelp(bot):
 
     bot.help_sessions = {}
 
-    @bot.add_command('!ouch')
+    @bot.add_command('ouch')
     async def cmd_help(self, message, content):
-        """`!ouch` : Asks for my help"""
+        """`$!ouch` : Asks for my help"""
         # await self.send_message(
         #     message.author,
         #     "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"+
@@ -420,19 +420,16 @@ def EnableHelp(bot):
         # )
         prompt = await self.send_message(
             message.author,
-            "Hello! I am Beymax, your personal ~~healthcare~~ **server** companion.\n"
-            "The help system is currently being rebuilt from scratch, but in the"
-            " meantime, I hope that my simplified help interface can be of some"
-            " assistance.\n"
+            "Hello! I am $NAME, your personal ~~healthcare~~ **server** companion.\n"
             "Simply type the name of a command that you need help with, or type "
             "`all` to list all of them.\n"
             "What can I help you with?"
         )
         chain = self.build_permissions_chain(message.author)
         commands = {
-            cmd[1:]:trim(self.commands[cmd])
+            self.strip_prefix(cmd):trim(self.commands[cmd])
             for cmd in self.commands
-            if self.check_permissions_chain(cmd[1:], message.author, chain)
+            if self.check_permissions_chain(self.strip_prefix(cmd), message.author, chain)
         }
         response = await self.wait_for_message(
             author=message.author,

@@ -150,10 +150,10 @@ def EnableStory(bot):
     bot.reserve_channel('story')
     bot._pending_activity = set()
 
-    @bot.add_command('!games', empty=True)
+    @bot.add_command('games', empty=True)
     async def cmd_story(self, message, content):
         """
-        `!games` : Lists the available games
+        `$!games` : Lists the available games
         """
         games = [
             f[:-3] for f in os.listdir('games') if f.endswith('.z5')
@@ -168,7 +168,7 @@ def EnableStory(bot):
 
     def checker(self, message):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        return message.channel.id == self.fetch_channel('story').id and state['user'] != '~<IDLE>' and not message.content.startswith('!')
+        return message.channel.id == self.fetch_channel('story').id and state['user'] != '~<IDLE>' and not message.content.startswith(self.command_prefix)
 
     @bot.add_special(checker)
     async def state_router(self, message, content):
@@ -272,10 +272,10 @@ def EnableStory(bot):
                 await asyncio.sleep(0.5)
                 await self.delete_message(message)
 
-    @bot.add_command('!toggle-comments', empty=True)
+    @bot.add_command('toggle-comments', empty=True)
     async def cmd_toggle_comments(self, message, content):
         """
-        `!toggle-comments` : Toggles allowing spectator comments in the story_channel
+        `$!toggle-comments` : Toggles allowing spectator comments in the story_channel
         """
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
             if state['user'] != message.author.id:
@@ -296,11 +296,11 @@ def EnableStory(bot):
                 )
                 state.save()
 
-    @bot.add_command('!_start', Arg('game', help="The game to play"))
+    @bot.add_command('_start', Arg('game', help="The game to play"))
     async def cmd_start(self, message, args):
         """
-        `!_start <game name>` : Starts an interactive text adventure
-        Example: `!_start zork1`
+        `$!_start <game name>` : Starts an interactive text adventure
+        Example: `$!_start zork1`
         """
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
             if state['user'] == '~<IDLE>':
@@ -358,15 +358,15 @@ def EnableStory(bot):
                     user,
                     "Congratulations on reaching level %d! Your weekly token payout"
                     " and maximum token balance have both been increased. To check"
-                    " your balance, type `!balance`" % player['level']
+                    " your balance, type `$!balance`" % player['level']
                 )
             players[user.id] = player
             players.save()
 
-    @bot.add_command('!balance', empty=True)
+    @bot.add_command('balance', empty=True)
     async def cmd_balance(self, message, content):
         """
-        `!balance` : Displays your current token balance
+        `$!balance` : Displays your current token balance
         """
         async with Database('players.json') as players:
             if message.author.id not in players:
@@ -387,14 +387,14 @@ def EnableStory(bot):
             )
 
     @bot.add_command(
-        '!bid',
+        'bid',
         Arg('amount', type=int, help='Amount of tokens to bid'),
         Arg('game', help="The game to play")
     )
     async def cmd_bid(self, message, args):
         """
-        `!bid <amount> <game>` : Place a bid to play the next game
-        Example: `!bid 1 zork1`
+        `$!bid <amount> <game>` : Place a bid to play the next game
+        Example: `$!bid 1 zork1`
         """
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
             if message.author.id == state['user']:
@@ -450,7 +450,7 @@ def EnableStory(bot):
                     await self.send_message(
                         message.channel,
                         "That is not a valid game. To see the list of games that"
-                        " are available, use `!games`"
+                        " are available, use `$!games`"
                     )
                     return
                 user = self.get_user(state['bids'][-1]['user'])
@@ -459,7 +459,7 @@ def EnableStory(bot):
                         user,
                         "You have been outbid by %s with a bid of %d tokens."
                         " If you would like to place another bid, use "
-                        "`!bid %d %s`" % (
+                        "`$!bid %d %s`" % (
                             getname(message.author),
                             bid,
                             bid+1,
@@ -482,15 +482,15 @@ def EnableStory(bot):
                     )
 
     @bot.add_command(
-        '!_payout',
+        '_payout',
         Arg('user', type=UserType(bot), help="Username or ID"),
         Arg('type', choices=['xp', 'tokens'], help="Type of payout (xp or tokens)"),
         Arg('amount', type=int, help="Amount to pay")
     )
     async def cmd_payout(self, message, args):
         """
-        `!_payout <user> <xp/tokens> <amount>` : Pays xp/tokens to the provided user
-        Example: !_payout some_user_id xp 12
+        `$!_payout <user> <xp/tokens> <amount>` : Pays xp/tokens to the provided user
+        Example: `$!_payout some_user_id xp 12`
         """
         async with Database('players.json') as players:
             if args.user.id not in players:
@@ -509,10 +509,10 @@ def EnableStory(bot):
                 )
             players.save()
 
-    @bot.add_command('!reup', empty=True)
+    @bot.add_command('reup', empty=True)
     async def cmd_reup(self, message, content):
         """
-        `!reup` : Extends your current game session by 1 day
+        `$!reup` : Extends your current game session by 1 day
         """
         async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
             async with Database('players.json') as players:
@@ -674,13 +674,13 @@ def EnableStory(bot):
                                 ' which, your game will automatically end\n'
                                 'Here are the controls for the story-mode system:\n'
                                 'Any message you type in the story channel will be interpreted'
-                                ' as input to the game **unless** your message starts with `!`'
+                                ' as input to the game **unless** your message starts with `$!`'
                                 ' (my commands)\n'
-                                '`!reup` : Use this command to add a day to your game session\n'
+                                '`$!reup` : Use this command to add a day to your game session\n'
                                 'This costs 1 token, and the cost will increase each time\n'
-                                '`!toggle-comments` : Use this command to toggle permissions in the story channel\n'
+                                '`$!toggle-comments` : Use this command to toggle permissions in the story channel\n'
                                 'Right now, anyone can send messages in the story channel'
-                                ' while you\'re playing. If you use `!toggle-comments`,'
+                                ' while you\'re playing. If you use `$!toggle-comments`,'
                                 ' nobody but you will be allowed to send messages.\n'
                                 '`$` : Simply type `$` to enter a blank line to the game\n'
                                 'That can be useful if the game is stuck or '
@@ -693,8 +693,8 @@ def EnableStory(bot):
                                 ' ones that I handle personally\n'
                                 'Lastly, if you want to make a comment in the channel'
                                 ' without me forwarding your message to the game, '
-                                'simply start the message with `! `, for example:'
-                                ' `! Any ideas on how to unlock this door?`'
+                                'simply start the message with `$!`, for example:'
+                                ' `$! Any ideas on how to unlock this door?`'
                             )
                             await self.send_message(
                                 self.fetch_channel('story'),
@@ -769,10 +769,10 @@ def EnableStory(bot):
             # print(week)
             week.save()
 
-    @bot.add_command('!timeleft', empty=True)
+    @bot.add_command('timeleft', empty=True)
     async def cmd_timeleft(self, message, content):
         """
-        `!timeleft` : Gets the remaining time for the current game
+        `$!timeleft` : Gets the remaining time for the current game
         """
         async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
             if state['user'] == '~<IDLE>':
@@ -801,11 +801,11 @@ def EnableStory(bot):
                     )
                 )
 
-    @bot.add_command('!highscore', Arg('game', help="The game to get the highscore of"))
+    @bot.add_command('highscore', Arg('game', help="The game to get the highscore of"))
     async def cmd_highscore(self, message, args):
         """
-        `!highscore <game>` : Gets the current highscore for that game
-        Example: `!highscore zork1`
+        `$!highscore <game>` : Gets the current highscore for that game
+        Example: `$!highscore zork1`
         """
         async with Database('scores.json') as scores:
             if args.game in scores:
@@ -847,6 +847,8 @@ def EnableStory(bot):
                     payout = players[user.id]['level']
                     if players[user.id]['balance'] < 20*players[user.id]['level']:
                         payout *= 2
+                    elif players[user.id]['balance'] > 100*players[user.id]['level']:
+                        payout //= 10
                     players[uid]['balance'] += payout
                     if 'active' in week[uid] or uid in self._pending_activity:
                         xp.append([user, 5])
@@ -882,7 +884,7 @@ def EnableStory(bot):
                     await self.send_message(
                         self.get_user(state['user']),
                         "Your current game of %s is about to expire. If you wish to extend"
-                        " your game session, you can `!reup` at a cost of %d tokens,"
+                        " your game session, you can `$!reup` at a cost of %d tokens,"
                         " which will grant you an additional day" % (
                             state['game'],
                             state['reup'] if 'reup' in state else 1
@@ -895,7 +897,7 @@ def EnableStory(bot):
                     await self.send_message(
                         self.get_user(state['user']),
                         "Your current game of %s will expire in less than 1 day. If you"
-                        " wish to extend your game session, you can `!reup` at a cost of"
+                        " wish to extend your game session, you can `$!reup` at a cost of"
                         " %d tokens, which will grant you an additional day" % (
                             state['game'],
                             state['reup'] if 'reup' in state else 1
