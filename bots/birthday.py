@@ -51,7 +51,7 @@ def EnableBirthday(bot):
                 if today.day == day and today.month == month:
                     await self.send_message(
                         self.fetch_channel('general'),
-                        "@everyone Today is %s's **%s** birthday!" % (
+                        "@here Today is %s's **%s** birthday!" % (
                             get_attr(self.get_user(uid), 'mention', 'Someone'),
                             postfix(str(today.year - data['year']))
                         )

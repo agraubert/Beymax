@@ -52,7 +52,7 @@ def EnableCash(bot):
                 )
                 await self.send_message(
                     self.fetch_channel('general'),
-                    '@everyone %s has generously donated $%0.2f towards %s, which puts us'
+                    '@here %s has generously donated $%0.2f towards %s, which puts us'
                     ' at %.0f%% of the $%d goal.\n'
                     'There is $%0.2f left to raise by %d/%d/%d\n'
                     'If you would like to donate, '

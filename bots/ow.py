@@ -108,7 +108,7 @@ def EnableOverwatch(bot):
                             body += '\n'+state[uid]['avatar']
                         if currentRank >= 4:
                             # Ping the channel for anyone who reached platinum or above
-                            body = body.replace('Everyone', '@everyone')
+                            body = body.replace('Everyone', '@here')
                         await self.send_message(
                             self.fetch_channel('general'), #for now
                             body
