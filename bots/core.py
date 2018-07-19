@@ -234,7 +234,7 @@ class CoreBot(discord.Client):
         first = True
         for server in list(self.servers):
             print(server.name, server.id)
-            self.on_server_join(server)
+            await self.on_server_join(server)
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",
