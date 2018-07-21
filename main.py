@@ -6,7 +6,7 @@ from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
-from bots.story import EnableStory
+from bots.games import EnableGames
 from bots.args import Arg
 import discord
 import asyncio
@@ -55,7 +55,7 @@ def select_status():
 
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
-    beymax = EnableStory(beymax) # Story needs priority on special message recognition
+    beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
