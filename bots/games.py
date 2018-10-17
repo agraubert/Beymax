@@ -3,7 +3,7 @@ from .utils import getname, Database, load_db, save_db, get_attr
 from .args import Arg, UserType
 import discord
 import asyncio
-# import os
+import os
 # import subprocess
 # import queue
 # import threading
@@ -632,7 +632,7 @@ def EnableGames(bot):
             now = time.time()
             if state['user'] != '~<IDLE>' and now - state['time'] >= 172800: # 2 days
                 user = self.get_user(state['user'])
-                self.dispatch('endgame', user, user)
+                self.dispatch('endgame', user)
                 return
             elif state['user'] != '~<IDLE>' and now - state['time'] >= 151200: # 6 hours left
                 if 'notified' not in state or state['notified'] == 'first':
