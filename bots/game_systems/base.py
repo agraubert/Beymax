@@ -290,14 +290,14 @@ class Phase(object):
         if user is None:
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
-                "Turn order is no longer enforced. All players may not interact freely"
+                "Turn order is no longer enforced. All players may now interact freely"
             )
         else:
-            await self.next_turn(user, self.turn)
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
                 "It is now %s's turn" % user.mention
             )
+            await self.next_turn(user, self.turn)
         self.turn = user
 
     async def next_turn(self, new, old):
@@ -414,6 +414,10 @@ class PhasedGame(GameSystem):
         self.phase_map = {**phases}
         self._defer_join = []
         self._defer_leave = []
+        self.players = []
+
+    def is_playing(self, user):
+        return user in self.players
 
     async def _activate_default(self):
         if self.active_phase is None and 'default' in self.phase_map:
@@ -437,6 +441,14 @@ class PhasedGame(GameSystem):
             await self.on_before_main()
         self.active_phase = next_phase
         await self.active_phase.before_phase()
+        self._defer_join = [
+            user for user in self._defer_join
+            if not self.active_phase.on_join(user)
+        ]
+        self._defer_leave = [
+            user for user in self._defer_leave
+            if not self.active_phase.on_leave(user)
+        ]
 
     async def on_before_main(self):
         """

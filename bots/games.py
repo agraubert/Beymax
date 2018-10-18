@@ -99,7 +99,6 @@ def EnableGames(bot):
         Can only be used if you are the host of the current game
         Example: `$!invite $NAME` : Invites me to join your game
         """
-        print("Aqcuiring state lock")
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
             print("INVITE")
             if state['user'] == '~<IDLE>':
@@ -114,6 +113,13 @@ def EnableGames(bot):
                     "(who had the winning `$!bid` can invite players)"
                 )
             else:
+                if self._game_system is None:
+                    await restore_game(self)
+                if self._game_system.is_playing(args.user):
+                    return await self.send_message(
+                        message.channel,
+                        "%d is already playing this game" % getname(args.user)
+                    )
                 if 'invites' not in state:
                     state['invites'] = [args.user.id]
                 elif args.user.id not in state['invites']:
