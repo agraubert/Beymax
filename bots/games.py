@@ -10,8 +10,10 @@ import os
 # from string import printable
 import time
 # import re
+import traceback
 from math import ceil, floor
 
+from .game_systems.base import GameSystem, GameError, GameEndException, JoinLeaveProhibited
 from .game_systems.story import StorySystem
 
 
@@ -19,18 +21,253 @@ from .game_systems.story import StorySystem
 # def avg(n):
 #     return sum(n)/len(n)
 
+# Games overhaul / notes:
+
+SYSTEMS = [StorySystem]
+
+
+# New commands:
+# !invite @user : bidder invites user to game
+# !join : Invitee accepts invitation to join game (dispatch on_join)
+# !leave : Player leaves game (dispatch on_leave). If bidder leaves, dispatch on_end instead
+
+# Enable games adds the following commands, events, and tasks
+# !games :
+
 def EnableGames(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
     bot.reserve_channel('games')
     bot._pending_activity = set()
+    bot._game_system = None
 
     def listgames():
-        for system in [StorySystem]:
-            sysname, games = system.query()
-            for game in games:
-                yield game, sysname, system
+        for system in SYSTEMS:
+            for game in system.games():
+                yield game, system.name, system
+
+    async def restore_game(self):
+        state = load_db('game.json', {'user':'~<IDLE>'})
+        if state['user'] != '~<IDLE>' and self._game_system is None:
+            await self.send_message(
+                self.fetch_channel('games'),
+                "The game has been interrupted. "
+                "Please wait while I resume the previous game"
+            )
+            try:
+                self._game_system = await {
+                    game:system
+                    for game, sysname, system in listgames()
+                }[state['game']].restore(self, state['game'])
+                await self._game_system.on_init()
+                await self._game_system.on_restore(
+                    self.get_user(state['user'])
+                )
+                await self._game_system.on_ready()
+            except GameError:
+                await self.send_message(
+                    self.fetch_channel('games'),
+                    "I was unable to restore the previous state. "
+                    "The current game will be refunded"
+                )
+                await self.send_message(
+                    self.fetch_channel('bugs'),
+                    traceback.format_exc(),
+                    quote='```'
+                )
+                self.dispatch('endgame', 'hard')
+                raise
+            except:
+                await self.send_message(
+                    self.fetch_channel('games'),
+                    "I was unable to restore the previous state. "
+                    "The current game will be refunded"
+                )
+                await self.send_message(
+                    self.fetch_channel('bugs'),
+                    traceback.format_exc(),
+                    quote='```'
+                )
+                self.dispatch('endgame', 'critical')
+                raise
+
+    @bot.add_command('invite', Arg('user', type=UserType(bot), help="Username, nickname, or ID of user"))
+    async def cmd_invite(self, message, args):
+        """
+        `$!invite <user>` : Invites the given user to join your game.
+        Can only be used if you are the host of the current game
+        Example: `$!invite $NAME` : Invites me to join your game
+        """
+        print("Aqcuiring state lock")
+        async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            print("INVITE")
+            if state['user'] == '~<IDLE>':
+                await self.send_message(
+                    message.channel,
+                    "There are no games in progress. You can start one with `$!bid`"
+                )
+            elif state['user'] != message.author.id:
+                await self.send_message(
+                    message.channel,
+                    "You are not the host of the current game. Only the host "
+                    "(who had the winning `$!bid` can invite players)"
+                )
+            else:
+                if 'invites' not in state:
+                    state['invites'] = [args.user.id]
+                elif args.user.id not in state['invites']:
+                    state['invites'].append(args.user.id)
+                await self.send_message(
+                    args.user,
+                    '%s has invited you to play %s. Use `$!join` to accept the '
+                    'invite and join the game.' % (
+                        message.author.mention,
+                        state['game']
+                    )
+                )
+                state.save()
+                await self.send_message(
+                    message.channel,
+                    "Invite sent to %s" % args.user.mention
+                )
+
+    @bot.add_command('join', empty=True)
+    async def cmd_join(self, message, content):
+        """
+        `$!join` : Joins the current game, if you've been invited
+        """
+        async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            if state['user'] == '~<IDLE>':
+                await self.send_message(
+                    message.channel,
+                    "There are no games in progress. You can start one with `$!bid`"
+                )
+            elif 'invites' not in state or message.author.id not in state['invites']:
+                await self.send_message(
+                    message.channel,
+                    "You have not been invited to play this game"
+                )
+            else:
+                state['invites'].remove(message.author.id)
+                state.save()
+                await self.send_message(
+                    message.channel,
+                    "Attempting to join the game..."
+                )
+                if self._game_system is None:
+                    await restore_game(self)
+                try:
+                    await self._game_system.on_join(message.author)
+                except JoinLeaveProhibited:
+                    await self.send_message(
+                        message.channel,
+                        "The current game prohibits new players from joining the game"
+                    )
+                except GameEndException:
+                    print(traceback.format_exc())
+                    await self.send_message(
+                        self.fetch_channel('games'),
+                        "Encountered a critical error while adding a new player."
+                        " The current game will be refunded"
+                    )
+                    self.dispatch('endgame', 'hard')
+                except:
+                    print(traceback.format_exc())
+                    await self.send_message(
+                        self.fetch_channel('games'),
+                        "Encountered an error while adding a new player"
+                    )
+                else:
+                    await self.send_message(
+                        message.channel,
+                        "The game has processed your request to join. "
+                        "Use `$!leave` to leave the game"
+                    )
+
+
+    @bot.add_command('leave', empty=True)
+    async def cmd_leave(self, message, content):
+        """
+        `$!leave` : Leaves the current game, if you're playing.
+        If you are the host of the game, leaving will end the game
+        """
+        async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            print("LEAVING GAME")
+            if state['user'] == '~<IDLE>':
+                await self.send_message(
+                    message.channel,
+                    "There are no games in progress. You can start one with `$!bid`"
+                )
+            else:
+                if self._game_system is None:
+                    await restore_game(self)
+                if not self._game_system.is_playing(message.author):
+                    await self.send_message(
+                        message.channel,
+                        "You are not playing this game"
+                    )
+                else:
+                    if message.author.id == state['user']:
+                        await self.send_message(
+                            message.channel,
+                            "You are the host of the current game. If you leave,"
+                            " the game will end. Do you still want to leave the"
+                            " game? (Yes/No)"
+                        )
+                        while True:
+                            response = await self.wait_for_message(
+                                timeout=60,
+                                author=message.author,
+                                channel=message.channel
+                            )
+                            if response is None:
+                                await self.send_message(
+                                    message.channel,
+                                    "%s, if you still want to leave the game, "
+                                    "you'll have to use `$!leave` again" % getname(message.author)
+                                )
+                                return
+                            elif response.content.lower().strip() == 'no':
+                                await self.send_message(
+                                    message.channel,
+                                    "Okay, %s. You will still remain in the game" % getname(message.author)
+                                )
+                                return
+                            elif response.content.lower().strip() == 'yes':
+                                await self.send_message(
+                                    self.fetch_channel('games'),
+                                    "Ending the game. The host, %s, has left" % message.author.mention
+                                )
+                                return self.dispatch('endgame')
+                            await self.send_message(
+                                message.channel,
+                                "I didn't understand your response. %s, would you"
+                                " like to quit your game? (Yes/No)" % message.author.mention
+                            )
+                    else:
+                        try:
+                            await self._game_system.on_leave(message.author)
+                        except JoinLeaveProhibited:
+                            await self.send_message(
+                                message.channel,
+                                "The current game prohibits players from leaving the game"
+                            )
+                        except GameEndException:
+                            print(traceback.format_exc())
+                            await self.send_message(
+                                self.fetch_channel('games'),
+                                "Encountered a critical error while removing a player."
+                                " The current game will be refunded"
+                            )
+                            self.dispatch('endgame', 'hard')
+                        except:
+                            print(traceback.format_exc())
+                            await self.send_message(
+                                self.fetch_channel('games'),
+                                "Encountered an error while removing a player"
+                            )
+
 
     @bot.add_command('games', empty=True)
     async def cmd_story(self, message, content):
@@ -50,32 +287,42 @@ def EnableGames(bot):
 
     def checker(self, message):
         state = load_db('game.json', {'user':'~<IDLE>'})
-        return message.channel.id == self.fetch_channel('games').id and state['user'] != '~<IDLE>' and not message.content.startswith(self.command_prefix)
+        return (
+            message.channel == self.fetch_channel('games') and
+            (not message.content.startswith(self.command_prefix)) and
+            state['user'] != '~<IDLE>'
+        )
 
     @bot.add_special(checker)
     async def state_router(self, message, content):
         # Routes messages depending on the game state
         # if not allowed:
         state = load_db('game.json', {'user':'~<IDLE>'})
-        if state['user'] != '~<IDLE>' and not hasattr(self, 'game_system') and self.game_system is not None:
-            await self.send_message(
-                self.fetch_channel('games'),
-                "The game has been interrupted. "
-                "Please wait while I resume the previous game"
-            )
-            self.game_system = await {
-                game:system
-                for game, sysname, system in listgames()
-            }[state['game']].restore(self)
-            if self.game_system is None:
+        if state['user'] != '~<IDLE>' and self._game_system is None:
+            await restore_game(self)
+        if self._game_system.is_playing(message.author):
+            try:
+                await self._game_system.on_input(
+                    message.author,
+                    message.channel,
+                    message
+                )
+            except GameEndException:
                 await self.send_message(
                     self.fetch_channel('games'),
-                    "I was unable to restore the previous state. "
-                    "The current game will be refunded"
+                    "The game encountered an irrecoverable error."
+                    " I will refund you for the current game"
                 )
-                self.dispatch('endgame', self.get_user(state['user']))
-        if self.game_system.is_playing(message.author):
-            await self.game_system.on_message(message, content)
+                msg = traceback.format_exc()
+                await self.send_message(
+                    self.fetch_channel('bugs'),
+                    msg,
+                    quote='```'
+                )
+                print(msg)
+                self.dispatch('endgame', 'hard')
+            except:
+                print(traceback.format_exc())
         elif 'restrict' in state and state['restrict']:
             await self.send_message(
                 message.author,
@@ -337,7 +584,7 @@ def EnableGames(bot):
                         message.channel,
                         "You are not currently hosting a game"
                     )
-                elif 'played' in state and not state['played']:
+                elif not (self._game_system is None or self._game_system.played):
                     await self.send_message(
                         message.channel,
                         "You should play your game first"
@@ -362,11 +609,11 @@ def EnableGames(bot):
                     state.save()
 
     @bot.subscribe('endgame')
-    async def end_game(self, evt, user):
-        endgame = False
+    async def end_game(self, evt, hardness='soft'):
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            user = self.get_user(state['user'])
             async with Database('players.json') as players:
-                if self.game_system is None or ('played' in state and not state['played']):
+                if self._game_system is None or not self._game_system.played:
                     await self.send_message(
                         self.fetch_channel('games'),
                         "You quit your game without playing. "
@@ -375,18 +622,50 @@ def EnableGames(bot):
                         )
                     )
                     players[user.id]['balance'] += state['refund']
-                elif hasattr(self.game_system, 'startgame'):
-                    endgame = True
+                elif hardness != 'soft':
+                    await self.send_message(
+                        self.fetch_channel('games'),
+                        "You are being refunded %d tokens."
+                        " I apologize for the inconvenience"
+                    )
+                    players[user.id]['balance'] += state['refund']
                 state.save()
                 players.save()
-        if endgame:
-            await self.game_system.endgame(user)
+        if hardness != 'critical' and self._game_system is not None:
+            try:
+                await self._game_system.on_end(user)
+            except:
+                msg = traceback.format_exc()
+                print(msg)
+                await self.send_message(
+                    self.fetch_channel('bugs'),
+                    msg,
+                    quote='```'
+                )
+                await self.send_message(
+                    self.fetch_channel('games'),
+                    "I encountered an error while ending the game. "
+                    "Scores and payouts may not have been processed. "
+                    "If you belive this to be the case, please make a `!bug` report"
+                )
         async with Database('game.json', {'user':'~<IDLE>'}) as state:
             state['bids'] = state['bids'] if 'bids' in state else []
             state['user'] = '~<IDLE>'
             for k in set(state) - {'user', 'bids'}:
                 del state[k]
-            del self.game_system
+            if self._game_system is not None:
+                try:
+                    await self._game_system.on_cleanup()
+                except:
+                    msg = traceback.format_exc()
+                    print(msg)
+                    print("Failed to clean the previous game")
+                    await self.send_message(
+                        self.fetch_channel('bugs'),
+                        msg,
+                        quote='```'
+                    )
+                self._game_system = None
             state.save()
             if 'bids' not in state or len(state['bids']) == 1:
                 await self.send_message(
@@ -398,7 +677,6 @@ def EnableGames(bot):
 
     @bot.subscribe('startgame')
     async def start_game(self, evt):
-        startgame = False
         async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
             async with Database('players.json') as players:
                 if state['user'] == '~<IDLE>':
@@ -426,15 +704,10 @@ def EnableGames(bot):
                             state['user'] = bid['user']
                             state['restrict'] = False
                             state['game'] = bid['game']
-                            state['played'] = False
                             state['refund'] = max(0, bid['amount'] - 1)
                             state['time'] = time.time()
                             state['bids'] = [{'user':'', 'amount':0, 'game':''}]
                             state.save()
-                            self.game_system = {
-                                game:system
-                                for game, sysname, system in listgames()
-                            }[bid['game']](self, bid['game'])
                             await self.send_message(
                                 user,
                                 'You have up to 2 days to finish your game, after'
@@ -445,10 +718,18 @@ def EnableGames(bot):
                                 ' (my commands)\n'
                                 '`$!reup` : Use this command to add a day to your game session\n'
                                 'This costs 1 token, and the cost will increase each time\n'
+                                '`$!invite <user>` : Use this command to invite users to the game.'
+                                ' Note that not all games will allow players to join'
+                                ' or may only allow players to join at specific times\n'
+                                '`$!leave` : Use this command to leave the game.'
+                                ' As the host, this will force the game to end\n'
                                 '`$!toggle-comments` : Use this command to toggle permissions in the games channel\n'
                                 'Right now, anyone can send messages in the channel'
                                 ' while you\'re playing. If you use `$!toggle-comments`,'
                                 ' nobody but you will be allowed to send messages.'
+                                ' Note: even when other users are allowed to send'
+                                ' messages, the game will only process messages'
+                                ' from users who are actually playing'
                             )
                             await self.send_message(
                                 self.fetch_channel('games'),
@@ -458,13 +739,44 @@ def EnableGames(bot):
                                     bid['game']
                                 )
                             )
-                            startgame = True
-        if startgame:
-            await asyncio.sleep(2)
-            if hasattr(self.game_system, 'startgame'):
-                await self.game_system.startgame(user)
-            return
-        else:
+                            try:
+                                self._game_system = {
+                                    game:system
+                                    for game, sysname, system in listgames()
+                                }[bid['game']](self, bid['game'])
+                                await self._game_system.on_init()
+                                await self._game_system.on_start(user)
+                                await self._game_system.on_ready()
+                            except GameError:
+                                await self.send_message(
+                                    self.fetch_channel('games'),
+                                    "I was unable to initialize the game. "
+                                    "The current game will be refunded"
+                                )
+                                msg = traceback.format_exc()
+                                await self.send_message(
+                                    self.fetch_channel('bugs'),
+                                    msg,
+                                    quote='```'
+                                )
+                                print(msg)
+                                self.dispatch('endgame', 'hard')
+                                return
+                            except:
+                                await self.send_message(
+                                    self.fetch_channel('games'),
+                                    "I was unable to initialize the game. "
+                                    "The current game will be refunded"
+                                )
+                                msg = traceback.format_exc()
+                                await self.send_message(
+                                    self.fetch_channel('bugs'),
+                                    msg,
+                                    quote='```'
+                                )
+                                print(msg)
+                                self.dispatch('endgame', 'critical')
+                                return
             async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
                 state['user'] = '~<IDLE>'
                 state['transcript'] = []
@@ -647,7 +959,7 @@ def EnableGames(bot):
                     )
                     state['notified'] = 'second'
                     state.save()
-            elif ('played' not in state or state['played']) and state['user'] != '~<IDLE>' and now - state['time'] >= 86400: # 1 day left
+            elif (self._game_system is not None and self._game_system.played) and state['user'] != '~<IDLE>' and now - state['time'] >= 86400: # 1 day left
                 if 'notified' not in state:
                     await self.send_message(
                         self.get_user(state['user']),
@@ -660,6 +972,15 @@ def EnableGames(bot):
                     )
                     state['notified'] = 'first'
                     state.save()
-        if hasattr(self, 'game_system') and hasattr(self.game_system, 'check_game'):
-            await self.game_system.check_game()
+        if self._game_system is not None:
+            try:
+                await self._game_system.on_check()
+            except:
+                msg = traceback.format_exc()
+                print(msg)
+                await self.send_message(
+                    self.fetch_channel('bugs'),
+                    msg,
+                    quote='```'
+                )
     return bot

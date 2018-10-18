@@ -8,13 +8,15 @@ import asyncio
 import threading
 import time
 from ..utils import Database, load_db
+from .base import GameSystem, GameError, JoinLeaveProhibited, GameEndException
+from math import ceil, floor
 
 printable_set = set(printable)
 
 def avg(n):
     return sum(n)/len(n)
 
-class GameEnded(OSError):
+class BackgroundGameExit(GameError):
     pass
 
 more_patterns = [
@@ -89,11 +91,15 @@ class Player:
         if timeout is not None:
             print("The timeout parameter is deprecated")
         if self.proc.returncode is not None:
-            raise GameEnded()
+            raise BackgroundGameExit(
+                "Player exited with returncode %d" % self.proc.returncode
+            )
         try:
             content = [self.buffer.get(timeout=10)]
         except queue.Empty:
-            raise GameEnded()
+            raise BackgroundGameExit(
+                "No content in buffer"
+            )
         try:
             while not self.buffer.empty():
                 content.append(self.buffer.get(timeout=0.5))
@@ -129,195 +135,258 @@ class Player:
         return '\n'.join(line for line in content if len(line.rstrip()))
 
     def quit(self):
-        self.write('quit')
-        self.write('y')
         try:
-            self.proc.wait(1)
-        except:
-            self.proc.kill()
-        os.close(self.stdinRead)
-        os.close(self.stdinWrite)
-        os.close(self.stdoutRead)
-        os.close(self.stdoutWrite)
+            self.write('quit')
+            self.write('y')
+            try:
+                self.proc.wait(1)
+            except:
+                self.proc.kill()
+            os.close(self.stdinRead)
+            os.close(self.stdinWrite)
+            os.close(self.stdoutRead)
+            os.close(self.stdoutWrite)
+        except OSError:
+            pass
 
-class StorySystem(object):
+class StorySystem(GameSystem):
+    name = 'Interactive Story'
 
     def __init__(self, bot, game):
-        self.bot = bot
+        super().__init__(bot, game)
         self.player = Player(game)
+        self.state = {}
 
     @classmethod
-    def query(cls):
-        return (
-            'Interactive Story',
-            [f[:-3] for f in os.listdir('games') if f.endswith('.z5')]
-        )
+    def games(cls):
+        return [f[:-3] for f in os.listdir('games') if f.endswith('.z5')]
 
     @classmethod
-    async def restore(cls, bot):
+    async def restore(cls, bot, game):
         # Attempt to restore the game state
         # Return StorySystem if successful
         # Return None if unable to restore state
         try:
-            async with Database('game.json', {'user':'~<IDLE>'}) as state:
+            async with Database('story.json') as state:
+                if 'bidder' not in state:
+                    raise GameError("No primary player defined in state")
                 system = StorySystem(bot, state['game'])
+                system.state.update(state)
                 for msg in state['transcript']:
+                    print("Replaying", msg)
                     system.player.write(msg)
                     await asyncio.sleep(0.5)
-                    system.player.readchunk()
-                    if system.player.proc.returncode is None:
-                        return system
-        except:
-            pass
-        return None
+                    print(system.player.readchunk())
+                    if system.player.proc.returncode is not None:
+                        break
+                return system
+        except Exception as e:
+            raise GameEndException("Unable to restore") from e
+
+    @property
+    def played(self):
+        return (
+            'transcript' in self.state and
+            len(self.state['transcript'])
+        )
 
     def is_playing(self, user):
-        state = load_db('game.json', {'user':'~<IDLE>'})
-        return user.id == state['user']
+        return user.id in self.state['players']
 
-    async def on_message(self, message, content):
-        async with Database('game.json', {'user':'~<IDLE>'}) as state:
-            try:
-                content = message.content.strip().lower()
-                if content == 'save':
-                    await self.bot.send_message(
-                        self.bot.fetch_channel('games'),
-                        "Unfortunately, saved games are not supported by "
-                        "the story system at this time."
-                    )
-                elif content == 'score':
-                    self.player.write('score')
-                    self.player.readchunk()
-                    await self.bot.send_message(
-                        self.bot.fetch_channel('games'),
-                        'Your score is %d' % self.player.score
-                    )
-                    if self.player.proc.returncode is not None:
-                        await self.bot.send_message(
-                            self.bot.fetch_channel('games'),
-                            "The game has ended"
-                        )
-                        self.bot.dispatch('endgame', self.bot.get_user(state['user']))
-                elif content == 'quit':
-                    self.bot.dispatch('endgame', self.bot.get_user(state['user']))
-                else:
-                    unfiltered_len = len(content)
-                    content = ''.join(
-                        char for char in content if char in printable_set
-                    )
-                    if len(content) != unfiltered_len:
-                        await self.bot.send_message(
-                            self.bot.fetch_channel('games'),
-                            "I had to filter out part of your command. "
-                            "Here's what I'm actually sending to the game: "
-                            "`%s`" % content
-                        )
-                    if content == '$':
-                        content = '\n'
-                    state['played'] = True
-                    state['transcript'].append(content)
-                    state.save()
-                    self.player.write(content)
-                    await self.bot.send_message(
-                        self.bot.fetch_channel('games'),
-                        self.player.readchunk(),
-                        quote='```'
-                    )
-                    if self.player.proc.returncode is not None:
-                        await self.bot.send_message(
-                            self.bot.fetch_channel('games'),
-                            "The game has ended"
-                        )
-                        self.bot.dispatch('endgame', self.bot.get_user(state['user']))
-            except GameEnded:
+    async def on_input(self, user, channel, message):
+        try:
+            content = message.content.strip().lower()
+            print("PROCESSING INPUT", content)
+            if content == 'save':
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
-                    "It looks like this game has ended!"
+                    "Unfortunately, saved games are not supported by "
+                    "the story system at this time."
                 )
-                self.bot.dispatch('endgame', self.bot.get_user(state['user']))
-
-    async def startgame(self, user):
-        async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
-            state['transcript'] = []
-            await self.bot.send_message(
-                user,
-                'Here are the controls for the story-mode system:\n'
-                '`$` : Simply type `$` to enter a blank line to the game\n'
-                'That can be useful if the game is stuck or '
-                'if it ignored your last input\n'
-                'Some menus may ask you to type a space to continue.\n'
-                '`quit` : Quits the game in progress\n'
-                'This is also how you end the game if you finish it\n'
-                '`score` : View your score\n'
-                'Some games may have their own commands in addition to these'
-                ' ones that I handle personally\n'
-                'Lastly, if you want to make a comment in the channel'
-                ' without me forwarding your message to the game, '
-                'simply start the message with `$!`, for example:'
-                ' `$! Any ideas on how to unlock this door?`'
-            )
+            elif content == 'score':
+                self.player.write('score')
+                self.player.readchunk()
+                self.sate['score'] = self.player.score
+                await self.bot.send_message(
+                    self.bot.fetch_channel('games'),
+                    'Your score is %d' % self.player.score
+                )
+                if self.player.proc.returncode is not None:
+                    await self.bot.send_message(
+                        self.bot.fetch_channel('games'),
+                        "The game has ended"
+                    )
+                    self.bot.dispatch('endgame')
+            elif content == 'quit':
+                self.bot.dispatch('endgame')
+            else:
+                unfiltered_len = len(content)
+                content = ''.join(
+                    char for char in content if char in printable_set
+                )
+                if not len(content):
+                    await self.bot.send_message(
+                        self.bot.fetch_channel('games'),
+                        "Your message didn't contain any characters which could"
+                        " be parsed by the game"
+                    )
+                elif len(content) != unfiltered_len:
+                    await self.bot.send_message(
+                        self.bot.fetch_channel('games'),
+                        "I had to filter out part of your command. "
+                        "Here's what I'm actually sending to the game: "
+                        "`%s`" % content
+                    )
+                if content == '$':
+                    content = '\n'
+                self.state['transcript'].append(content)
+                self.player.write(content)
+                await self.bot.send_message(
+                    self.bot.fetch_channel('games'),
+                    self.player.readchunk(),
+                    quote='```'
+                )
+                if self.player.proc.returncode is not None:
+                    await self.bot.send_message(
+                        self.bot.fetch_channel('games'),
+                        "The game has ended"
+                    )
+                    self.bot.dispatch('endgame')
+        except BackgroundGameExit:
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
-                self.player.readchunk(),
-                quote='```'
+                "It looks like this game has ended!"
             )
+            self.bot.dispatch('endgame')
+        await self.save_state()
 
-    async def endgame(self, user):
-        async with Database('game.json', {'user':'~<IDLE>'}) as state:
-            async with Database('players.json') as players:
-                try:
-                    self.player.write('score')
-                    self.player.readchunk()
-                except GameEnded:
-                    pass
-                finally:
-                    self.player.quit()
-                async with Database('scores.json') as scores:
-                    if state['game'] not in scores:
-                        scores[state['game']] = []
-                    scores[state['game']].append([
-                        self.player.score,
-                        state['user']
-                    ])
-                    scores.save()
-                    modifier = avg(
-                        [score[0] for game in scores for score in scores[game]]
-                    ) / max(1, avg(
-                        [score[0] for score in scores[state['game']]]
-                    ))
-                norm_score = ceil(self.player.score * modifier)
-                norm_score += floor(
-                    len(state['transcript']) / 25 * min(
-                        modifier,
-                        1
-                    )
+    async def save_state(self):
+        async with Database('story.json') as state:
+            state.update(self.state)
+            state.save()
+
+    async def send_join_message(self, user):
+        await self.bot.send_message(
+            user,
+            'Here are the controls for the story-mode system:\n'
+            '`$` : Simply type `$` to enter a blank line to the game\n'
+            'That can be useful if the game is stuck or '
+            'if it ignored your last input\n'
+            'Some menus may ask you to type a space to continue.\n'
+            '`quit` : Quits the game in progress\n'
+            'This is also how you end the game if you finish it\n'
+            '`score` : View your score\n'
+            'Some games may have their own commands in addition to these'
+            ' ones that I handle personally\n'
+            'Lastly, if you want to make a comment in the channel'
+            ' without me forwarding your message to the game, '
+            'simply start the message with `$!`, for example:'
+            ' `$! Any ideas on how to unlock this door?`'
+        )
+
+    async def on_start(self, user):
+        self.state = {
+            'transcript': [],
+            'bidder': user.id,
+            'players': [user.id],
+            'game': self.game,
+            'score': 0
+        }
+        await self.save_state()
+        await self.send_join_message(user)
+        await self.bot.send_message(
+            self.bot.fetch_channel('games'),
+            self.player.readchunk(),
+            quote='```'
+        )
+
+
+    async def on_join(self, user):
+        await self.send_join_message(user)
+        self.state['players'].append(user.id)
+        await self.save_state()
+
+    async def on_leave(self, user):
+        await self.bot.send_message(
+            self.bot.fetch_channel('games'),
+            user.mention + " has left the game"
+        )
+        self.state['players'].remove(user.id)
+        await self.save_state()
+
+
+    async def on_end(self, user):
+        async with Database('players.json') as players:
+            try:
+                self.player.write('score')
+                self.player.readchunk()
+            except BackgroundGameExit:
+                pass
+            finally:
+                self.player.quit()
+            async with Database('scores.json') as scores:
+                if self.game not in scores:
+                    scores[self.game] = []
+                scores[self.game].append([
+                    self.player.score,
+                    self.state['bidder']
+                ])
+                scores.save()
+                modifier = avg(
+                    [score[0] for game in scores for score in scores[game]]
+                ) / max(1, avg(
+                    [score[0] for score in scores[self.game]]
+                ))
+            norm_score = ceil(self.player.score * modifier)
+            norm_score += floor(
+                len(self.state['transcript']) / 25 * min(
+                    modifier,
+                    1
                 )
-                if self.player.score > 0:
-                    norm_score = max(norm_score, 1)
+            )
+            if len(self.state['players']) > 1:
+                norm_score *= 1.05 / len(self.state['players'])
+            if self.player.score > 0:
+                norm_score = max(norm_score, 1)
+            await self.bot.send_message(
+                self.bot.fetch_channel('games'),
+                'Your game has ended. Your score was %d\n'
+                'Thanks for playing! All players will receive %d tokens' % (
+                    self.player.score,
+                    norm_score
+                )
+            )
+            if self.player.score > max([score[0] for score in scores[self.game]]):
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
-                    'Your game has ended. Your score was %d\n'
-                    'Thanks for playing! You will receive %d tokens' % (
-                        self.player.score,
-                        norm_score
+                    "%s %s just set the high score on %s at %d points" % (
+                        (
+                            self.bot.get_user(self.state['bidder']).mention
+                            if len(self.state['players']) <= 1
+                            else
+                            (
+                                ', '.join(
+                                    self.bot.get_user(player).mention
+                                    for player in self.state['players'][:-1]
+                                ) + ' and ' + self.bot.get_user(self.state['players'][-1]).mention
+                            )
+                        ),
+                        'has' if len(self.state['players']) <= 1 else 'have',
+                        self.game,
+                        self.player.score
                     )
                 )
-                if self.player.score > max([score[0] for score in scores[state['game']]]):
-                    await self.bot.send_message(
-                        self.bot.fetch_channel('games'),
-                        "%s has just set the high score on %s at %d points" % (
-                            user.mention,
-                            state['game'],
-                            self.player.score
-                        )
-                    )
-                if norm_score > 0:
-                    players[state['user']]['balance'] += norm_score
+            if norm_score > 0:
+                for player in self.state['players']:
+                    players[player]['balance'] += norm_score
                     # print("Granting xp for score payout")
                     self.bot.dispatch(
                         'grant_xp',
-                        user,
+                        self.bot.get_user(player),
                         norm_score * 10
                     )
-                state.save()
-                players.save()
+            players.save()
+
+    async def on_cleanup(self):
+        if os.path.exists('story.json'):
+            os.remove('story.json')

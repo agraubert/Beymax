@@ -11,6 +11,7 @@ import threading
 import shlex
 from functools import wraps
 import re
+import traceback
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
@@ -73,6 +74,10 @@ class CoreBot(discord.Client):
                         await func(self, message, content)
                     except discord.DiscordException:
                         await self.send_message(
+                            self.fetch_channel('bugs'),
+                            traceback.format_exc()
+                        )
+                        await self.send_message(
                             message.channel,
                             "I've encountered an error communicating with Discord."
                             " This may be a transient issue, but if it occurs again"
@@ -81,6 +86,10 @@ class CoreBot(discord.Client):
                         )
                         raise
                     except:
+                        await self.send_message(
+                            self.fetch_channel('bugs'),
+                            traceback.format_exc()
+                        )
                         await self.send_message(
                             message.channel,
                             "I encountered unexpected error while processing your"
