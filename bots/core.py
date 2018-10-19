@@ -75,7 +75,8 @@ class CoreBot(discord.Client):
                     except discord.DiscordException:
                         await self.send_message(
                             self.fetch_channel('bugs'),
-                            traceback.format_exc()
+                            traceback.format_exc(),
+                            quote='```'
                         )
                         await self.send_message(
                             message.channel,
@@ -88,7 +89,8 @@ class CoreBot(discord.Client):
                     except:
                         await self.send_message(
                             self.fetch_channel('bugs'),
-                            traceback.format_exc()
+                            traceback.format_exc(),
+                            quote='```'
                         )
                         await self.send_message(
                             message.channel,
@@ -122,9 +124,12 @@ class CoreBot(discord.Client):
 
         return wrapper
 
-    def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
+    def add_task(self, interval, anon=False): #decorator. Sets the decorated function to run on the specified interval
         def wrapper(func):
-            taskname = 'task:'+func.__name__
+            if not anon:
+                taskname = 'task:'+func.__name__
+            else:
+                taskname = 'task:ANONYMOUS:' + str(hash(func))
             if taskname in self.tasks:
                 raise NameError("This task already exists! Change the name of the task function")
             self.tasks[taskname] = (interval, func.__qualname__)
@@ -132,10 +137,11 @@ class CoreBot(discord.Client):
             @self.subscribe(taskname)
             async def run_task(self, task):
                 await func(self)
-                if 'tasks' not in self.update_times:
-                    self.update_times['tasks'] = {}
-                self.update_times['tasks'][taskname] = time.time()
-                save_db(self.update_times, 'tasks.json')
+                if not anon:
+                    if 'tasks' not in self.update_times:
+                        self.update_times['tasks'] = {}
+                    self.update_times['tasks'][taskname] = time.time()
+                    save_db(self.update_times, 'tasks.json')
 
 
             return run_task
@@ -243,7 +249,7 @@ class CoreBot(discord.Client):
         first = True
         for server in list(self.servers):
             print(server.name, server.id)
-            self.on_server_join(server)
+            await self.on_server_join(server)
         print("Commands:", [cmd for cmd in self.commands])
         print(
             "Tasks:",
@@ -855,5 +861,25 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "I was unable to find any entities by that name"
             )
 
+    @bot.add_command('timer', Arg('minutes', type=int, help="How many minutes"))
+    async def cmd_timer(self, message, args):
+        """
+        `$!timer <minutes>` : Sets a timer to run for the specified number of minutes
+        """
+        @self.add_task(60 * args.minutes, anon=True)
+        async def run_timer(self):
+            await self.send_message(
+                message.channel,
+                message.author.mention + " Your %d minute timer is up!" % args.minutes
+            )
+            run_timer.unsubscribe()
+
+        await self.send_message(
+            message.channel,
+            "Okay, I'll remind you in %d minute%s" % (
+                args.minutes,
+                '' if args.minutes == 1 else 's'
+            )
+        )
 
     return bot

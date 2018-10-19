@@ -314,6 +314,7 @@ class Phase(object):
         * on_any_input is dispatched unconditionally, when any player sends a message
         * on_turn_input is dispatched if the current turn player sends a message
         """
+        print("Phase captured input", message.content)
         await self.on_any_input(user, channel, message)
         if self.turn == user:
             await self.on_turn_input(user, channel, message)
@@ -410,6 +411,7 @@ class PhasedGame(GameSystem):
         * A string which exists as a key in the phase map
         """
         super().__init__(bot, game)
+        print("PhasedGame initialized with phases", phases)
         self.active_phase = None
         self.phase_map = {**phases}
         self._defer_join = []
@@ -421,7 +423,7 @@ class PhasedGame(GameSystem):
 
     async def _activate_default(self):
         if self.active_phase is None and 'default' in self.phase_map:
-            self.enter_phase('default')
+            await self.enter_phase('default')
 
     async def enter_phase(self, phase):
         if isinstance(phase, Phase):
@@ -429,11 +431,11 @@ class PhasedGame(GameSystem):
             next_phase = phase
         elif isinstance(phase, type) and issubclass(phase, Phase):
             # User provided a Phase class. Construct it here
-            next_phase = phase(bot, self)
+            next_phase = phase(self.bot, self)
         elif isinstance(phase, str):
             # User provided a key.
             if phase in self.phase_map:
-                return self.enter_phase(self.phase_map[phase])
+                return await self.enter_phase(self.phase_map[phase])
             raise KeyError("No such phase '%s'" % phase)
         if self.active_phase is not None:
             await self.active_phase.after_phase()
@@ -479,7 +481,7 @@ class PhasedGame(GameSystem):
         If you wish to override the fallback event handler (to process input when no phase is active)
         use on_default_input
         """
-        self._activate_default()
+        await self._activate_default()
         if self.active_phase is not None:
             return await self.active_phase.on_input(user, channel, message)
         else:
@@ -499,12 +501,20 @@ class PhasedGame(GameSystem):
         If you wish to override the fallback event handler (to process joins when no phase is active)
         use on_default_join.
         """
-        self._activate_default()
+        print("HANDLE JOIN", user)
+        await self._activate_default()
         if self.active_phase is not None:
             if not await self.active_phase.on_join(user):
+                print("DEFER")
                 self._defer_join.append(user)
+                await self.bot.send_message(
+                    user,
+                    "You cannot join the game at this time. "
+                    "You will automatically join the game at the next opportunity"
+                )
         else:
             if not await self.on_default_join(user):
+                print("DEFER")
                 self._defer_join.append(user)
                 await self.bot.send_message(
                     user,
@@ -530,12 +540,20 @@ class PhasedGame(GameSystem):
         If you wish to override the fallback event handler (to process leaves when no phase is active)
         use on_default_leave.
         """
-        self._activate_default()
+        print("HANDLE LEAVE", user)
+        await self._activate_default()
         if self.active_phase is not None:
             if not await self.active_phase.on_leave(user):
+                print("DEFER")
                 self._defer_leave.append(user)
+                await self.bot.send_message(
+                    user,
+                    "You cannot leave the game at this time. "
+                    "You will automatically leave the game at the next opportunity"
+                )
         else:
             if not await self.on_default_leave(user):
+                print("DEFER")
                 self._defer_leave.append(user)
                 await self.bot.send_message(
                     user,

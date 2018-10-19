@@ -2,6 +2,7 @@ import json
 import sys
 import asyncio
 import warnings
+import traceback
 
 db_lock = asyncio.Lock()
 locks = {}
@@ -17,6 +18,7 @@ class Database(dict):
     async def __aenter__(self):
         global db_lock
         global locks
+        # print("A database has been acquired:", self.filename)
         async with db_lock:
             if self.filename not in locks:
                 locks[self.filename] = asyncio.Lock()
@@ -41,6 +43,7 @@ class Database(dict):
 
     async def __aexit__(self, *args):
         global locks
+        # print("A database has been released:", self.filename)
         locks[self.filename].release()
 
 class ListDatabase(list):
