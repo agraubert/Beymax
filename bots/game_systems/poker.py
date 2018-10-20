@@ -10,6 +10,7 @@ from .base import GameSystem, GameError, JoinLeaveProhibited, GameEndException, 
 # FIXME Rotation of turn order is odd
 # FIXME Two pair just shows one card from each pair
 # FIXME Invite/Args broken, not accepting fullnames
+# FIXME Turn prompts show up twice on error
 class PokerError(GameError):
     """
     For poker-specific errors
@@ -594,7 +595,10 @@ class BettingPhase(LockedPhase):
                 else:
                     self.game.bets[user.id] = cost
                 self.game.pot += cost
-                self.game.refund[user.id] += cost
+                if user.id in self.game.refund:
+                    self.game.refund[user.id] += cost
+                else:
+                    self.game.refund[user.id] = cost
                 self.game.bet = cost
                 self.game.square = {user.id} # new bet, so only the current user is square
                 return await self.advance_if(self.game.bet, cost)
@@ -639,7 +643,10 @@ class BettingPhase(LockedPhase):
                 else:
                     self.game.bets[user.id] = cost
                 self.game.pot += cost
-                self.game.refund[user.id] += cost
+                if user.id in self.game.refund:
+                    self.game.refund[user.id] += cost
+                else:
+                    self.game.refund[user.id] = cost
                 self.game.bet += raise_amt
                 self.game.square = {user.id} # Raised, so only this user is square
                 return await self.advance_if(self.game.bet, cost)
@@ -653,7 +660,10 @@ class BettingPhase(LockedPhase):
                 else:
                     self.game.bets[user.id] = cost
                 self.game.pot += cost
-                self.game.refund[user.id] += cost
+                if user.id in self.game.refund:
+                    self.game.refund[user.id] += cost
+                else:
+                    self.game.refund[user.id] = cost
             if cost == balance and balance != 0:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
@@ -781,6 +791,13 @@ class WinPhase(LockedPhase):
     * Reset the pot to 0
     """
     async def before_phase(self):
+        # First make sure the table has 5 cards. We may have skipped to this state
+        remaining_cards = 5 - len(self.game.table)
+        if remaining_cards:
+            if len(self.game.deck) < remaining_cards:
+                self.game.deck.fill(self.game.trash)
+                self.game.trash.cards = []
+            self.game.table += self.game.deck.deal(remaining_cards)
         effective_hands = {
             player.id:Hand(self.game.hands[player.id].cards + self.game.table.cards)
             for player in self.game.players
@@ -810,6 +827,8 @@ class WinPhase(LockedPhase):
             )
             for player_id, hand in self.game.hands.items()
         )
+        payout = self.game.pot // len(winners)
+        leftover = self.game.pot % len(winners)
         await self.bot.send_message(
             self.bot.fetch_channel("games"),
             "Everyone, flip your cards!\n"
@@ -817,18 +836,17 @@ class WinPhase(LockedPhase):
             "%s\n----------\n"
             "And the winner%s:\n"
             "%s\n"
-            "Congratulations!" % (
+            "Congratulations! Each winner will recieve %d tokens" % (
                 self.game.table.display,
                 player_hands,
                 ' is' if len(winners) <= 1 else 's are',
                 ', '.join(
                     self.bot.get_user(player_id).mention
                     for player_id in winners
-                )
+                ),
+                payout
             )
         )
-        payout = self.game.pot // len(winners)
-        leftover = self.game.pot % len(winners)
         self.game.pot = leftover
         self.game.refund = {}
         if leftover:

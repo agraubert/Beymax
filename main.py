@@ -126,6 +126,13 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         await self.shutdown()
 
+    @beymax.add_command('coinflip', empty=True)
+    async def cmd_flip(self, message, content):
+        await self.send_message(
+            message.channel,
+            "Heads" if random.random() < 0.5 else "Tails"
+        )
+
     @beymax.add_command('_greet', empty=True)
     async def cmd_greet(self, message, content):
         """

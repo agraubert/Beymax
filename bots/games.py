@@ -575,7 +575,7 @@ def EnableGames(bot):
                     'balance':10
                 }
             if args.type == 'tokens':
-                players[user.id]['balance'] += args.amount
+                players[args.user.id]['balance'] += args.amount
             else:
                 self.dispatch(
                     'grant_xp',
