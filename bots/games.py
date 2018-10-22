@@ -16,6 +16,8 @@ from .game_systems.base import GameSystem, GameError, GameEndException, JoinLeav
 from .game_systems.story import StorySystem
 from .game_systems.poker import PokerSystem
 
+from functools import lru_cache
+
 # def avg(n):
 #     return sum(n)/len(n)
 
@@ -382,6 +384,7 @@ def EnableGames(bot):
                     "Please wait until the current player finishes their game"
                 )
 
+    @lru_cache(4096)
     def xp_for(level):
         if level <= 2:
             return 10
