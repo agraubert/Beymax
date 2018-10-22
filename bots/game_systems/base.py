@@ -445,11 +445,11 @@ class PhasedGame(GameSystem):
         await self.active_phase.before_phase()
         self._defer_join = [
             user for user in self._defer_join
-            if not self.active_phase.on_join(user)
+            if not await self.active_phase.on_join(user)
         ]
         self._defer_leave = [
             user for user in self._defer_leave
-            if not self.active_phase.on_leave(user)
+            if not await self.active_phase.on_leave(user)
         ]
 
     async def on_before_main(self):

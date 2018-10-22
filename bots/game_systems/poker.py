@@ -2,15 +2,15 @@ import discord
 import asyncio
 import random
 import json
+import traceback
 from itertools import permutations, groupby
 from ..utils import Database, load_db, getname
 from .base import GameSystem, GameError, JoinLeaveProhibited, GameEndException, Phase, PhasedGame
 
-# FIXME /Users/agraubert/Documents/beymax/bots/game_systems/base.py:448: RuntimeWarning: coroutine 'NoJoinPhase.on_join' was never awaited
-# FIXME Rotation of turn order is odd
-# FIXME Two pair just shows one card from each pair
-# FIXME Invite/Args broken, not accepting fullnames
-# FIXME Turn prompts show up twice on error
+# /Users/agraubert/Documents/beymax/bots/game_systems/base.py:448: RuntimeWarning: coroutine 'NoJoinPhase.on_join' was never awaited
+# Rotation of turn order is odd
+# Two pair just shows one card from each pair
+# Turn prompts show up twice on error
 class PokerError(GameError):
     """
     For poker-specific errors
@@ -267,8 +267,8 @@ class Hand(object):
             return PokerRank(
                 'two-pair',
                 cards[-1],
-                rank_groups[pair_keys[-1][0]][0],
-                rank_groups[pair_keys[-2][0]][0]
+                *rank_groups[pair_keys[-1][0]],
+                *rank_groups[pair_keys[-2][0]]
             )
         if len(pairs):
             return PokerRank(
@@ -367,6 +367,7 @@ class PreGame(FreePhase):
             self.bot.fetch_channel('games'),
             "%s, please specify the ante: " % getname(self.game.bidder)
         )
+        return True
 
     async def before_phase(self):
         await self.set_player(self.game.bidder)
@@ -464,7 +465,6 @@ class BettingPhase(LockedPhase):
             self.bot.fetch_channel('games'),
             "The pot is now %d tokens" % self.game.pot
         )
-        self.game.index = 0
         self.game.bets = {}
         self.game.square = set()
         self.game.bet = -1
@@ -559,14 +559,14 @@ class BettingPhase(LockedPhase):
                 self.bot.fetch_channel('games'),
                 "Please provide a valid action"
             )
-            await self.next_turn(user, None)
+            return await self.next_turn(user, None)
         elif content[0] == 'bet' and self.game.bet == -1:
             if len(content) != 2:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to bet"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             try:
                 cost = int(content[1])
             except ValueError:
@@ -574,13 +574,13 @@ class BettingPhase(LockedPhase):
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to bet"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             if cost < 1:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to bet"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             elif cost > balance:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
@@ -613,7 +613,7 @@ class BettingPhase(LockedPhase):
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to raise by"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             try:
                 raise_amt = int(content[1])
                 cost = raise_amt + call
@@ -622,13 +622,13 @@ class BettingPhase(LockedPhase):
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to raise by"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             if cost < 1:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     "You must provide a quantity of tokens to raise by"
                 )
-                await self.next_turn(user, None)
+                return await self.next_turn(user, None)
             elif cost > balance:
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
@@ -682,7 +682,7 @@ class BettingPhase(LockedPhase):
             self.bot.fetch_channel('games'),
             "That action is invalid"
         )
-        await self.next_turn(user, None)
+        return await self.next_turn(user, None)
 
 
 class Deal(BettingPhase):
@@ -894,7 +894,7 @@ class ResetPhase(LockedPhase):
     """
     This phase resets the game for another round:
     * Advance the dealer index by 1
-    * Reset the player index to 0
+    * Reset the player index to 1
     * Reset inactive players to set()
     * Reset ante to 0
     * Empty hands and table into trash deck
@@ -903,7 +903,7 @@ class ResetPhase(LockedPhase):
 
     async def before_phase(self):
         self.game.dealer = (self.game.dealer + 1) % len(self.game.players)
-        self.game.index = 0
+        self.game.index = 1
         self.game.inactive_players = set()
         self.game.ante = 0
         self.game.trash += self.game.table.cards
