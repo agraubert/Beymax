@@ -114,12 +114,9 @@ class CoreBot(discord.Client):
 
         return wrapper
 
-    def add_task(self, interval, anon=False): #decorator. Sets the decorated function to run on the specified interval
+    def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
         def wrapper(func):
-            if not anon:
-                taskname = 'task:'+func.__name__
-            else:
-                taskname = 'task:ANONYMOUS:' + str(hash(func))
+            taskname = 'task:'+func.__name__
             if taskname in self.tasks:
                 raise NameError("This task already exists! Change the name of the task function")
             self.tasks[taskname] = (interval, func.__qualname__)
@@ -127,11 +124,10 @@ class CoreBot(discord.Client):
             @self.subscribe(taskname)
             async def run_task(self, task):
                 await func(self)
-                if not anon:
-                    if 'tasks' not in self.update_times:
-                        self.update_times['tasks'] = {}
-                    self.update_times['tasks'][taskname] = time.time()
-                    save_db(self.update_times, 'tasks.json')
+                if 'tasks' not in self.update_times:
+                    self.update_times['tasks'] = {}
+                self.update_times['tasks'][taskname] = time.time()
+                save_db(self.update_times, 'tasks.json')
 
 
             return run_task
@@ -862,20 +858,17 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `$!timer <minutes>` : Sets a timer to run for the specified number of minutes
         """
-        @self.add_task(60 * args.minutes, anon=True)
-        async def run_timer(self):
-            await self.send_message(
-                message.channel,
-                message.author.mention + " Your %d minute timer is up!" % args.minutes
-            )
-            run_timer.unsubscribe()
-
         await self.send_message(
             message.channel,
             "Okay, I'll remind you in %d minute%s" % (
                 args.minutes,
                 '' if args.minutes == 1 else 's'
             )
+        )
+        await asyncio.sleep(60 * args.minutes)
+        await self.send_message(
+            message.channel,
+            message.author.mention + " Your %d minute timer is up!" % args.minutes
         )
 
     return bot

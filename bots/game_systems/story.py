@@ -196,7 +196,6 @@ class StorySystem(GameSystem):
     async def on_input(self, user, channel, message):
         try:
             content = message.content.strip().lower()
-            print("PROCESSING INPUT", content)
             if content == 'save':
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
