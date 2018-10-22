@@ -2,7 +2,6 @@ import discord
 import asyncio
 import random
 import json
-import traceback
 import os
 from ...utils import Database, load_db, getname
 from ..base import GameEndException, PhasedGame

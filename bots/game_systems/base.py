@@ -314,7 +314,6 @@ class Phase(object):
         * on_any_input is dispatched unconditionally, when any player sends a message
         * on_turn_input is dispatched if the current turn player sends a message
         """
-        print("Phase captured input", message.content)
         await self.on_any_input(user, channel, message)
         if self.turn == user:
             await self.on_turn_input(user, channel, message)

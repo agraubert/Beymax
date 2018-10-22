@@ -176,10 +176,7 @@ class Deal(LockedPhase):
         self.game.table = Hand(self.game.deck.deal(2))
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
-            "Players can no longer join or leave until the end of the round. "
-        )
-        await self.bot.send_message(
-            self.bot.fetch_channel('games'),
+            "Players can no longer join or leave until the end of the round.\n"+
             "All hands have been dealt. Here are your cards:\n" + (
                 "\n".join(
                     '%s : %s' % (
@@ -486,7 +483,7 @@ class DealerPhase(LockedPhase):
                 repr(self.game.table[-1]),
                 scores[-1][0]
             )
-        print(scores, scores[0][0] < 21, scores[-1][0] < 17, scores[-1][1], scores[-1][0] < worst_player_score)
+            scores = filter(lambda x: x<=21, scores)
         if not len([score for score, soft in scores if score <= 21]):
             msg += 'Bust!'
         else:

@@ -10,15 +10,11 @@ import os
 # from string import printable
 import time
 # import re
-import traceback
 from math import ceil, floor
 
 from .game_systems.base import GameSystem, GameError, GameEndException, JoinLeaveProhibited
 from .game_systems.story import StorySystem
 from .game_systems.poker import PokerSystem
-
-# TODO Config set: enable tracebacks, then add a bot.trace() method to print a tb to bugs
-# TODO $MENTION
 
 # def avg(n):
 #     return sum(n)/len(n)
@@ -73,11 +69,7 @@ def EnableGames(bot):
                     "I was unable to restore the previous state. "
                     "The current game will be refunded"
                 )
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    traceback.format_exc(),
-                    quote='```'
-                )
+                await self.trace()
                 self.dispatch('endgame', 'hard')
                 raise
             except:
@@ -86,11 +78,7 @@ def EnableGames(bot):
                     "I was unable to restore the previous state. "
                     "The current game will be refunded"
                 )
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    traceback.format_exc(),
-                    quote='```'
-                )
+                await self.trace()
                 self.dispatch('endgame', 'critical')
                 raise
 
@@ -176,7 +164,7 @@ def EnableGames(bot):
                         "The current game prohibits new players from joining the game"
                     )
                 except GameEndException:
-                    print(traceback.format_exc())
+                    await self.trace()
                     await self.send_message(
                         self.fetch_channel('games'),
                         "Encountered a critical error while adding a new player."
@@ -184,7 +172,7 @@ def EnableGames(bot):
                     )
                     self.dispatch('endgame', 'hard')
                 except:
-                    print(traceback.format_exc())
+                    await self.trace()
                     await self.send_message(
                         self.fetch_channel('games'),
                         "Encountered an error while adding a new player"
@@ -265,7 +253,7 @@ def EnableGames(bot):
                                 "The current game prohibits players from leaving the game"
                             )
                         except GameEndException:
-                            print(traceback.format_exc())
+                            await self.trace()
                             await self.send_message(
                                 self.fetch_channel('games'),
                                 "Encountered a critical error while removing a player."
@@ -273,7 +261,7 @@ def EnableGames(bot):
                             )
                             self.dispatch('endgame', 'hard')
                         except:
-                            print(traceback.format_exc())
+                            await self.trace()
                             await self.send_message(
                                 self.fetch_channel('games'),
                                 "Encountered an error while removing a player"
@@ -313,10 +301,8 @@ def EnableGames(bot):
         state = load_db('game.json', {'user':'~<IDLE>'})
         if state['user'] != '~<IDLE>' and self._game_system is None:
             await restore_game(self)
-        print(message.author, "Playing:", self._game_system.is_playing(message.author))
         if self._game_system.is_playing(message.author):
             try:
-                print("This is the handler:", self._game_system.on_input)
                 await self._game_system.on_input(
                     message.author,
                     message.channel,
@@ -328,16 +314,10 @@ def EnableGames(bot):
                     "The game encountered an irrecoverable error."
                     " I will refund you for the current game"
                 )
-                msg = traceback.format_exc()
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    msg,
-                    quote='```'
-                )
-                print(msg)
+                await self.trace()
                 self.dispatch('endgame', 'hard')
             except:
-                print(traceback.format_exc())
+                await self.trace(False)
         elif 'restrict' in state and state['restrict']:
             await self.send_message(
                 message.author,
@@ -652,13 +632,7 @@ def EnableGames(bot):
             try:
                 await self._game_system.on_end(user)
             except:
-                msg = traceback.format_exc()
-                print(msg)
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    msg,
-                    quote='```'
-                )
+                await self.trace()
                 await self.send_message(
                     self.fetch_channel('games'),
                     "I encountered an error while ending the game. "
@@ -674,14 +648,7 @@ def EnableGames(bot):
                 try:
                     await self._game_system.on_cleanup()
                 except:
-                    msg = traceback.format_exc()
-                    print(msg)
-                    print("Failed to clean the previous game")
-                    await self.send_message(
-                        self.fetch_channel('bugs'),
-                        msg,
-                        quote='```'
-                    )
+                    await self.trace()
                 self._game_system = None
             state.save()
             if 'bids' not in state or len(state['bids']) == 1:
@@ -774,13 +741,7 @@ def EnableGames(bot):
                     "I was unable to initialize the game. "
                     "The current game will be refunded"
                 )
-                msg = traceback.format_exc()
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    msg,
-                    quote='```'
-                )
-                print(msg)
+                await self.trace()
                 self.dispatch('endgame', 'hard')
             except:
                 await self.send_message(
@@ -788,13 +749,7 @@ def EnableGames(bot):
                     "I was unable to initialize the game. "
                     "The current game will be refunded"
                 )
-                msg = traceback.format_exc()
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    msg,
-                    quote='```'
-                )
-                print(msg)
+                await self.trace()
                 self.dispatch('endgame', 'critical')
             return
         async with Database('game.json', {'user':'~<IDLE>', 'bids':[]}) as state:
@@ -996,11 +951,5 @@ def EnableGames(bot):
             try:
                 await self._game_system.on_check()
             except:
-                msg = traceback.format_exc()
-                print(msg)
-                await self.send_message(
-                    self.fetch_channel('bugs'),
-                    msg,
-                    quote='```'
-                )
+                await self.trace()
     return bot

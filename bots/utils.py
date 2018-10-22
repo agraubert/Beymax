@@ -18,8 +18,7 @@ class Database(dict):
     async def __aenter__(self):
         global db_lock
         global locks
-        traceback.print_stack()
-        print("A database has been acquired:", self.filename)
+        # print("A database has been acquired:", self.filename)
         async with db_lock:
             if self.filename not in locks:
                 locks[self.filename] = asyncio.Lock()
@@ -44,7 +43,7 @@ class Database(dict):
 
     async def __aexit__(self, *args):
         global locks
-        print("A database has been released:", self.filename)
+        # print("A database has been released:", self.filename)
         locks[self.filename].release()
 
 class ListDatabase(list):
@@ -126,6 +125,7 @@ class Interpolator(dict):
             NICK = NAME
         super().__init__(**{
             '$NAME': NAME,
+            '$MENTION': bot.user.mention,
             '$FULLNAME': '%s#%s' % ( bot.user.name, str(bot.user.discriminator)),
             '$ID': bot.user.id,
             '$NICK': NICK,

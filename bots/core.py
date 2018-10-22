@@ -73,11 +73,7 @@ class CoreBot(discord.Client):
                     try:
                         await func(self, message, content)
                     except discord.DiscordException:
-                        await self.send_message(
-                            self.fetch_channel('bugs'),
-                            traceback.format_exc(),
-                            quote='```'
-                        )
+                        await self.trace()
                         await self.send_message(
                             message.channel,
                             "I've encountered an error communicating with Discord."
@@ -85,20 +81,14 @@ class CoreBot(discord.Client):
                             " you should submit a bug report: `$!bug <Discord Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
-                        raise
                     except:
-                        await self.send_message(
-                            self.fetch_channel('bugs'),
-                            traceback.format_exc(),
-                            quote='```'
-                        )
+                        await self.trace()
                         await self.send_message(
                             message.channel,
                             "I encountered unexpected error while processing your"
                             " command. Please submit a bug report: `$!bug <Python Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
-                        raise
                     self.dispatch('command', cmd, message.author)
                 else:
                     print("Denied", message.author, "using command", cmd, "in", message.channel)
@@ -364,6 +354,20 @@ class CoreBot(discord.Client):
 
         self.task_worker.start()
 
+    async def trace(self, send=True):
+        x,y,z = sys.exc_info()
+        if x is None and y is None and z is None:
+            msg = traceback.format_stack()
+        else:
+            msg = traceback.format_exc()
+        print(msg)
+        if send and self.config_get('send_traces'):
+            await self.send_message(
+                self.fetch_channel('bugs'),
+                msg,
+                quote='```'
+            )
+
     async def shutdown(self):
         tasks = self.dispatch('cleanup')
         if len(tasks):
@@ -440,11 +444,7 @@ class CoreBot(discord.Client):
                         **kwargs
                     )
                 except discord.errors.HTTPException as e:
-                    print("Failed to deliver message:", e.text)
-                    await super().send_message(
-                        self.fetch_channel('dev'),
-                        "Failed to deliver a message to "+str(destination)
-                        )
+                    await self.trace()
                 tmp = []
                 await asyncio.sleep(1)
         if len(tmp):
@@ -455,11 +455,7 @@ class CoreBot(discord.Client):
                     quote+msg+quote
                 )
             except discord.errors.HTTPException as e:
-                print("Failed to deliver message:", e.text)
-                await super().send_message(
-                    self.fetch_channel('dev'),
-                    "Failed to deliver a message to "+str(destination)
-                )
+                await self.trace()
         return last_msg
 
     def get_user(self, reference, *servers):
