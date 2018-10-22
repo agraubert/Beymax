@@ -17,7 +17,8 @@ from .game_systems.base import GameSystem, GameError, GameEndException, JoinLeav
 from .game_systems.story import StorySystem
 from .game_systems.poker import PokerSystem
 
-
+# TODO Config set: enable tracebacks, then add a bot.trace() method to print a tb to bugs
+# TODO $MENTION
 
 # def avg(n):
 #     return sum(n)/len(n)
@@ -559,13 +560,13 @@ def EnableGames(bot):
     @bot.add_command(
         '_payout',
         Arg('user', type=UserType(bot), help="Username or ID"),
-        Arg('type', choices=['xp', 'tokens'], help="Type of payout (xp or tokens)"),
-        Arg('amount', type=int, help="Amount to pay")
+        Arg('amount', type=int, help="Amount to pay"),
+        Arg('type', choices=['xp', 'tokens'], help="Type of payout (xp or tokens)")
     )
     async def cmd_payout(self, message, args):
         """
-        `$!_payout <user> <xp/tokens> <amount>` : Pays xp/tokens to the provided user
-        Example: `$!_payout some_user_id xp 12`
+        `$!_payout <user> <amount> <xp/tokens>` : Pays xp/tokens to the provided user
+        Example: `$!_payout some_user_id 12 xp`
         """
         async with Database('players.json') as players:
             if args.user.id not in players:
@@ -640,7 +641,9 @@ def EnableGames(bot):
                     await self.send_message(
                         self.fetch_channel('games'),
                         "You are being refunded %d tokens."
-                        " I apologize for the inconvenience"
+                        " I apologize for the inconvenience" % (
+                            state['refund']
+                        )
                     )
                     players[user.id]['balance'] += state['refund']
                 state.save()
