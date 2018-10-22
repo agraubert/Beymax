@@ -173,3 +173,7 @@ class PokerSystem(PhasedGame):
     async def on_ready(self):
         if self.active_phase is None:
             await self.enter_phase('pregame')
+
+    async def on_cleanup(sefl):
+        if os.path.exists('poker.json'):
+            os.remove('poker.json')

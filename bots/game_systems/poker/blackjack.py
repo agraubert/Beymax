@@ -22,9 +22,7 @@ from .utils import FreePhase, LockedPhase, Card, Hand, strike_if
 # blackjack xp
 # (base: 15) + (2.5 * payout) - (10 on loss) - (5 on tie)
 
-# FIXME Beymax best_bust_score not working
-
-def _evaluate_hand(hand, total=0, soft=False):
+def evaluate_hand(hand, total=0, soft=False):
     # value + 2
     # if value > 8, value == 10
     # if rank == ace, recurse soft and hard
@@ -32,12 +30,12 @@ def _evaluate_hand(hand, total=0, soft=False):
         card = hand.cards[i]
         if card.rank == 'ace':
             soft_ace = Card('two', card.suit)
-            soft_ace.rank_vaue = -1 # +2 = 1
+            soft_ace.rank_vaue = 0 # +2 = 1
             hard_ace = Card('two', card.suit)
             hard_ace.rank_value = 99
             return (
-                *_evaluate_hand(Hand([soft_ace] + hand.cards[i+1:]), total, soft),
-                *_evaluate_hand(Hand([hard_ace] + hand.cards[i+1:]), total, True)
+                *evaluate_hand(Hand([soft_ace] + hand.cards[i+1:]), total - 1, soft),
+                *evaluate_hand(Hand([hard_ace] + hand.cards[i+1:]), total, True)
             )
         elif card.rank_value > 8 and card.rank_value != 99:
             assert card.rank in {'ten', 'jack', 'queen', 'king'}, card
@@ -50,27 +48,12 @@ def _evaluate_hand(hand, total=0, soft=False):
             total += card.rank_value + 2
     return [(total, soft)]
 
-def evaluate_hand(hand, total=0, soft=False):
-    r = _evaluate_hand(hand, total, soft)
-    print(r)
-    return r
-
 class BeforeRound(FreePhase):
     """
     This phase represents the betting period between when the game has started
     and when all players have placed bets. Players may join or leave freely
     The phase automatically ends when all players have placed a bet
     """
-    def safe_advance(self):
-        p = self.game.advance_index()
-        i = 0
-        while p.id in self.game.inactive_players or (p.id in self.game.bets and self.game.bets[p.id] != 0):
-            i += 1
-            p = self.game.advance_index()
-            if i > len(self.game.players):
-                raise GameEndException("Unable to locate next player")
-        return p
-
     async def on_leave(self, user):
         await super().on_leave(user)
         if user.id in self.game.refund:
@@ -84,27 +67,50 @@ class BeforeRound(FreePhase):
                 players[user.id]['balance'] += self.game.refund[user.id]
                 players.save()
             del self.game.refund[user.id]
+        await self.try_advance()
+        return True
 
     async def before_phase(self):
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
             "A new round of Blackjack is about to start."
             " Players may join or leave freely until all players have placed a "
-            "bet. If you leave after placing a bet, your bet **will** be refunded"
+            "bet. If you leave after placing a bet, your bet **will** be refunded."
+            " All players, please specify your bets, in tokens. If you would"
+            " like to sit this round out, say `fold`"
         )
-        await self.set_player(self.safe_advance())
 
-    async def next_turn(self, new, old):
+    async def on_join(self, user):
+        await super().on_join(user)
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
-            "Please specify your bet, in tokens."
-            " If you would like to sit this round out, say `fold`"
+            " Please specify your bets, in tokens. If you would"
+            " like to sit this round out, say `fold`"
+        )
+        return True
+
+    async def try_advance(self):
+        if len({*self.game.bets} | self.game.inactive_players) == len(self.game.players):
+            if len({player.id for player in self.game.players} - self.game.inactive_players) ==  0:
+                await self.bot.send_message(
+                    self.bot.fetch_channel("games"),
+                    "There are no players this round. The round will now"
+                    " restart."
+                )
+                return await self.game.enter_phase('reset')
+            else:
+                return await self.game.enter_phase('deal')
+        await self.bot.send_message(
+            self.bot.fetch_channel('games'),
+            "Still waiting on bets from: %s" % (
+                ', '.join(player.mention for player in self.game.players if player.id not in self.game.inactive_players and (player.id not in self.game.bets or self.game.bets[player.id] == 0))
+            )
         )
 
-    async def on_turn_input(self, user, channel, message):
+    async def on_any_input(self, user, channel, message):
         if message.content.lower().strip() == 'fold':
             self.game.inactive_players.add(user.id)
-            await self.set_player(self.safe_advance())
+            await self.try_advance()
             return
         async with Database('players.json') as players:
             if user.id not in players:
@@ -121,7 +127,7 @@ class BeforeRound(FreePhase):
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     "That is not a valid amount. "
-                    "Please specify your bet as a positive integer:"
+                    "Please specify your bet as a positive integer"
                 )
             elif bet > balance:
                 await self.bot.send_message(
@@ -141,17 +147,7 @@ class BeforeRound(FreePhase):
                         }
                     players[user.id]['balance'] -= bet
                     players.save()
-                if len({*self.game.bets} | self.game.inactive_players) == len(self.game.players):
-                    if len({player.id for player in self.game.players} - self.game.inactive_players) ==  0:
-                        await self.bot.send_message(
-                            self.bot.fetch_channel("games"),
-                            "There are no players this round. The round will now"
-                            " restart."
-                        )
-                        return await self.game.enter_phase('reset')
-                    else:
-                        return await self.game.enter_phase('deal')
-                await self.set_player(self.safe_advance())
+                await self.try_advance()
         except ValueError:
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
@@ -339,7 +335,7 @@ class MainPhase(LockedPhase):
                     players.save()
                 balance = players[player.id]['balance']
             msg += strike_if(
-                '`double down` (Double your bet of %d, hit, then stay)' % self.game.bets[player.id],
+                '`double down` (Double your bet of %d, hit, then stay)\n' % self.game.bets[player.id],
                 balance >= self.game.bets[player.id]
             )
         msg += "`hit` (Take another card)\n`stay` (End your turn)"
@@ -516,7 +512,7 @@ class WinPhase(LockedPhase):
     """
     async def before_phase(self):
         table_score = max([0] + [score for score, soft in evaluate_hand(self.game.table) if score <= 21])
-        best_bust_score = min([0] + [score for score, soft in evaluate_hand(self.game.table) if score > 21])
+        best_bust_score = min([99] + [score for score, soft in evaluate_hand(self.game.table) if score > 21])
         losers = set()
         ties = set()
         winners = set()
