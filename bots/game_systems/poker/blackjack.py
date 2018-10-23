@@ -483,7 +483,7 @@ class DealerPhase(LockedPhase):
                 repr(self.game.table[-1]),
                 scores[-1][0]
             )
-            scores = filter(lambda x: x<=21, scores)
+            # scores= [(score, soft) for score, soft in scores if score <= 21]
         if not len([score for score, soft in scores if score <= 21]):
             msg += 'Bust!'
         else:

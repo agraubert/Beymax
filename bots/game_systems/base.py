@@ -410,7 +410,6 @@ class PhasedGame(GameSystem):
         * A string which exists as a key in the phase map
         """
         super().__init__(bot, game)
-        print("PhasedGame initialized with phases", phases)
         self.active_phase = None
         self.phase_map = {**phases}
         self._defer_join = []

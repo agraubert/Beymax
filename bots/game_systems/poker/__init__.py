@@ -9,11 +9,6 @@ from .utils import Card, Hand, Deck, PokerError
 from .texas_hold_em import __GAME_DEF as texas, __RESTORE as texas_restore
 from .blackjack import __GAME_DEF as blackjack, __RESTORE as blackjack_restore
 
-# /Users/agraubert/Documents/beymax/bots/game_systems/base.py:448: RuntimeWarning: coroutine 'NoJoinPhase.on_join' was never awaited
-# Rotation of turn order is odd
-# Two pair just shows one card from each pair
-# Turn prompts show up twice on error
-
 class PokerSystem(PhasedGame):
     """
     This is a lightweight class

@@ -31,6 +31,7 @@ class CoreBot(discord.Client):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._dbg_event_queue = []
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
                 self.configuration = yaml.load(reader)
@@ -190,6 +191,9 @@ class CoreBot(discord.Client):
         self.nt += 1
         output = []
         if not manual:
+            while len(self._dbg_event_queue) >= 100:
+                self._dbg_event_queue.pop(0)
+            self._dbg_event_queue.append(event)
             if 'before:'+str(event) in self.event_listeners:
                 output += self.dispatch_event('before:'+str(event), *args, **kwargs)
             super().dispatch(event, *args, **kwargs)
