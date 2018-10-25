@@ -33,3 +33,7 @@
 ## Set name to be the username you wish to use for Beymax
 ## Beymax will change its username if this value has changed since the last startup
 # name: Beymax
+
+## Set send_traces to True if you want Beymax to send stack traces to the bugs channel
+## Anytime Beymax encounters an exception it will be posted to the bugs channel instead of just printed to Beymax's console
+# send_traces: True

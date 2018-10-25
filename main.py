@@ -6,7 +6,7 @@ from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
-from bots.story import EnableStory
+from bots.games import EnableGames
 from bots.args import Arg
 import discord
 import asyncio
@@ -55,7 +55,7 @@ def select_status():
 
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
-    beymax = EnableStory(beymax) # Story needs priority on special message recognition
+    beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
@@ -126,6 +126,13 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         """
         await self.shutdown()
 
+    @beymax.add_command('coinflip', empty=True)
+    async def cmd_flip(self, message, content):
+        await self.send_message(
+            message.channel,
+            "Heads" if random.random() < 0.5 else "Tails"
+        )
+
     @beymax.add_command('_greet', empty=True)
     async def cmd_greet(self, message, content):
         """
@@ -182,4 +189,8 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
 if __name__ == '__main__':
     with open("token.txt") as r:
-        ConstructBeymax().run(r.read().strip())
+        try:
+            bey = ConstructBeymax()
+            bey.run(r.read().strip())
+        finally:
+            print(bey._dbg_event_queue)

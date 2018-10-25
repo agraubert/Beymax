@@ -11,6 +11,7 @@ import threading
 import shlex
 from functools import wraps
 import re
+import traceback
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
@@ -30,6 +31,7 @@ class CoreBot(discord.Client):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._dbg_event_queue = []
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
                 self.configuration = yaml.load(reader)
@@ -72,6 +74,7 @@ class CoreBot(discord.Client):
                     try:
                         await func(self, message, content)
                     except discord.DiscordException:
+                        await self.trace()
                         await self.send_message(
                             message.channel,
                             "I've encountered an error communicating with Discord."
@@ -79,15 +82,14 @@ class CoreBot(discord.Client):
                             " you should submit a bug report: `$!bug <Discord Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
-                        raise
                     except:
+                        await self.trace()
                         await self.send_message(
                             message.channel,
                             "I encountered unexpected error while processing your"
                             " command. Please submit a bug report: `$!bug <Python Exception> %s`"
                             % (message.content.replace('`', ''))
                         )
-                        raise
                     self.dispatch('command', cmd, message.author)
                 else:
                     print("Denied", message.author, "using command", cmd, "in", message.channel)
@@ -189,6 +191,9 @@ class CoreBot(discord.Client):
         self.nt += 1
         output = []
         if not manual:
+            while len(self._dbg_event_queue) >= 100:
+                self._dbg_event_queue.pop(0)
+            self._dbg_event_queue.append(event)
             if 'before:'+str(event) in self.event_listeners:
                 output += self.dispatch_event('before:'+str(event), *args, **kwargs)
             super().dispatch(event, *args, **kwargs)
@@ -349,6 +354,20 @@ class CoreBot(discord.Client):
 
         self.task_worker.start()
 
+    async def trace(self, send=True):
+        x,y,z = sys.exc_info()
+        if x is None and y is None and z is None:
+            msg = traceback.format_stack()
+        else:
+            msg = traceback.format_exc()
+        print(msg)
+        if send and self.config_get('send_traces'):
+            await self.send_message(
+                self.fetch_channel('bugs'),
+                msg,
+                quote='```'
+            )
+
     async def shutdown(self):
         tasks = self.dispatch('cleanup')
         if len(tasks):
@@ -425,11 +444,7 @@ class CoreBot(discord.Client):
                         **kwargs
                     )
                 except discord.errors.HTTPException as e:
-                    print("Failed to deliver message:", e.text)
-                    await super().send_message(
-                        self.fetch_channel('dev'),
-                        "Failed to deliver a message to "+str(destination)
-                        )
+                    await self.trace()
                 tmp = []
                 await asyncio.sleep(1)
         if len(tmp):
@@ -440,11 +455,7 @@ class CoreBot(discord.Client):
                     quote+msg+quote
                 )
             except discord.errors.HTTPException as e:
-                print("Failed to deliver message:", e.text)
-                await super().send_message(
-                    self.fetch_channel('dev'),
-                    "Failed to deliver a message to "+str(destination)
-                )
+                await self.trace()
         return last_msg
 
     def get_user(self, reference, *servers):
@@ -846,5 +857,22 @@ def EnableUtils(bot): #prolly move to it's own bot
                 "I was unable to find any entities by that name"
             )
 
+    @bot.add_command('timer', Arg('minutes', type=int, help="How many minutes"))
+    async def cmd_timer(self, message, args):
+        """
+        `$!timer <minutes>` : Sets a timer to run for the specified number of minutes
+        """
+        await self.send_message(
+            message.channel,
+            "Okay, I'll remind you in %d minute%s" % (
+                args.minutes,
+                '' if args.minutes == 1 else 's'
+            )
+        )
+        await asyncio.sleep(60 * args.minutes)
+        await self.send_message(
+            message.channel,
+            message.author.mention + " Your %d minute timer is up!" % args.minutes
+        )
 
     return bot
