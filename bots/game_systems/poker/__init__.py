@@ -58,7 +58,7 @@ class PokerSystem(PhasedGame):
         """
         idx = (self.dealer + i) % len(self.players)
         for x in range(len(self.players)):
-            if self.players[x + idx].id not in self.inactive_players:
+            if self.players[(x + idx) % len(self.players)].id not in self.inactive_players:
                 return self.players[x + idx]
         raise PokerError("All players inactive")
 

@@ -601,7 +601,7 @@ async def __RESTORE(game, bidder):
     elif tlen == 3:
         await game.enter_phase('turn')
     elif tlen == 0 and len(game.hands) > 1:
-        await self.enter_phase('flop')
+        await game.enter_phase('flop')
     elif tlen == 0 and len(game.hands) == 0:
         await game.enter_phase('deal')
     else:

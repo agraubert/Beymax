@@ -102,7 +102,7 @@ class PokerRank(object):
 
     @property
     def display(self):
-        return '<%s: %s (%s high)>' % (
+        return '%s: %s (%s high)' % (
             self.rank,
             Hand(self.cards).display,
             repr(self.high)
