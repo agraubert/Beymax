@@ -100,6 +100,13 @@ class PokerRank(object):
 
         return True
 
+    def using(self, card):
+        return PokerRank(
+            self.rank,
+            card,
+            *self.cards
+        )
+
     @property
     def display(self):
         return '%s: %s (%s high)' % (
@@ -121,6 +128,11 @@ class PokerRank(object):
         return len(self.cards) < len(other.cards)
 
 
+def diffs(cards):
+    return [
+        cur.rank_value - prev.rank_value
+        for prev, cur in zip(cards, cards[1:])
+    ]
 
 class Hand(object):
     def __init__(self, cards=None):
@@ -173,25 +185,16 @@ class Hand(object):
 
     @property
     def is_straight(self):
-        last_card = None
-        for card in self.ordered_cards:
-            if last_card is None:
-                last_card = card
-            elif last_card.rank_value + 1 != card.rank_value and not (card.rank == 'ace' or last_card.rank == 'ace'):
-                return False
-        last_card = None
-        for card in sorted(card.demoted_ace() for card in self.cards):
-            if last_card is None:
-                last_card = card
-            elif last_card.rank_value + 1 != card.rank_value:
-                return False
-        return True
+        diff = diffs(self.ordered_cards)
+        demoted_diff = diffs(sorted(card.demoted_ace() for card in self.cards))
+        return diff == [1]*len(diff) or demoted_diff == [1]*len(demoted_diff)
 
     @property
     def poker_rank(self):
+        highest_card = self.ordered_cards[-1]
         if len(self.cards) > 5:
             return sorted(
-                Hand(permutation).poker_rank
+                Hand(permutation).poker_rank.using(highest_card)
                 for permutation in permutations(self.cards, 5)
             )[-1]
         cards = self.ordered_cards
