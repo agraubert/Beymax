@@ -59,7 +59,7 @@ class PokerSystem(PhasedGame):
         idx = (self.dealer + i) % len(self.players)
         for x in range(len(self.players)):
             if self.players[(x + idx) % len(self.players)].id not in self.inactive_players:
-                return self.players[x + idx]
+                return self.players[(x + idx) % len(self.players)]
         raise PokerError("All players inactive")
 
     async def save_state(self):
