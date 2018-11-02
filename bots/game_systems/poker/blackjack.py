@@ -219,14 +219,14 @@ class Deal(LockedPhase):
                             self.bot.dispatch(
                                 'grant_xp',
                                 player,
-                                10 + int(1.5 * self.game.bets[player.id])
+                                int(0.75 * self.game.bets[player.id])
                             )
-                        else:
-                            self.bot.dispatch(
-                                'grant_xp',
-                                player,
-                                5
-                            )
+                        # else:
+                        #     self.bot.dispatch(
+                        #         'grant_xp',
+                        #         player,
+                        #         5
+                        #     )
                 players.save()
             msg = "$NICK had a natural 21 (%s), so the game is over. " % self.game.table.display
             if len(ties):
@@ -253,18 +253,18 @@ class Deal(LockedPhase):
                             }
                         if len(player_scores[player.id]):
                             # Player had a natural
-                            players[player.id]['balance'] += int(2.5 * self.game.bets[player.id])
+                            players[player.id]['balance'] += int(1.5 * self.game.bets[player.id])
                             self.bot.dispatch(
                                 'grant_xp',
                                 player,
-                                15 + int(3.75 * self.game.bets[player.id])
+                                int(1.75 * self.game.bets[player.id])
                             )
-                        else:
-                            self.bot.dispatch(
-                                'grant_xp',
-                                player,
-                                5
-                            )
+                        # else:
+                        #     self.bot.dispatch(
+                        #         'grant_xp',
+                        #         player,
+                        #         5
+                        #     )
                 players.save()
             winners = [uid for uid, hand in self.game.hands if len(player_scores[uid])]
             msg = "%s%s%s had a natural 21, so their bet(s) are refunded. " % (
@@ -539,11 +539,11 @@ class WinPhase(LockedPhase):
                             if player.id in self.game.refund:
                                 del self.game.refund[player.id]
                             del self.game.bets[player.id]
-                            self.bot.dispatch(
-                                'grant_xp',
-                                player,
-                                5
-                            )
+                            # self.bot.dispatch(
+                            #     'grant_xp',
+                            #     player,
+                            #     5
+                            # )
                         elif scores[0][0] <= 21:
                             if best_score == table_score:
                                 ties.add(player.id)
@@ -553,18 +553,18 @@ class WinPhase(LockedPhase):
                                 self.bot.dispatch(
                                     'grant_xp',
                                     player,
-                                    10 + int(5 * self.game.bets[player.id])
+                                    int(0.75 * self.game.bets[player.id])
                                 )
                                 del self.game.bets[player.id]
                             elif best_score > table_score:
                                 winners.add(player.id)
                                 if player.id in self.game.refund:
                                     del self.game.refund[player.id]
-                                players[player.id]['balance'] += 2.5 * self.game.bets[player.id]
+                                players[player.id]['balance'] += int(1.5 * self.game.bets[player.id])
                                 self.bot.dispatch(
                                     'grant_xp',
                                     player,
-                                    15 + int(1.5 * self.game.bets[player.id])
+                                    int(1.75 * self.game.bets[player.id])
                                 )
                                 del self.game.bets[player.id]
             players.save()

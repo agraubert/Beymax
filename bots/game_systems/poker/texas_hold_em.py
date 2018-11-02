@@ -515,15 +515,12 @@ class WinPhase(LockedPhase):
                     }
                 players[winner]['balance'] += payout
             players.save()
-        # XP payout?
-        # base - penalty + bonus
-        # 25 - {15 if inactive} + {2.5*payout if winner}
         for player in self.game.players:
-            xp = 25
-            if player.id in self.game.inactive_players:
-                xp -= 15
+            xp = 0 #25
+            # if player.id in self.game.inactive_players:
+            #     xp -= 15
             if player.id in winners:
-                xp += int(2.5 * payout) + leftover
+                xp += int(1.75 * payout) + leftover
             self.bot.dispatch(
                 'grant_xp',
                 player,
