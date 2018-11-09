@@ -16,26 +16,62 @@ import traceback
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
 class CoreBot(discord.Client):
-    nt = 0
-    configuration = {}
-    primary_server = None
-    channel_references = {} # reference name -> channel name/id
-    event_listeners = {} # event name -> [listener functions (self, event)]
-    # changed to set in favor of event API
-    commands = {} # !cmd -> docstring. Functions take (self, message, content)
-    ignored_users = set()
-    users = {} # id/fullname -> {id, fullname, mention, name}
-    tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
-    special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
-    special_order = []
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.nt = 0
+        self.configuration = {}
+        self.primary_server = None
+        self.channel_references = {} # reference name -> channel name/id
+        self.event_listeners = {} # event name -> [listener functions (self, event)]
+        # changed to set in favor of event API
+        self.commands = {} # !cmd -> docstring. Functions take (self, message, content)
+        self.ignored_users = set()
+        self.users = {} # id/fullname -> {id, fullname, mention, name}
+        self.tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
+        self.special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
+        self.special_order = []
         self._dbg_event_queue = []
+        self.debounced_channels = {}
+        self.channel_lock = asyncio.Lock()
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
                 self.configuration = yaml.load(reader)
             self.command_prefix = self.config_get('prefix', default='!')
+
+        # Debounced messages are done through an event handler, so there must be a subscription
+        # However, since this is a core feature, the subscription can't be added in a sub-bot
+        @self.subscribe('debounce-send')
+        async def _debounced_send_message(self, evt, dest, content):
+            """
+            Debounces outbound messages per-channel.
+            If any kwargs are provided, this sends immediately (no logical way to
+            concatenate the kwargs)
+            Waits 1s before sending a message, then
+            """
+            async with self.channel_lock:
+                if dest.id not in self.debounced_channels:
+                    # print("DEBOUNCE: Starting new queue for", dest.id)
+                    self.debounced_channels[dest.id] = content
+                else:
+                    # print("DEBOUNCE: Appending to queue for", dest.id)
+                    self.debounced_channels[dest.id]+='\n'+content
+                MSG_LEN = len(self.debounced_channels[dest.id])
+            await asyncio.sleep(.5) # wait 500ms for other messages
+            async with self.channel_lock:
+                if MSG_LEN == len(self.debounced_channels[dest.id]):
+                    # No other messages were added to the queue while waiting
+                    # print("DEBOUNCE: Finally sending", dest.id)
+                    content = self.debounced_channels[dest.id]
+                    del self.debounced_channels[dest.id]
+                    await self._bulk_send_message(dest, content)
+                # else:
+                #     # Other messages were added, so just wait for a message to return
+                #     print("DEBOUNCE: Waiting for", dest.id)
+                #     return await self.wait_for_message(
+                #         timeout=10, # Max 10s delay before giving up
+                #         author=self.user,
+                #         check=lambda msg:len({line for line in content.split('\n')} & {line for line in msg.content.split('\n')}) > 0
+                #     )
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         if aliases is None:
@@ -375,7 +411,7 @@ class CoreBot(discord.Client):
             await asyncio.wait(tasks)
         await self.close()
 
-    async def send_message(self, destination, content, *, delim='\n', quote='', interp=None, **kwargs):
+    async def send_message(self, destination, content, *, delim='\n', quote='', interp=None, skip_debounce=False, **kwargs):
         #built in chunking
         if interp is None:
             interp = Interpolator(self, destination)
@@ -408,6 +444,26 @@ class CoreBot(discord.Client):
                         '`@%s#%s`' % (user.name, str(user.discriminator)),
                         1
                     )
+        if skip_debounce or quote != '' or len(kwargs):
+            return await self._bulk_send_message(
+                destination,
+                content,
+                delim,
+                quote,
+                **kwargs
+            )
+        else:
+            self.dispatch('debounce-send', destination, content)
+            # return await self._debounced_send_message(
+            #     destination,
+            #     content
+            # )
+
+    async def _bulk_send_message(self, destination, content, *, delim='\n', quote='', **kwargs):
+        """
+        Sends a pre-interpolated message
+        Large messages are split according to the delimiter
+        """
         body = content.split(delim)
         tmp = []
         last_msg = None
@@ -417,7 +473,7 @@ class CoreBot(discord.Client):
             if len(msg) > 2048 and delim=='. ':
                 # If the message is > 2KB and we're trying to split by sentences,
                 # try to split it up by spaces
-                last_msg = await self.send_message(
+                last_msg = await self._bulk_send_message(
                     destination,
                     msg,
                     delim=' ',
@@ -427,7 +483,7 @@ class CoreBot(discord.Client):
             elif len(msg) > 1536 and delim=='\n':
                 # if the message is > 1.5KB and we're trying to split by lines,
                 # try to split by sentences
-                last_msg = await self.send_message(
+                last_msg = await self._bulk_send_message(
                     destination,
                     msg,
                     delim='. ',
@@ -457,6 +513,7 @@ class CoreBot(discord.Client):
             except discord.errors.HTTPException as e:
                 await self.trace()
         return last_msg
+
 
     def get_user(self, reference, *servers):
         if not len(servers):
