@@ -8,6 +8,8 @@ defaults:
     - bug:status
     - bug:user
     - owupdate
+    - ignore
+    - pardon
   underscore: false
 ## Set the permissions block to specify the rules for permissions
 # permissions:

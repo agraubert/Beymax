@@ -29,7 +29,8 @@ def EnableParties(bot):
                             "It looks like you already have a party together right now: `%s`\n"
                             "However, I can disband that party and create this new one for you.\n"
                             "Would you like me to disband your current party? (Yes/No)"
-                            % parties[i]['name']
+                            % parties[i]['name'],
+                            skip_debounce=True
                         )
                         while True:
                             response = await self.wait_for_message(

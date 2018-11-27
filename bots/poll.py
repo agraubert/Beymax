@@ -45,7 +45,8 @@ def EnablePolls(bot):
         body+="\n\nReact with your vote"
         target = await self.send_message(
             message.channel,
-            body
+            body,
+            skip_debounce=True
         )
         for i in range(1,len(opts)+1):
             await self.add_reaction(
