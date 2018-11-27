@@ -74,6 +74,29 @@ class CoreBot(discord.Client):
                 #     )
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
+        """
+        Decorator. Registers the given function as the handler for the specified command.
+        Arguments:
+        command : The name of the command. Messages starting with this word (with the command prefix prepended) will run this function
+        *spec : (Optional) A variable number of Arg objects. These objects follow the argparse.add_argument syntax.
+        aliases : (Optional) List of other words to accept as the command.
+        delimiter : (Optional) A string to use to split individual arguments of the command, instead of whitespace
+        empty : (Optional) If true, the command will not accept any arguments (only the command word itself)
+        **kwargs : (Optional) A set of keyword arguments to pass on the the argument parser
+
+        If at least one spec is provided, user messages will be passed through the argparse API and
+        the third argument to the command function will be an argparse Namespace argument instead
+        of a list of words in the message.
+
+        Setting empty to True will also use the argparse API but require 0 arguments.
+
+        The decorated function must be a coroutine (async def) and use one of the following call signatures:
+        The first two arguments will be the bot object and the message object.
+        * If empty is False and no spec is provided, the last argument will be a list of lowercase strings from splitting the message content by the delimiter
+        * Otherwise, the last argument will be an argparse.Namespace object containing the arguments parsed from the message
+
+        Note: The docstring of command functions is used as the command's help text.
+        """
         if aliases is None:
             aliases = []
         for arg in spec:
@@ -152,6 +175,13 @@ class CoreBot(discord.Client):
         return wrapper
 
     def add_task(self, interval): #decorator. Sets the decorated function to run on the specified interval
+        """
+        Decorator. Sets the decorated function to run on the specified interval.
+        Arguments:
+        interval : The interval in which to run the function, in seconds
+
+        The decorated function must be a coroutine (async def) and take only the bot object as an argument
+        """
         def wrapper(func):
             taskname = 'task:'+func.__name__
             if taskname in self.tasks:
@@ -171,6 +201,16 @@ class CoreBot(discord.Client):
         return wrapper
 
     def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
+        """
+        Decorator. Sets the decorated function to run whenever the given check function is True.
+        Arguments:
+        check : A function which takes a message argument and returns True if the decorated function should be run
+
+        The decorated function must be a coroutine (async def) and take the three following arguments:
+        * The bot object
+        * The message object
+        * A list of lowercased, whitespace delimited strings
+        """
         def wrapper(func):
             event = 'special:'+func.__name__
             if event in self.special:
@@ -186,6 +226,16 @@ class CoreBot(discord.Client):
         return wrapper
 
     def subscribe(self, event): # decorator. Sets the decorated function to run on events
+        """
+        Decorator. Sets the decorated function to be run whenever the given event
+        is dispatched.
+        Arguments:
+        event : A string argument name. WHen that argument is dispatched, the decorated function will run
+
+        The decorated function must be a coroutine (async def). The function must take
+        the event name as the first argument, and any additional arguments/keyword arguments
+        are determined by the arguments to the dispatch() function
+        """
         # event functions should take the event, followed by expected arguments
         def wrapper(func):
             if str(event) not in self.event_listeners:
@@ -200,17 +250,36 @@ class CoreBot(discord.Client):
         return wrapper
 
     def reserve_channel(self, name):
+        """
+        Call to declare a channel reference. The bot configuration can then map
+        this reference to an actual channel. By default all undefined references
+        map to general
+        Arguments:
+        name : A string channel reference to reserve
+        """
         # creates a channel reference by that name
         # channel references can be changed in configuration
         self.channel_references[name] = None
 
     def fetch_channel(self, name):
+        """
+        Fetch the channel object for a given reference name. If the reference is
+        undefined, it returns general
+        Arguments:
+        name : A string channel reference to lookup
+        """
         channel = self.channel_references[name] if name in self.channel_references else None
         if channel is None:
             return self.fetch_channel('general')
         return channel
 
     def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
+        """
+        Enables all of the given Enable_ sub-bot suites.
+        Arguments:
+        *bots : A set of functions which take the bot object. Each function should perform setup required to
+            initialize a sub-bot, such as registering commands, tasks, and channel references
+        """
         for bot in bots:
             if callable(bot):
                 self = bot(self)
@@ -219,11 +288,30 @@ class CoreBot(discord.Client):
         return self
 
     def strip_prefix(self, command):
+        """
+        Returns a string with the command prefix removed.
+        Arguments:
+        command : A string to remove the command prefix from
+        """
         if command.startswith(self.command_prefix):
             return command[len(self.command_prefix):]
         return command
 
     def dispatch(self, event, *args, manual=False, **kwargs):
+        """
+        Manually dispatches an event (may be used to trigger tasks, commands, etc programatically).
+        Arguments:
+        event : The string event name to dispatch
+        *args : Arguments to provide to the event handler
+        manual : (Optional) If True, do not attempt to dispatch before: and after: events
+        **kwargs : Keyword arguments to provide to the event handler
+
+        By default, when dispatch is called:
+        * Run any functions subscribed to before:{event}
+        * Run any functions subscribed to the event in the base class (discord.Client)
+        * Run any functions subscribed to the event
+        * Run any functions subscribed to after:{event}
+        """
         self.nt += 1
         output = []
         if not manual:
@@ -243,6 +331,10 @@ class CoreBot(discord.Client):
         return output
 
     def dispatch_event(self, event, *args, **kwargs):
+        """
+        Called internally. Sets the internal event loop to run event handlers for
+        a given event
+        """
         return [
             create_task(listener(self, event, *args, **kwargs), loop=self.loop)
             for listener in self.event_listeners[event]
@@ -251,6 +343,12 @@ class CoreBot(discord.Client):
 
 
     def config_get(self, *keys, default=None):
+        """
+        Retrieve a given key from the configuration. A multiple keys may be given to retrieve a nested value.
+        Arguments:
+        *keys : List of nested keys to read from the configuration
+        default : (Optional) The fallback value to return if the requested key path does not exist or is undefined. Defaults to None
+        """
         obj = self.configuration
         for key in keys:
             if key in obj:
@@ -260,6 +358,13 @@ class CoreBot(discord.Client):
         return obj
 
     async def on_ready(self):
+        """
+        Coroutine. Default event handler for the bot going online.
+        Handles core functions such as checking primary_server configuration and
+        parsing the permissions file into a set of rules.
+        Do not override. Instead, use @bot.subsribe('ready') to add additional handling
+        to this event
+        """
         print("Connected to the following servers")
         if 'primary_server' in self.configuration:
             self.primary_server = discord.utils.get(
@@ -391,6 +496,12 @@ class CoreBot(discord.Client):
         self.task_worker.start()
 
     async def trace(self, send=True):
+        """
+        Coroutine. Prints a stack trace to the console, and optionally sends it to the registered
+        bugs channel
+        Arguments:
+        send : (Optional) If True (the default) post the stack trace to the bugs channel
+        """
         x,y,z = sys.exc_info()
         if x is None and y is None and z is None:
             msg = traceback.format_stack()
@@ -405,6 +516,11 @@ class CoreBot(discord.Client):
             )
 
     async def shutdown(self):
+        """
+        Coroutine. Use this function for a clean shutdown.
+        Dispatches the 'cleanup' event, waits for all tasks to complete, then disconnects
+        the bot
+        """
         tasks = self.dispatch('cleanup')
         if len(tasks):
             print("Waiting for ", len(tasks), "cleanup tasks to complete")
@@ -412,6 +528,27 @@ class CoreBot(discord.Client):
         await self.close()
 
     async def send_message(self, destination, content, *, delim='\n', quote='', interp=None, skip_debounce=False, **kwargs):
+        """
+        Coroutine. Primary send-message function. Use to post a message to any channel.
+        Arguments:
+        destination : A channel or User object to specify where to send the message
+        content : A string containing the message body to send
+        Keyword Only arguments:
+        delim : String to use to break up the content if it is too large to send in one message. Defaults to newline
+        quote : String to use to quote the message content (prepend and append to content). Defaults to empty string
+        interp : Object to use to interpolate substitutions in the message content. Interp may be any of the following:
+            None : (Default) Build a default Interpolator object relative to the given destination to parse the message content
+            False : Disable interpolation. Message will be sent as-is
+            Interpolator instance : A premade Interpolator instance to use in addition to the default Interpolator for the channel.
+                Substitutions from both Interpolators are used, but the user provided one takes priority when they both substitute a string
+            discord.Channel instance : Build a default Interpolator but for a channel other than the current destination
+            dict instance : Substitute each occurence of a key in the dictionary with the associated value
+        skip_debounce : If set to True, send the message immediately without debouncing. By default, messages are debounced for 500ms
+            so that messages going to the same channel can be concatenated to avoid rapidly sending short messages
+        **kwargs : Additional keyword arguments to provide to the base class (discord.Client) send_message function.
+
+        Setting quote or providing any kwargs will also disable message debouncing.
+        """
         #built in chunking
         if interp is None:
             interp = Interpolator(self, destination)
@@ -516,6 +653,14 @@ class CoreBot(discord.Client):
 
 
     def get_user(self, reference, *servers):
+        """
+        Gets a user object given a form of reference. Optionaly provide a subset of servers to check
+        Arguments:
+        reference : A string reference which can either be a user's id or a username to identify a user
+        *servers : A list of servers to check. By default, this function checks the primary_server, then all others
+
+        Checks servers for a user based on id first, then username. Returns the first match
+        """
         if not len(servers):
             servers = list(self.servers)
             if self.primary_server is not None:
@@ -532,6 +677,11 @@ class CoreBot(discord.Client):
                 return result
 
     def getid(self, username):
+        """
+        Gets the id of a user based on a reference.
+        Arguments:
+        username : A reference which may be the full discriminated username or their id
+        """
         #Get the id of a user from an unknown reference (could be their username, fullname, or id)
         result = self.get_user(username)
         if result is not None:
@@ -541,6 +691,14 @@ class CoreBot(discord.Client):
         raise NameError("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
 
     def build_permissions_chain(self, user):
+        """
+        Used to assemble the chain of permissions rules for the given user
+        Arguments:
+        user : A user object
+
+        Returns a list of permissions rules which apply to the given user, in order
+        of highest to lowest priority
+        """
         # Assemble the chain of permissions rules for a given user
         chain = []
         if user.id in self.permissions['users']:
@@ -555,6 +713,13 @@ class CoreBot(discord.Client):
         return [item for item in chain] + [self.permissions['defaults']]
 
     def has_underscore_permissions(self, user, chain=None):
+        """
+        Used to check if a user has permissions to use underscore (administrator) commands.
+        Arguments:
+        user : A user object to check for underscore permissions
+        chain : (Optional) a prebuilt permissions chain from build_permissions_chain. By default,
+            the permissions chain is rebuilt
+        """
         # Check the permissions chain for a user to see if they can use
         # Administrative (underscore) commands
         if chain is None:
@@ -565,6 +730,14 @@ class CoreBot(discord.Client):
                 return obj['underscore']
 
     def check_permissions_chain(self, cmd, user, chain=None):
+        """
+        Used to check if a user's permissions chain allows the use of a given command
+        Arguments:
+        cmd : The string command word to check. Cannot start with the command prefix (use strip_prefix)
+        user : The user object to check
+        chain : (Optional) a prebuilt permissions chain from build_permissions_chain. By default,
+            the permissions chain is rebuilt
+        """
         #Important note: cmd argument does not include the leading ! of a command
         # Permissions.yml file contains commands without prefix, and we check them
         # here without the prefix
@@ -581,11 +754,30 @@ class CoreBot(discord.Client):
         return (not cmd.startswith('_'), 'by default') #default behavior
 
     async def on_message(self, message):
+        """
+        Coroutine. Default handler for incomming messages. Do not override.
+        Immediately skips message handling and returns if:
+        * The message was sent by this bot
+        * The message was sent in a DM by a user who does not have any servers in common with this bot
+        * The message was sent by a user in this bot's ignore list
+
+        Splits the message content by whitespace (or the shlex parser if enabled)
+
+        If the first word starts with the command prefix and is in the list of registered
+        commands, dispatch the command handler, which checks permissions then runs the command
+
+        Otherwise, check if any registered special functions should run on this message
+
+        If you wish to add additional handling for messages, use @bot.subscribe('message').
+        """
         if message.author == self.user:
             return
         if self.get_user(message.author.id) is None:
             #User is not a member of any known server
             #silently ignore
+            return
+        if message.author.id in self.ignored_users:
+            print("Ignoring message from", message.author,":", content)
             return
         # build the user struct and update the users object
         if self.config_get('use_shlex'):
@@ -602,9 +794,7 @@ class CoreBot(discord.Client):
                 content[0] = content[0].lower()
             except:
                 return
-        if message.author.id in self.ignored_users:
-            print("Ignoring message from", message.author,":", content)
-        elif content[0] in self.commands: #if the first argument is a command
+        if content[0] in self.commands: #if the first argument is a command
             # dispatch command event
             print("Dispatching command")
             self.dispatch(content[0], message, content)
@@ -618,6 +808,10 @@ class CoreBot(discord.Client):
                     break
 
     def _run_tasks(self):
+        """
+        Background worker to run tasks. Every 60 seconds, while the bot is online,
+        check if it is time for any registered tasks to run
+        """
         while True:
             time.sleep(60)
             # Check if it is time to run any tasks
@@ -633,6 +827,13 @@ class CoreBot(discord.Client):
                     self.dispatch(task)
 
     async def on_server_join(self, server):
+        """
+        Coroutine. Handler for joining servers. Do not override.
+        If you wish to add handling for joining servers use @bot.subscribe('server_join')
+
+        If a primary server is defined and this is not the primary server, leave it.
+        Otherwise, print a warning that a primary server is not defined
+        """
         if self.primary_server is not None and self.primary_server != server:
             try:
                 await self.send_message(
@@ -653,11 +854,14 @@ class CoreBot(discord.Client):
             print("Warning: Joining to multiple servers is not supported behavior")
 
 def EnableUtils(bot): #prolly move to it's own bot
+    """
+    A sub-bot to enable utility functions
+    """
     #add some core commands
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    bot.reserve_channel('dev')
+    bot.reserve_channel('dev') # Reserve a reference for a development channel
 
     @bot.add_command('_task', Arg('task', type='extra', help='task_name'))
     async def cmd_task(self, message, args):

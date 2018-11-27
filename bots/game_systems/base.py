@@ -512,6 +512,8 @@ class PhasedGame(GameSystem):
                     "You cannot join the game at this time. "
                     "You will automatically join the game at the next opportunity"
                 )
+            elif user not in self.players:
+                self.players.add(user)
         else:
             if not await self.on_default_join(user):
                 print("DEFER")
@@ -521,6 +523,8 @@ class PhasedGame(GameSystem):
                     "You cannot join the game at this time. "
                     "You will automatically join the game at the next opportunity"
                 )
+            elif user not in self.players:
+                self.players.add(user)
 
     async def on_default_join(self, user):
         """
@@ -551,6 +555,8 @@ class PhasedGame(GameSystem):
                     "You cannot leave the game at this time. "
                     "You will automatically leave the game at the next opportunity"
                 )
+            elif user in self.players:
+                self.players.remove(user)
         else:
             if not await self.on_default_leave(user):
                 print("DEFER")
@@ -560,6 +566,8 @@ class PhasedGame(GameSystem):
                     "You cannot leave the game at this time. "
                     "You will automatically leave the game at the next opportunity"
                 )
+            elif user in self.players:
+                self.players.remove(user)
 
 
     async def on_default_leave(self, user):

@@ -133,6 +133,22 @@ class PrebuiltException(Exception):
 Argtuple = namedtuple('Arg', ['args', 'kwargs'])
 
 def Arg(*args, remainder=False, **kwargs):
+    """
+    Takes arguments and keyword arguments exactly like the argparse.ArgumentParser.add_argument
+    method with two exceptions:
+
+    * Setting remainder to True, sets the value of the 'nargs' keyword argument to be
+    argparse.REMAINDER. This is simply a convenience to avoid having to import argparse
+    * If the 'type' keyword argument is set to 'extra', this argument will be defined
+    exactly as expected (given the arguments) except that 'type' is set to the default str.
+    Additionally, another argument will be added with the name 'extra', 'nargs' set to
+    argparse.REMAINDER, and the 'metavar' will be set to the empty string. This attains
+    a similar result to setting 'nargs' to '+', but allows special handling of the first
+    word
+
+    Note: The first argument is the name of this argument, and will specify the attribute
+    on the Namespace where the argument value can be obtained
+    """
     if remainder:
         kwargs['nargs'] = argparse.REMAINDER
     if 'metavar' in kwargs and kwargs['metavar'] != '':
