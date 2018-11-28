@@ -585,8 +585,8 @@ class CoreBot(discord.Client):
             return await self._bulk_send_message(
                 destination,
                 content,
-                delim,
-                quote,
+                delim=delim,
+                quote=quote,
                 **kwargs
             )
         else:
