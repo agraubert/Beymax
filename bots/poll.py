@@ -49,13 +49,12 @@ def EnablePolls(bot):
             skip_debounce=True
         )
         for i in range(1,len(opts)+1):
-            await self.add_reaction(
-                target,
+            await target.add_reaction(
                 (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
             )
         if not isinstance(message.channel, discord.PrivateChannel):
             try:
-                await self.delete_message(message)
+                await message.delete()
             except:
                 print("Warning: Unable to delete poll source message")
             self.polls[target.id] = (message.author, set())

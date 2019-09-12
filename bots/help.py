@@ -431,9 +431,9 @@ def EnableHelp(bot):
             for cmd in self.commands
             if self.check_permissions_chain(self.strip_prefix(cmd), message.author, chain)
         }
-        response = await self.wait_for_message(
-            author=message.author,
-            channel=prompt.channel
+        response = await self.wait_for(
+            'message',
+            check=lambda m: m.author == message.author and m.channel == prompt.channel
         )
         if response.content.lower() in commands:
             await self.send_message(

@@ -92,9 +92,9 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                 "We're glad to have you on our server! Would you like a brief "
                 "introduction on what I can do? (Yes/No)"
             )
-            response = await self.wait_for_message(
-                channel=message.channel,
-                # check=lambda x:x.content.lower() in {'yes', 'no'}
+            response = await self.wait_for(
+                'message',
+                check=lambda m : m.channel == message.channel
             )
             if response is None or response.content.lower() == 'no':
                 await self.send_message(
@@ -145,7 +145,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         name = select_status()
         print("CHANGING STATUS:", name)
         await self.change_presence(
-            game=discord.Game(name=name)
+            activity=discord.Game(name=name)
         )
 
     @beymax.add_command('_status', Arg('status', remainder=True, help="Manually set this status"))
@@ -155,7 +155,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         else:
             name = select_status()
         await self.change_presence(
-            game=discord.Game(name=name)
+            activity=discord.Game(name=name)
         )
 
     def pick(self, message):
@@ -163,8 +163,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
     @beymax.add_special(pick)
     async def react(self, message, content):
-        await self.add_reaction(
-            message,
+        await message.add_reaction(
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
         # print("granting reaction xp")

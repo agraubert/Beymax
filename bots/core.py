@@ -1,7 +1,6 @@
 from .utils import load_db, save_db, Database, getname, validate_permissions, Interpolator
 from .args import Arg, Argspec, UserType
 import discord
-from discord.compat import create_task
 import asyncio
 import time
 import os
@@ -12,6 +11,7 @@ import shlex
 from functools import wraps
 import re
 import traceback
+import warnings
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
@@ -26,7 +26,6 @@ class CoreBot(discord.Client):
         # changed to set in favor of event API
         self.commands = {} # !cmd -> docstring. Functions take (self, message, content)
         self.ignored_users = set()
-        self.users = {} # id/fullname -> {id, fullname, mention, name}
         self.tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
         self.special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
         self.special_order = []
@@ -64,14 +63,6 @@ class CoreBot(discord.Client):
                     content = self.debounced_channels[dest.id]
                     del self.debounced_channels[dest.id]
                     await self._bulk_send_message(dest, content)
-                # else:
-                #     # Other messages were added, so just wait for a message to return
-                #     print("DEBOUNCE: Waiting for", dest.id)
-                #     return await self.wait_for_message(
-                #         timeout=10, # Max 10s delay before giving up
-                #         author=self.user,
-                #         check=lambda msg:len({line for line in content.split('\n')} & {line for line in msg.content.split('\n')}) > 0
-                #     )
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, empty=False, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         """
@@ -159,7 +150,7 @@ class CoreBot(discord.Client):
                         # have permissions for this command
                         (("If you have permissions granted to you by a role, "
                          "I cannot check those in private messages\n")
-                         if isinstance(message.channel, discord.PrivateChannel) and
+                         if isinstance(message.channel, discord.abc.PrivateChannel) and
                          self.primary_server is None
                          else ""
                         ) +
@@ -336,7 +327,7 @@ class CoreBot(discord.Client):
         a given event
         """
         return [
-            create_task(listener(self, event, *args, **kwargs), loop=self.loop)
+            asyncio.ensure_future(listener(self, event, *args, **kwargs), loop=self.loop)
             for listener in self.event_listeners[event]
         ]
 
@@ -365,11 +356,12 @@ class CoreBot(discord.Client):
         Do not override. Instead, use @bot.subsribe('ready') to add additional handling
         to this event
         """
+        self.servers = self.guilds
         print("Connected to the following servers")
         if 'primary_server' in self.configuration:
             self.primary_server = discord.utils.get(
                 self.servers,
-                id=str(self.configuration['primary_server'])
+                id=self.configuration['primary_server']
             )
             if self.primary_server is None:
                 sys.exit("Primary server set, but no matching server was found")
@@ -566,11 +558,12 @@ class CoreBot(discord.Client):
             for key in interp:
                 content = content.replace(key, interp[key])
         except:
+            traceback.print_exc()
             print("Interpolation Error: ", {**interp})
         for match in mention_pattern.finditer(content):
             uid = match.group(1)
             do_sub = isinstance(destination, discord.User) and destination.id != uid
-            do_sub |= hasattr(destination, 'server') and self.get_user(uid, destination.server) is None
+            do_sub |= hasattr(destination, 'guild') and self.get_user(uid, destination.guild) is None
             do_sub |= hasattr(destination, 'recipients') and uid not in {user.id for user in destination.recipients}
             if do_sub:
                 # have to replace the mention with a `@Username`
@@ -631,8 +624,7 @@ class CoreBot(discord.Client):
                 # Otherwise, send it if the current message has reached the
                 # 1KB chunking target
                 try:
-                    last_msg = await super().send_message(
-                        destination,
+                    last_msg = await destination.send(
                         quote+msg+quote,
                         **kwargs
                     )
@@ -643,8 +635,7 @@ class CoreBot(discord.Client):
         if len(tmp):
             #send any leftovers (guaranteed <2KB)
             try:
-                last_msg = await super().send_message(
-                    destination,
+                last_msg = await destination.send(
                     quote+msg+quote
                 )
             except discord.errors.HTTPException as e:
@@ -667,10 +658,14 @@ class CoreBot(discord.Client):
                 servers = [self.primary_server] + servers
                 #it's okay that the primary_server is duplicated
                 #But at least this gives it priority
-        for server in servers:
-            result = server.get_member(reference)
-            if result is not None:
-                return result
+        try:
+            uid = int(reference)
+            for server in servers:
+                result = server.get_member(uid)
+                if result is not None:
+                    return result
+        except ValueError:
+            pass
         for server in servers:
             result = server.get_member_named(reference)
             if result is not None:
@@ -705,9 +700,9 @@ class CoreBot(discord.Client):
             chain += self.permissions['users'][user.id]
         if self.primary_server is not None:
             user = self.primary_server.get_member(user.id)
-        if hasattr(user, 'roles') and hasattr(user, 'server'):
+        if hasattr(user, 'roles') and hasattr(user, 'guild'):
             user_roles = set(user.roles)
-            for role in user.server.role_hierarchy:
+            for role in user.guild.roles:
                 if role in user_roles and role.id in self.permissions['roles']:
                     chain.append(self.permissions['roles'][role.id])
         return [item for item in chain] + [self.permissions['defaults']]
@@ -849,7 +844,7 @@ class CoreBot(discord.Client):
                 )
             except:
                 pass
-            await self.leave_server(server)
+            await server.leave()
         elif len(self.servers) > 1:
             print("Warning: Joining to multiple servers is not supported behavior")
 
@@ -942,7 +937,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 cmd,
                 rule
             ))
-        if isinstance(message.channel, discord.PrivateChannel) and self.primary_server is None:
+        if isinstance(message.channel, discord.abc.PrivateChannel) and self.primary_server is None:
             body.append(
                 "You may have additional permissions granted to you by a role"
                 " but I cannot check those within a private chat. Try the"
@@ -976,7 +971,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             user = server.get_member(uid)
             if user is not None:
                 general = self.fetch_channel('general')
-                if general.server != server:
+                if general.guild != server:
                     general = discord.utils.get(
                         server.channels,
                         name='general',
@@ -1031,7 +1026,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             user = server.get_member(uid)
             if user is not None:
                 general = self.fetch_channel('general')
-                if general.server != server:
+                if general.guild != server:
                     general = discord.utils.get(
                         server.channels,
                         name='general',
@@ -1041,8 +1036,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                     blacklist_role = self.config_get('ignore_role')
                     for role in server.roles:
                         if role.id == blacklist_role or role.name == blacklist_role:
-                            await self.remove_roles(
-                                user,
+                            await user.remove_roles(
                                 role
                             )
                 try:
@@ -1067,7 +1061,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         `$!idof <entity>` : Gets a list of all known entities by that name
         Example: `$!idof general` would list all users, channels, and roles with that name
         """
-        servers = [message.server] if message.server is not None else self.servers
+        servers = [message.guild] if message.guild is not None else self.servers
         result = []
         query = ' '.join([args.query] + args.extra).lower()
         for server in servers:

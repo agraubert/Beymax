@@ -34,7 +34,7 @@ def EnableBugs(bot):
             role_mention = ''
             role_target = self.config_get('bug_role')
             if role_target is not None:
-                for role in self.fetch_channel('bugs').server.roles:
+                for role in self.fetch_channel('bugs').guild.roles:
                     # Not that this will make literally 0 sense in a multi-server environment
                     # primaryServerMasterRace
                     if role.id == role_target or role.name == role_target:

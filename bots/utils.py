@@ -7,6 +7,18 @@ import traceback
 db_lock = asyncio.Lock()
 locks = {}
 
+def parse_id_keys(obj):
+    if isinstance(obj, dict):
+        try:
+            return {
+                int(key):parse_id_keys(val) for key,val in obj.items()
+            }
+        except ValueError:
+            return {key:parse_id_keys(val) for key,val in obj.items()}
+    elif isinstance(obj, list):
+        return [parse_id_keys(elem) for elem in obj]
+    return obj
+
 class Database(dict):
     def __init__(self, filename, default=None):
         super().__init__(self)
@@ -25,7 +37,7 @@ class Database(dict):
         await locks[self.filename].acquire()
         try:
             with open(self.filename) as reader:
-                self.update(json.load(reader))
+                self.update(parse_id_keys(json.load(reader)))
         except FileNotFoundError:
             self.update({} if self.default is None else self.default)
         return self
@@ -63,7 +75,7 @@ class ListDatabase(list):
         await locks[self.filename].acquire()
         try:
             with open(self.filename) as reader:
-                self += json.load(reader)
+                self += parse_id_keys(json.load(reader))
         except FileNotFoundError:
             self += ([] if self.default is None else self.default)
         return self
@@ -111,7 +123,7 @@ class Interpolator(dict):
             default=bot.user.name
         )
         NICK = (
-            bot.get_user(bot.user.id, channel.server)
+            bot.get_user(bot.user.id, channel.guild)
             if hasattr(channel, 'server')
             else (
                 bot.get_user(bot.user.id)
@@ -127,7 +139,7 @@ class Interpolator(dict):
             '$NAME': NAME,
             '$MENTION': bot.user.mention,
             '$FULLNAME': '%s#%s' % ( bot.user.name, str(bot.user.discriminator)),
-            '$ID': bot.user.id,
+            '$ID': str(bot.user.id),
             '$NICK': NICK,
             '$CHANNEL': (
                 channel.name if hasattr(channel, 'name') and channel.name is not None

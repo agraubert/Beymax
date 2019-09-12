@@ -217,19 +217,20 @@ def EnableGames(bot):
                             " game? (Yes/No)"
                         )
                         while True:
-                            response = await self.wait_for_message(
-                                timeout=60,
-                                author=message.author,
-                                channel=message.channel
-                            )
-                            if response is None:
+                            try:
+                                response = await self.wait_for(
+                                    'message',
+                                    check=lambda m: m.author==message.author and m.channel == message.channel,
+                                    timeout=60,
+                                )
+                            except asyncio.TimeoutError:
                                 await self.send_message(
                                     message.channel,
                                     "%s, if you still want to leave the game, "
                                     "you'll have to use `$!leave` again" % getname(message.author)
                                 )
                                 return
-                            elif response.content.lower().strip() == 'no':
+                            if response.content.lower().strip() == 'no':
                                 await self.send_message(
                                     message.channel,
                                     "Okay, %s. You will still remain in the game" % getname(message.author)
@@ -326,7 +327,7 @@ def EnableGames(bot):
                 "The current player has disabled comments in the story channel"
             )
             await asyncio.sleep(0.5)
-            await self.delete_message(message)
+            await message.delete()
 
 
     @bot.add_command('toggle-comments', empty=True)
