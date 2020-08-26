@@ -52,7 +52,7 @@ def EnablePolls(bot):
             await target.add_reaction(
                 (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
             )
-        if not isinstance(message.channel, discord.PrivateChannel):
+        if not isinstance(message.channel, discord.abc.PrivateChannel):
             try:
                 await message.delete()
             except:

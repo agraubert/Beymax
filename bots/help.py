@@ -461,7 +461,7 @@ def EnableHelp(bot):
         # self.help_sessions[message.author.id] = HelpSession(self, message.author)
 
     # def should_help(self, message):
-    #     return isinstance(message.channel, discord.PrivateChannel) and message.author.id in self.help_sessions
+    #     return isinstance(message.channel, discord.abc.PrivateChannel) and message.author.id in self.help_sessions
     #
     # @bot.add_special(should_help)
     # async def help_digest(self, message, content):
@@ -469,7 +469,7 @@ def EnableHelp(bot):
     #     self.help_sessions = {user:session for user,session in self.help_sessions.items() if session.active}
 
     # def confused(self, message):
-    #     return isinstance(message.channel, discord.PrivateChannel) and message.author.id not in self.help_sessions
+    #     return isinstance(message.channel, discord.abc.PrivateChannel) and message.author.id not in self.help_sessions
     #
     # @bot.add_special(confused)
     # async def suggest_help(self, message, content):

@@ -99,7 +99,7 @@ def EnableParties(bot):
                             manage_roles=src.manage_roles,
                             manage_webhooks=src.manage_webhooks,
                             connect=src.read_messages,
-                            send=src.send_messages,
+                            send_messages=src.send_messages,
                             mute_members=src.manage_messages,
                             deafen_members=src.manage_messages,
                             move_members=src.manage_messages,
@@ -116,10 +116,15 @@ def EnableParties(bot):
                     manage_roles=True,
                     manage_channels=True # Allow creator to modify the channel
                 )
+                category = None
+                if self.config_get('party_category') is not None:
+                    for cat in message.guild.categories:
+                        if cat.id == self.config_get('party_category') or cat.name == self.config_get('party_category'):
+                            category = cat
                 channel = await message.guild.create_voice_channel(
                     name,
                     overwrites=perms,
-                    category=self.categories['Voice Channels'],
+                    category=category,
                     reason="Creating party for {}".format(getname(message.author))
                 )
 
