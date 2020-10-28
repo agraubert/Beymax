@@ -1,5 +1,5 @@
 import asyncio
-from ...utils import Database, load_db, getname
+from ...utils import DBView, getname
 from .utils import FreePhase, LockedPhase, Hand, strike_if
 
 class PreGame(FreePhase):

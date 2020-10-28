@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database, get_attr, getname
+from .utils import DBView, get_attr, getname
 from .args import Arg, DateType
 import os
 import requests

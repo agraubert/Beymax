@@ -1,6 +1,6 @@
 from .core import CoreBot
 from .args import Arg
-from .utils import ListDatabase, sanitize, getname
+from .utils import DBView, sanitize, getname
 import discord
 from discord.http import Route
 import asyncio

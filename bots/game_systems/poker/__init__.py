@@ -3,7 +3,7 @@ import asyncio
 import random
 import json
 import os
-from ...utils import Database, load_db, getname
+from ...utils import DBView, getname
 from ..base import GameEndException, PhasedGame
 from .utils import Card, Hand, Deck, PokerError
 from .texas_hold_em import __GAME_DEF as texas, __RESTORE as texas_restore
@@ -63,8 +63,8 @@ class PokerSystem(PhasedGame):
         raise PokerError("All players inactive")
 
     async def save_state(self):
-        async with Database('poker.json') as poker:
-            poker.update({
+        async with DBView('poker') as db:
+            db['poker'].update({
                 'players': [player.id for player in self.players],
                 'inactive_players': [player_id for player_id in self.inactive_players],
                 'dealer': self.dealer,
@@ -79,7 +79,6 @@ class PokerSystem(PhasedGame):
                 },
                 'table': [repr(card) for card in self.table]
             })
-            poker.save()
 
     async def do_refund(self):
         await self.bot.send_message(

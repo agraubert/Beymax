@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database, get_attr
+from .utils import DBView, get_attr
 from .args import Arg, DateType, DollarType
 from argparse import ArgumentTypeError
 import asyncio

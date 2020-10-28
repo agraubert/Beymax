@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import sanitize, ListDatabase, Database
+from .utils import sanitize, DBView
 import discord
 import asyncio
 import sys

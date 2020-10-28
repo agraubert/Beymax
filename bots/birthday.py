@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import Database, get_attr
+from .utils import DBView, get_attr
 from .args import Arg, DateType
 from .ow import postfix
 import asyncio

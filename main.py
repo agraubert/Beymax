@@ -19,13 +19,13 @@ bots/core.py and bots/utils.py contain the development framework upon which
 all of Beymax is built. The remaining bots/*.py files build unique feature sets
 out of this framework. This file is where we tie it all together. Starting from
 the CoreBot (defined in bots/core.py) we add in a few additional just-for-fun
-features (greetings, statuses, etc) which we wanted on our server, but which we didn't
+features (greetings, statuses, etc) which we wanted on our guild, but which we didn't
 think justified an entire feature set. Then we enable all of the other features
 using EnableAll, and the various Enable___ functions. Lastly, the bot is launched
 by reading a token out of token.txt
 
 You are free to use any of the features in this file and others to get your bot
-setup as you wish. Note that bots/help.py is considered server-specific and just
+setup as you wish. Note that bots/help.py is considered guild-specific and just
 generally bad. We appologize and intend to deprecate or fix this code in the future
 
 If you have any trouble, feel free to reach out to us by opening an issue on our
@@ -44,7 +44,7 @@ def select_status():
             'Surgeon Simulator',
             'a robot doctor, but only on TV',
             'your loyal servant, for now',
-            'with the server settings',
+            'with the guild settings',
             'with the Discord API',
             'with your very lives',
             'Metadata Salesman'
@@ -55,7 +55,7 @@ def select_status():
 
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
-    beymax = EnableGames(beymax) # Story needs priority on special message recognition
+    # beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
@@ -64,21 +64,20 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         print(self.user.id)
         print('------')
         print("Bot connected to:")
-        for server in self.servers:
-            print(server.name)
+        for guild in self.guilds:
+            print(guild.name)
         print("Bot has access to:")
         for channel in self.get_all_channels():
             print(channel.name, channel.type)
         print("Ready to serve!")
         self.dispatch('task:update_status') # manually set status at startup
-        from bots.utils import Database
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
         await self.send_message(
             self.fetch_channel('general'),
             "Welcome, "+member.mention+"!\n"
-            "I am %s, your personal ~~healthcare~~ server companion\n"
+            "I am %s, your personal ~~healthcare~~ guild companion\n"
             "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi\n"
             "Try typing `$!permissions` to find the list of commands you can use "
             "or `$!ouch` to get help with them" % (
@@ -89,7 +88,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             await asyncio.sleep(10)
             message = await self.send_message(
                 member,
-                "We're glad to have you on our server! Would you like a brief "
+                "We're glad to have you on our guild! Would you like a brief "
                 "introduction on what I can do? (Yes/No)"
             )
             response = await self.wait_for(
@@ -175,13 +174,13 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
     beymax.EnableAll( #enable all sub-bots
         EnableUtils,
-        EnableBirthday,
-        EnableBugs,
-        EnableHelp,
-        EnableOverwatch,
-        EnableParties,
-        EnablePolls,
-        EnableCash,
+        # EnableBirthday,
+        # EnableBugs,
+        # EnableHelp,
+        # EnableOverwatch,
+        # EnableParties,
+        # EnablePolls,
+        # EnableCash,
     )
 
     return beymax

@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import getname, Database, load_db, save_db, get_attr
+from .utils import getname, DBView, get_attr
 from .args import Arg, UserType
 import discord
 import asyncio

@@ -1,5 +1,5 @@
 from .core import CoreBot
-from .utils import ListDatabase, getname, get_attr
+from .utils import DBView, getname, get_attr
 from .args import Arg, UserType
 import asyncio
 

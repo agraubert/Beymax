@@ -33,31 +33,31 @@ class EType(object):
         if self.null:
             return False
 
-class ServerType(EType):
+class GuildType(EType):
     def __call__(self, arg):
-        server = self.search_iter(self.client.servers, arg)
-        if server is not None:
-            return server
+        guild = self.search_iter(self.client.guilds, arg)
+        if guild is not None:
+            return guild
         raise argparse.ArgumentTypeError(
-            "No server matching `%s` by %s" % (
+            "No guild matching `%s` by %s" % (
                 arg,
                 ljoin(self.fields)
             )
         )
 
-class ServerComponentType(EType):
+class GuildComponentType(EType):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def servers(self):
-        if self.client.primary_server is not None:
-            yield self.client.primary_server
-        yield from self.client.servers
+    def guilds(self):
+        if self.client.primary_guild is not None:
+            yield self.client.primary_guild
+        yield from self.client.guilds
 
-class RoleType(ServerComponentType):
+class RoleType(GuildComponentType):
     def __call__(self, arg):
         role = self.search_iter(
-            [role for server in self.servers() for role in server.roles],
+            [role for guild in self.guilds() for role in guild.roles],
             arg
         )
         if role is not None:
@@ -69,10 +69,10 @@ class RoleType(ServerComponentType):
             )
         )
 
-class ChannelType(ServerComponentType):
+class ChannelType(GuildComponentType):
     def __call__(self, arg):
         channel = self.search_iter(
-            [channel for server in self.servers() for channel in server.channels],
+            [channel for guild in self.guilds() for channel in guild.channels],
             arg
         )
         if channel is not None:
@@ -84,7 +84,7 @@ class ChannelType(ServerComponentType):
             )
         )
 
-class UserType(ServerComponentType):
+class UserType(GuildComponentType):
     def __init__(self, client, by_name=True, by_id=True, by_nick=True, nullable=False, mentions=True):
         super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
         self.nick = by_nick
@@ -99,7 +99,7 @@ class UserType(ServerComponentType):
                 arg = result.group(1)
                 print("Matched Mention")
         member = self.search_iter(
-            [member for server in self.servers() for member in server.members],
+            [member for guild in self.guilds() for member in guild.members],
             arg
         )
         if member is not None:
@@ -132,6 +132,9 @@ class PrebuiltException(Exception):
 
 Argtuple = namedtuple('Arg', ['args', 'kwargs'])
 
+
+# FIXME: Extra is useful, but adding it as separate arguments seems dumb
+# Everywhere I use extra, i'm concatenating arg + extra
 def Arg(*args, remainder=False, **kwargs):
     """
     Takes arguments and keyword arguments exactly like the argparse.ArgumentParser.add_argument
@@ -158,7 +161,7 @@ def Arg(*args, remainder=False, **kwargs):
     return Argtuple(args, kwargs)
 
 class Argspec(argparse.ArgumentParser):
-    def __init__(self, name, *args, **kwargs):
+    def __init__(self, name, *args, allow_redirection=True, **kwargs):
         super().__init__(name, add_help=False, **kwargs)
         for arg in args:
             if 'type' in arg.kwargs and arg.kwargs['type'] == 'extra':
