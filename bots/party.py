@@ -23,7 +23,7 @@ def EnableParties(bot):
         if message.guild is not None:
             async with ListDatabase('parties.json') as parties:
                 for i in range(len(parties)):
-                    if message.guild.id == parties[i]['server'] and message.author.id == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
+                    if message.guild.id == parties[i]['guild'] and message.author.id == parties[i]['creator'] and time.time()-parties[i]['time'] < 86400:
                         await self.send_message(
                             message.channel,
                             "It looks like you already have a party together right now: `%s`\n"
@@ -136,7 +136,7 @@ def EnableParties(bot):
                 parties.append({
                     'name':name,
                     'id':channel.id,
-                    'server':message.guild.id,
+                    'guild':message.guild.id,
                     # 'primed':False,
                     'creator':message.author.id,
                     'time': time.time()
@@ -146,7 +146,7 @@ def EnableParties(bot):
             await self.send_message(
                 message.channel,
                 "You cannot use this command in a private chat. "
-                "Please try it again from within a server channel"
+                "Please try it again from within a guild channel"
             )
 
     @bot.add_command('disband', empty=True)
@@ -158,7 +158,7 @@ def EnableParties(bot):
             async with ListDatabase('parties.json') as parties:
                 pruned = []
                 for i in range(len(parties)):
-                    if message.guild.id == parties[i]['server'] and message.author.id == parties[i]['creator']:
+                    if message.guild.id == parties[i]['guild'] and message.author.id == parties[i]['creator']:
                         channel = discord.utils.get(
                             self.get_all_channels(),
                             id=parties[i]['id'],

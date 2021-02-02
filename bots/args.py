@@ -4,6 +4,7 @@ from datetime import datetime
 import re
 
 mention_pattern = re.compile(r'<@\D?(\d+)>')
+channel_mention_pattern = re.compile(r'<#(\d+)>')
 
 def ljoin(args, op='or'):
     output = ', '.join(args[:-1])
@@ -28,7 +29,7 @@ class EType(object):
     def search_iter(self, iterable, arg):
         for field in self.fields:
             for item in iterable:
-                if hasattr(item, field) and getattr(item, field) == arg:
+                if hasattr(item, field) and str(getattr(item, field)) == str(arg):
                     return item
         if self.null:
             return False
@@ -46,9 +47,6 @@ class GuildType(EType):
         )
 
 class GuildComponentType(EType):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def guilds(self):
         if self.client.primary_guild is not None:
             yield self.client.primary_guild
@@ -70,7 +68,16 @@ class RoleType(GuildComponentType):
         )
 
 class ChannelType(GuildComponentType):
+    def __init__(self, client, by_name=True, by_id=True, nullable=False, mentions=True):
+        super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
+        self.mentions = mentions
+
     def __call__(self, arg):
+        if self.mentions:
+            result = channel_mention_pattern.match(arg)
+            if result:
+                arg = int(result.group(1))
+                print("Matched Mention")
         channel = self.search_iter(
             [channel for guild in self.guilds() for channel in guild.channels],
             arg
@@ -96,7 +103,7 @@ class UserType(GuildComponentType):
         if self.mentions:
             result = mention_pattern.match(arg)
             if result:
-                arg = result.group(1)
+                arg = int(result.group(1))
                 print("Matched Mention")
         member = self.search_iter(
             [member for guild in self.guilds() for member in guild.members],

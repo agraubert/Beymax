@@ -187,8 +187,9 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
 if __name__ == '__main__':
     with open("token.txt") as r:
-        try:
-            bey = ConstructBeymax()
-            bey.run(r.read().strip())
-        finally:
-            print(bey._dbg_event_queue)
+        ConstructBeymax().run(r.read().strip())
+        # try:
+        #     bey = ConstructBeymax()
+        #     bey.run(r.read().strip())
+        # finally:
+        #     print(bey._dbg_event_queue)

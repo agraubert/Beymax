@@ -1,5 +1,6 @@
-from .utils import DBView, getname, validate_permissions, Interpolator
-from .args import Arg, Argspec, UserType
+from .utils import DBView, getname, Interpolator, standard_intents
+from .args import Arg, Argspec, UserType, ChannelType
+from .perms import PermissionsFile
 import discord
 import asyncio
 import time
@@ -17,7 +18,7 @@ mention_pattern = re.compile(r'<@.*?(\d+)>')
 
 class CoreBot(discord.Client):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, intents=standard_intents(), **kwargs)
         self.nt = 0
         self.configuration = {}
         self.primary_guild = None
@@ -76,12 +77,6 @@ class CoreBot(discord.Client):
         delimiter : (Optional) A string to use to split individual arguments of the command, instead of whitespace
         **kwargs : (Optional) A set of keyword arguments to pass on the the argument parser
 
-        If at least one spec is provided, user messages will be passed through the argparse API and
-        the third argument to the command function will be an argparse Namespace argument instead
-        of a list of words in the message.
-
-        Setting empty to True will also use the argparse API but require 0 arguments.
-
         The decorated function must be a coroutine (async def) and use one of the following call signatures:
         The first two arguments will be the bot object and the message object.
         * If empty is False and no spec is provided, the last argument will be a list of lowercase strings from splitting the message content by the delimiter
@@ -103,8 +98,8 @@ class CoreBot(discord.Client):
         def wrapper(func):
             @wraps(func)
             async def on_cmd(self, cmd, message):
-                if self.check_permissions_chain(self.strip_prefix(cmd), message.author)[0]:
-                    print("Command in channel", message.channel, "from", message.author, ":", content)
+                if self.permissions.query(message.author, self.strip_prefix(cmd))[0]:
+                    print("Command in channel", message.channel, "from", message.author, ":", message.content.strip().split())
                     argspec = Argspec(cmd, *spec, **kwargs)
                     if delimiter is not None and delimiter not in message.content:
                         delim = None
@@ -113,7 +108,7 @@ class CoreBot(discord.Client):
                         delim = None
                     else:
                         delim = delimiter
-                    result, args = argspec(message.content.strip().split()[1:], delimiter=delim)
+                    result, args = argspec(*message.content.strip().split()[1:], delimiter=delim)
                     if not result:
                         await self.send_message(
                             message.channel,
@@ -324,6 +319,8 @@ class CoreBot(discord.Client):
         Called internally. Sets the internal event loop to run event handlers for
         a given event
         """
+        if asyncio.get_running_loop() != self.loop:
+            sys.exit("Penis")
         return [
             asyncio.ensure_future(listener(self, event, *args, **kwargs), loop=self.loop)
             for listener in self.event_listeners[event]
@@ -354,138 +351,142 @@ class CoreBot(discord.Client):
         Do not override. Instead, use @bot.subsribe('ready') to add additional handling
         to this event
         """
-        print("Connected to the following guilds")
-        if 'primary_guild' in self.configuration:
-            self.primary_guild = discord.utils.get(
-                self.guilds,
-                id=self.configuration['primary_guild']
+        try:
+            print("Connected to the following guilds")
+            if 'primary_guild' in self.configuration:
+                self.primary_guild = discord.utils.get(
+                    self.guilds,
+                    id=self.configuration['primary_guild']
+                )
+                if self.primary_guild is None:
+                    sys.exit("Primary guild set, but no matching guild was found")
+                else:
+                    print("Validated primary guild:", self.primary_guild.name)
+            else:
+                print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
+            first = True
+            for guild in list(self.guilds):
+                print(guild.name, guild.id)
+                await self.on_guild_join(guild)
+            print("Commands:", [cmd for cmd in self.commands])
+            print(
+                "Tasks:",
+                '\n'.join([
+                    '%s every %d seconds (Runs %s)' % (
+                        taskname,
+                        *self.tasks[taskname]
+                    ) for taskname in self.tasks
+                ])
             )
-            if self.primary_guild is None:
-                sys.exit("Primary guild set, but no matching guild was found")
-            else:
-                print("Validated primary guild:", self.primary_guild.name)
-        else:
-            print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
-        first = True
-        for guild in list(self.guilds):
-            print(guild.name, guild.id)
-            await self.on_guild_join(guild)
-        print("Commands:", [cmd for cmd in self.commands])
-        print(
-            "Tasks:",
-            '\n'.join([
-                '%s every %d seconds (Runs %s)' % (
-                    taskname,
-                    *self.tasks[taskname]
-                ) for taskname in self.tasks
-            ])
-        )
-        self._general = discord.utils.get(
-            self.get_all_channels(),
-            name='general',
-            type=discord.ChannelType.text
-        )
-        async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
-            taskkey = ''.join(sorted(self.tasks))
-            if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
-                print("Invalidating task time cache")
-                db['tasks'] = {'key':taskkey, 'tasks':{}}
-            else:
-                print("Not task invalidating cache")
-            self.update_times = db['tasks']
+            self._general = discord.utils.get(
+                self.get_all_channels(),
+                name='general',
+                type=discord.ChannelType.text
+            )
+            async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
+                taskkey = ''.join(sorted(self.tasks))
+                if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
+                    print("Invalidating task time cache")
+                    db['tasks'] = {'key':taskkey, 'tasks':{}}
+                else:
+                    print("Not task invalidating cache")
+                self.update_times = db['tasks']
 
-        self.permissions = None
-        self.channel_references['general'] = self._general
-        if 'channels' in self.configuration:
-            for name in self.channel_references:
-                if name in self.configuration['channels']:
-                    channel = discord.utils.get(
-                        self.get_all_channels(),
-                        name=self.configuration['channels'][name],
-                        type=discord.ChannelType.text
-                    )
-                    if channel is None:
+            self.channel_references['general'] = self._general
+            if 'channels' in self.configuration:
+                for name in self.channel_references:
+                    if name in self.configuration['channels']:
                         channel = discord.utils.get(
                             self.get_all_channels(),
-                            id=self.configuration['channels'][name],
+                            name=self.configuration['channels'][name],
                             type=discord.ChannelType.text
                         )
-                    if channel is None:
-                        raise NameError("No channel by name of "+self.configuration['channels'][name])
-                    self.channel_references[name] = channel
-                else:
-                    print("Warning: Channel reference", name, "is not defined")
-        print(self.channel_references)
-        # Preload server ignores. Readonly, but default to list
-        async with DBView(ignores=[]) as db:
-            self.ignored_users = set(db['ignores'])
-        if os.path.exists('permissions.yml'):
-            with open('permissions.yml') as reader:
-                self.permissions = yaml.load(reader)
-            #get user by name: guild.get_member_named
-            #get user by id: guild.get_member
-            #iterate over guild.role_hierarchy until the command is found (default enabled)
-            #validate the permissions object
-            if not isinstance(self.permissions, dict):
-                sys.exit("permissions.yml must be a dictionary")
-            if 'defaults' not in self.permissions:
-                sys.exit("permissions.yml must define defaults")
-            validate_permissions(self.permissions['defaults'], True)
-            if 'rules' in self.permissions:
-                if not isinstance(self.permissions['rules'], list):
-                    sys.exit("rules key of permissions.yml must be a list")
-            seen_roles = set()
-            for target in self.permissions['rules']:
-                validate_permissions(target)
-                if 'role' in target:
-                    if target['role'] in seen_roles:
-                        sys.exit("Duplicate role encountered in permissions.yml")
-                    seen_roles.add(target['role'])
-            self.permissions['roles'] = {
-                discord.utils.find(
-                    lambda role: role.name == obj['role'] or role.id == obj['role'],
-                    [_role for guild in self.guilds for _role in guild.roles]
-                ).id:obj for obj in self.permissions['rules']
-                if 'role' in obj
-            }
-            try:
-                tmp = [
-                    (self.getid(user),obj) for obj in self.permissions['rules']
-                    if 'users' in obj
-                    for user in obj['users']
-                ]
-            except NameError as e:
-                raise SystemExit("Unable to find user") from e
-            self.permissions['users'] = {}
-            for uid, rule in tmp:
-                if uid not in self.permissions['users']:
-                    self.permissions['users'][uid] = [rule]
-                else:
-                    self.permissions['users'][uid].append(rule)
-            for uid in self.permissions['users']:
-                self.permissions['users'][uid].sort(
-                    key=lambda x:len(x['users'])
-                )
-            self.permissions['defaults']['_grant'] = 'by default'
-            for user in self.permissions['users']:
-                for i in range(len(self.permissions['users'][user])):
-                    nUsers = len(self.permissions['users'][user][i]['users'])
-                    self.permissions['users'][user][i]['_grant'] = (
-                        'directly to you' if nUsers == 1 else
-                        'to you and %d other people' % nUsers
-                    )
-            for role in self.permissions['roles']:
-                self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
-                    self.permissions['roles'][role]['role']
-                )
-        self.task_worker = threading.Thread(
-            target=CoreBot._run_tasks,
-            args=(self,),
-            daemon=True,
-            name="CoreBot Background Task Thread"
-        )
+                        if channel is None:
+                            channel = discord.utils.get(
+                                self.get_all_channels(),
+                                id=self.configuration['channels'][name],
+                                type=discord.ChannelType.text
+                            )
+                        if channel is None:
+                            raise NameError("No channel by name of "+self.configuration['channels'][name])
+                        self.channel_references[name] = channel
+                    else:
+                        print("Warning: Channel reference", name, "is not defined")
+            print(self.channel_references)
+            # Preload server ignores. Readonly, but default to list
+            async with DBView(ignores=[]) as db:
+                self.ignored_users = set(db['ignores'])
+            self.permissions = await PermissionsFile.load(self, 'permissions.yml')
+            # if os.path.exists('permissions.yml'):
+            #     with open('permissions.yml') as reader:
+            #         self.permissions = yaml.load(reader)
+            #     #get user by name: guild.get_member_named
+            #     #get user by id: guild.get_member
+            #     #iterate over guild.role_hierarchy until the command is found (default enabled)
+            #     #validate the permissions object
+            #     if not isinstance(self.permissions, dict):
+            #         sys.exit("permissions.yml must be a dictionary")
+            #     if 'defaults' not in self.permissions:
+            #         sys.exit("permissions.yml must define defaults")
+            #     validate_permissions(self.permissions['defaults'], True)
+            #     if 'rules' in self.permissions:
+            #         if not isinstance(self.permissions['rules'], list):
+            #             sys.exit("rules key of permissions.yml must be a list")
+            #     seen_roles = set()
+            #     for target in self.permissions['rules']:
+            #         validate_permissions(target)
+            #         if 'role' in target:
+            #             if target['role'] in seen_roles:
+            #                 sys.exit("Duplicate role encountered in permissions.yml")
+            #             seen_roles.add(target['role'])
+            #     self.permissions['roles'] = {
+            #         discord.utils.find(
+            #             lambda role: role.name == obj['role'] or role.id == obj['role'],
+            #             [_role for guild in self.guilds for _role in guild.roles]
+            #         ).id:obj for obj in self.permissions['rules']
+            #         if 'role' in obj
+            #     }
+            #     try:
+            #         tmp = [
+            #             (self.getid(user),obj) for obj in self.permissions['rules']
+            #             if 'users' in obj
+            #             for user in obj['users']
+            #         ]
+            #     except NameError as e:
+            #         raise SystemExit("Unable to find user") from e
+            #     self.permissions['users'] = {}
+            #     for uid, rule in tmp:
+            #         if uid not in self.permissions['users']:
+            #             self.permissions['users'][uid] = [rule]
+            #         else:
+            #             self.permissions['users'][uid].append(rule)
+            #     for uid in self.permissions['users']:
+            #         self.permissions['users'][uid].sort(
+            #             key=lambda x:len(x['users'])
+            #         )
+            #     self.permissions['defaults']['_grant'] = 'by default'
+            #     for user in self.permissions['users']:
+            #         for i in range(len(self.permissions['users'][user])):
+            #             nUsers = len(self.permissions['users'][user][i]['users'])
+            #             self.permissions['users'][user][i]['_grant'] = (
+            #                 'directly to you' if nUsers == 1 else
+            #                 'to you and %d other people' % nUsers
+            #             )
+            #     for role in self.permissions['roles']:
+            #         self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
+            #             self.permissions['roles'][role]['role']
+            #         )
+            self.task_worker = threading.Thread(
+                target=CoreBot._run_tasks,
+                args=(self,),
+                daemon=True,
+                name="CoreBot Background Task Thread"
+            )
 
-        self.task_worker.start()
+            self.task_worker.start()
+        except:
+            traceback.print_exc()
+            sys.exit("Unhandled exception during startup")
 
     async def trace(self, send=True):
         """
@@ -655,21 +656,20 @@ class CoreBot(discord.Client):
         if not len(guilds):
             guilds = list(self.guilds)
             if self.primary_guild is not None:
-                guilds = [self.primary_guild] + guilds
-                #it's okay that the primary_guild is duplicated
-                #But at least this gives it priority
-        try:
-            uid = int(reference)
+                guilds = [self.primary_guild]
+        if isinstance(reference, int):
             for guild in guilds:
-                result = guild.get_member(uid)
+                result = guild.get_member(reference)
                 if result is not None:
                     return result
-        except ValueError:
-            pass
-        for guild in guilds:
-            result = guild.get_member_named(reference)
-            if result is not None:
-                return result
+        elif isinstance(reference, str):
+            for guild in guilds:
+                result = guild.get_member_named(reference)
+                if result is not None:
+                    return result
+        else:
+            raise TypeError("Unacceptable reference type {}".format(type(reference)))
+
 
     def getid(self, username):
         """
@@ -684,69 +684,6 @@ class CoreBot(discord.Client):
                 raise NameError("Username '%s' not valid, must containe #discriminator" % username)
             return result.id
         raise NameError("Unable to locate member '%s'. Must use a user ID, username, or username#discriminator" % username)
-
-    def build_permissions_chain(self, user):
-        """
-        Used to assemble the chain of permissions rules for the given user
-        Arguments:
-        user : A user object
-
-        Returns a list of permissions rules which apply to the given user, in order
-        of highest to lowest priority
-        """
-        # Assemble the chain of permissions rules for a given user
-        chain = []
-        if user.id in self.permissions['users']:
-            chain += self.permissions['users'][user.id]
-        if self.primary_guild is not None:
-            user = self.primary_guild.get_member(user.id)
-        if hasattr(user, 'roles') and hasattr(user, 'guild'):
-            user_roles = set(user.roles)
-            for role in user.guild.roles:
-                if role in user_roles and role.id in self.permissions['roles']:
-                    chain.append(self.permissions['roles'][role.id])
-        return [item for item in chain] + [self.permissions['defaults']]
-
-    def has_underscore_permissions(self, user, chain=None):
-        """
-        Used to check if a user has permissions to use underscore (administrator) commands.
-        Arguments:
-        user : A user object to check for underscore permissions
-        chain : (Optional) a prebuilt permissions chain from build_permissions_chain. By default,
-            the permissions chain is rebuilt
-        """
-        # Check the permissions chain for a user to see if they can use
-        # Administrative (underscore) commands
-        if chain is None:
-            #build the chain, if it wasn't given as an argument
-            chain = self.build_permissions_chain(user)
-        for obj in chain:
-            if 'underscore' in obj:
-                return obj['underscore']
-
-    def check_permissions_chain(self, cmd, user, chain=None):
-        """
-        Used to check if a user's permissions chain allows the use of a given command
-        Arguments:
-        cmd : The string command word to check. Cannot start with the command prefix (use strip_prefix)
-        user : The user object to check
-        chain : (Optional) a prebuilt permissions chain from build_permissions_chain. By default,
-            the permissions chain is rebuilt
-        """
-        #Important note: cmd argument does not include the leading ! of a command
-        # Permissions.yml file contains commands without prefix, and we check them
-        # here without the prefix
-        if chain is None:
-            #build the chain, if it wasn't given as an argument
-            chain = self.build_permissions_chain(user)
-        for obj in chain:
-            if 'allow' in obj and (cmd in obj['allow'] or '$all' in obj['allow']):
-                return True, obj['_grant']
-            elif 'deny' in obj and (cmd in obj['deny'] or '$all' in obj['deny']):
-                return False, obj['_grant']
-            elif cmd.startswith('_') and 'underscore' in obj:
-                return obj['underscore'], obj['_grant']
-        return (not cmd.startswith('_'), 'by default') #default behavior
 
     async def on_message(self, message):
         """
@@ -772,7 +709,7 @@ class CoreBot(discord.Client):
             #silently ignore
             return
         if message.author.id in self.ignored_users:
-            print("Ignoring message from", message.author,":", content)
+            print("Ignoring message from", message.author)
             return
         # build the user struct and update the users object
         try:
@@ -783,14 +720,14 @@ class CoreBot(discord.Client):
         if content[0] in self.commands: #if the first argument is a command
             # dispatch command event
             print("Dispatching command")
-            self.dispatch(content[0], message, content)
+            self.dispatch(content[0], message)
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
             for event in self.special_order:
                 if self.special[event](self, message):
                     print("Running special", event)
-                    self.dispatch(event, message, content)
+                    self.dispatch(event, message, content) # FIXME: events should not take content
                     break
 
     def _run_tasks(self):
@@ -874,16 +811,25 @@ def EnableUtils(bot): #prolly move to it's own bot
         )
 
     #Not using argparse API as it does not preserve whitespace
-    @bot.add_command('_announce', Arg('content', remainder=True, help="Message to echo"))
-    async def cmd_announce(self, message, content):
+    @bot.add_command('_announce', Arg('destination', type=ChannelType(bot, by_name=False, nullable=True), nargs='?', help="Direct output to specific channel (provide a channel mention)", default=None), Arg('content', remainder=True, help="Message to echo"))
+    async def cmd_announce(self, message, destination, content):
         """
         `$!_announce <message>` : Forces me to say the given message in general.
         Example: `$!_announce I am really cool`
         """
+        content = message.content.strip().replace(self.command_prefix+'_announce', '', 1).strip()
+        # do this better with indexing
+        if destination is not False and destination is not None:
+            if content.startswith(destination.name):
+                contant = content.replace(destination.name, '', 1)
+            elif content.startswith(str(destination.id)):
+                content = content.replace(str(destination.id), '', 1)
+            elif content.startswith(destination.mention):
+                content = content.replace(destination.mention, '', 1)
         await self.send_message(
-            self.fetch_channel('general'),
+            destination if destination is not False and destination is not None else self.fetch_channel('general'),
             # Don't use content here because we want to preserve whitespace
-            message.content.strip().replace(self.command_prefix+'_announce', '', 1)
+            content
         )
 
     @bot.add_command('permissions')
@@ -891,10 +837,10 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `$!permissions` : Gets a list of commands you have permissions to use
         """
-        chain = self.build_permissions_chain(message.author)
+        chain = self.permissions.query(message.author)
         cmds = []
         for command in sorted(self.commands):
-            (allow, rule) = self.check_permissions_chain(self.strip_prefix(command), message.author, chain)
+            (allow, rule) = self.permissions.query(message.author, self.strip_prefix(command), _chain=chain)
             if allow:
                 cmds.append((
                     command,
@@ -904,7 +850,14 @@ def EnableUtils(bot): #prolly move to it's own bot
         for cmd, rule in cmds:
             body.append('`%s` : Granted **%s**' % (
                 cmd,
-                rule
+                'by default' if rule.type is None else (
+                    "by role `{}`".format(rule.data['name']) if rule.type is 'role'
+                    else (
+                        'to you and {} others'.format(rule.data['priority'] - 1)
+                        if rule.data['priority'] > 1
+                        else 'directly to you'
+                    )
+                )
             ))
         if isinstance(message.channel, discord.abc.PrivateChannel) and self.primary_guild is None:
             body.append(
@@ -1083,7 +1036,7 @@ def EnableUtils(bot): #prolly move to it's own bot
                 '' if minutes == 1 else 's'
             )
         )
-        await asyncio.sleep(60 * args.minutes)
+        await asyncio.sleep(60 * minutes)
         await self.send_message(
             message.channel,
             message.author.mention + " Your %d minute timer is up!" % minutes

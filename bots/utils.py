@@ -4,6 +4,7 @@ import os
 import asyncio
 import warnings
 import traceback
+import discord
 
 DATABASE = {
     'lock': asyncio.Lock(),
@@ -63,9 +64,9 @@ class DBView(object):
         Saves the provided data (scope:value) pairs
         without checking current value
         """
-        async with DBView(*data):
+        async with DBView(*data) as db:
             for key, value in data.items():
-                data[key] = value
+                db[key] = value
 
     def __init__(self, *scopes, **defaults):
         self.scopes = sorted(set(scopes)) # Enforce lock ordering
@@ -173,10 +174,10 @@ class Interpolator(dict):
         )
         NICK = (
             bot.get_user(bot.user.id, channel.guild)
-            if hasattr(channel, 'server')
+            if hasattr(channel, 'guild')
             else (
                 bot.get_user(bot.user.id)
-                if bot.primary_server is not None
+                if bot.primary_guild is not None
                 else None
             )
         )
@@ -219,13 +220,24 @@ def get_attr(obj, attr, default):
         return getattr(obj,attr)
     return default
 
-def validate_permissions(obj, is_default=False):
-    if is_default:
-        if 'role' in obj or 'users' in obj:
-            sys.exit("role and users cannot be set on default permissions")
-    else:
-        if not (('role' in obj) ^ ('users' in obj)):
-            sys.exit("role or users must be set on each permissions object")
-    if not ('allow' in obj or 'deny' in obj  or 'underscore' in obj):
-        sys.exit("Permissions object must set some permission (allow, deny, or underscore)")
-    return
+def standard_intents():
+    return discord.Intents(
+        guilds=True,
+        members=True,
+        bans=True,
+        emojis=True,
+        integrations=False,
+        webhooks=False,
+        invites=False,
+        voice_states=False,
+        presences=False,
+        messages=True,
+        guild_messages=True,
+        dm_messages=True,
+        reactions=True,
+        guild_reactions=True,
+        dm_reactions=True,
+        typing=False,
+        guild_typing=False,
+        dm_typing=False
+    )

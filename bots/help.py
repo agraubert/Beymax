@@ -425,11 +425,11 @@ def EnableHelp(bot):
             "`all` to list all of them.\n"
             "What can I help you with?"
         )
-        chain = self.build_permissions_chain(message.author)
+        chain = self.permissions.query(message.author)
         commands = {
             self.strip_prefix(cmd):trim(self.commands[cmd])
             for cmd in self.commands
-            if self.check_permissions_chain(self.strip_prefix(cmd), message.author, chain)
+            if self.permissions.query(message.author, self.strip_prefix(cmd), _chain=chain)
         }
         response = await self.wait_for(
             'message',
