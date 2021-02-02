@@ -7,7 +7,7 @@ from bots.party import EnableParties
 from bots.poll import EnablePolls
 from bots.cash import EnableCash
 from bots.games import EnableGames
-from bots.args import Arg
+from bots.args import Arg, UserType
 import discord
 import asyncio
 import random
@@ -86,14 +86,14 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         )
         if not member.bot:
             await asyncio.sleep(10)
-            message = await self.send_message(
+            await self.send_message(
                 member,
                 "We're glad to have you on our guild! Would you like a brief "
                 "introduction on what I can do? (Yes/No)"
             )
             response = await self.wait_for(
                 'message',
-                check=lambda m : m.channel == message.channel
+                check=lambda m : m.channel == member.dm_channel and m.author.id == member.id
             )
             if response is None or response.content.lower() == 'no':
                 await self.send_message(
@@ -103,12 +103,12 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                 return
             elif response.content.lower() != 'yes':
                 await self.send_message(
-                    message.channel,
+                    member,
                     "I didn't understand your response, but I'll go ahead and"
                     " give you the rundown anyways"
                 )
             await self.send_message(
-                message.channel,
+                member,
                 "You can use the `$!birthday` command so I'll post a message on your birthday. "
                 "If you're an Overwatch player, you can use `$!ow` and I'll keep track of your competitive rank. "
                 "You can use the `$!party` command if you want to make a voice channel for you your friends to hang out for a while. "
@@ -118,26 +118,26 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                 interp=self.fetch_channel('story')
             )
 
-    @beymax.add_command('kill-beymax', aliases=['satisfied'], empty=True)
-    async def cmd_shutdown(self, message, content):
+    @beymax.add_command('kill-beymax', aliases=['satisfied'])
+    async def cmd_shutdown(self, message):
         """
         `$!satisfied` : Shuts down beymax
         """
         await self.shutdown()
 
-    @beymax.add_command('coinflip', empty=True)
-    async def cmd_flip(self, message, content):
+    @beymax.add_command('coinflip')
+    async def cmd_flip(self, message):
         await self.send_message(
             message.channel,
             "Heads" if random.random() < 0.5 else "Tails"
         )
 
-    @beymax.add_command('_greet', empty=True)
-    async def cmd_greet(self, message, content):
+    @beymax.add_command('_greet', Arg('target', type=UserType(beymax), nargs='?', default=None))
+    async def cmd_greet(self, message, target):
         """
         `$!_greet` : Manually triggers a greeting (I will greet you)
         """
-        self.dispatch('member_join', message.author)
+        self.dispatch('member_join', target if target is not None else message.author)
 
     @beymax.add_task(3600) # 1 hour
     async def update_status(self, *args):
@@ -148,9 +148,9 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         )
 
     @beymax.add_command('_status', Arg('status', remainder=True, help="Manually set this status"))
-    async def cmd_status(self, message, args):
-        if len(args.status):
-            name = ' '.join(args.status).strip()
+    async def cmd_status(self, message, status):
+        if len(status):
+            name = ' '.join(status).strip()
         else:
             name = select_status()
         await self.change_presence(
