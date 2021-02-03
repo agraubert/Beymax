@@ -179,7 +179,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableHelp,
         # EnableOverwatch,
         EnableParties,
-        # EnablePolls,
+        EnablePolls,
         # EnableCash,
     )
 

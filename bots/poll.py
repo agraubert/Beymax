@@ -16,7 +16,7 @@ def EnablePolls(bot):
         Arg("options", nargs='*', help="Poll options"),
         delimiter='|'
     )
-    async def cmd_poll(self, message, args):
+    async def cmd_poll(self, message, title, options):
         """
         `$!poll <poll title> | [Option 1] | [Option 2] | [etc...]` : Creates a poll
         Example: `$!poll Is $NAME cool? | Yes | Definitely`
@@ -24,7 +24,7 @@ def EnablePolls(bot):
         #The argparse API is killing the blank handling, but I think that's okay
         opts = [
             (opt.rstrip() if '~<blank>' not in opt else opt)
-            for opt in args.options
+            for opt in options
         ]
         if sum(1 for opt in opts if not len(opt)):
             await self.send_message(
@@ -36,7 +36,7 @@ def EnablePolls(bot):
             )
         opts = [opt.replace('~<blank>', '') for opt in opts if len(opt)]
         body = getname(message.author)+" has started a poll:\n"
-        body+=args.title+"\n"
+        body+=title+"\n"
         body+="\n".join((
                 "%d) %s"%(num+1, opt)
                 for (num, opt) in
@@ -52,12 +52,12 @@ def EnablePolls(bot):
             await target.add_reaction(
                 (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
             )
-        if not isinstance(message.channel, discord.PrivateChannel):
+        if not isinstance(message.channel, discord.abc.PrivateChannel):
             try:
                 await message.delete()
             except:
                 print("Warning: Unable to delete poll source message")
-            self.polls[target.id] = (message.author, set())
+            self.polls[target.id] = (message.author, {self.user.id})
 
     @bot.subscribe('reaction_add')
     async def on_reaction_add(self, event, reaction, user):
