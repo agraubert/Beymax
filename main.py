@@ -176,7 +176,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableUtils,
         EnableBirthday,
         EnableBugs,
-        # EnableHelp,
+        EnableHelp,
         # EnableOverwatch,
         # EnableParties,
         # EnablePolls,

@@ -408,7 +408,7 @@ def EnableHelp(bot):
     bot.help_sessions = {}
 
     @bot.add_command('ouch')
-    async def cmd_help(self, message, content):
+    async def cmd_help(self, message):
         """`$!ouch` : Asks for my help"""
         # await self.send_message(
         #     message.author,
@@ -418,7 +418,7 @@ def EnableHelp(bot):
         #     "if you're not sure what sort of things I can do, just say `help`\n"+
         #     "What seems to be the problem?"
         # )
-        prompt = await self.send_message(
+        await self.send_message(
             message.author,
             "Hello! I am $NAME, your personal ~~healthcare~~ **server** companion.\n"
             "Simply type the name of a command that you need help with, or type "
@@ -433,7 +433,7 @@ def EnableHelp(bot):
         }
         response = await self.wait_for(
             'message',
-            check=lambda m: m.author == message.author and m.channel == prompt.channel
+            check=lambda m: m.author == message.author and m.channel == message.author.dm_channel
         )
         if response.content.lower() in commands:
             await self.send_message(
