@@ -199,7 +199,7 @@ class Argspec(argparse.ArgumentParser):
 
     def error(self, message):
         raise PrebuiltException(
-            self.format_usage().replace('usage: ', 'usage: `')+"`\n"+re.sub(r'[<>]','',message)
+            self.format_help().replace('usage: ', 'usage: `')+"`\n"+re.sub(r'[<>]','',message)
         )
 
     def __call__(self, *args, delimiter=None):

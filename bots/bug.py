@@ -2,6 +2,7 @@ from .core import CoreBot
 from .utils import DBView, getname, get_attr
 from .args import Arg, UserType
 import asyncio
+import json
 
 def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
@@ -9,22 +10,31 @@ def EnableBugs(bot):
 
     bot.reserve_channel('bugs')
 
+    @bot.subscribe('before:ready')
+    async def cleanup(self, _):
+        if not os.path.exists('bugs.json'):
+            return
+        with open('bugs.json') as r:
+            bugs = json.load(r)
+        async with DBView('bugs') as db:
+            db['bugs'] = bugs
+
+
     @bot.add_command(
         'bug',
         Arg(
-            'message',
-            type='extra',
+            'content',
+            remainder=True,
             help='Your feedback or bug report'
         ),
     )
-    async def cmd_bug(self, message, args):
+    async def cmd_bug(self, message, content):
         """
         `$!bug [feedback or bug report]` : Opens a new ticket with your
         feedback. Example: `$!bug $NAME didn't understand me in a help session`
         """
-        content = ' '.join([args.message] + args.extra)
-        async with ListDatabase('bugs.json') as bugs:
-            bugs.append({
+        async with DBView('bugs', bugs=[]) as db:
+            db['bugs'].append({
                 'users': [message.author.id],
                 'status': 'Pending', #pending->investigating->solution in progress->testing solution->closed
                 'content': content,
@@ -46,37 +56,37 @@ def EnableBugs(bot):
                 'New issue reported: %s\n' #@Developer
                 '[%d] [Pending] %s : %s' % (
                     role_mention,
-                    len(bugs)-1,
+                    len(db['bugs'])-1,
                     message.author.mention,
-                    bugs[-1]['content']
+                    db['bugs'][-1]['content']
                 )
             )
-            bugs.save()
 
     @bot.add_command('thread', Arg('bug', type=int, help="Bug ID"), aliases=['bug:thread'])
-    async def cmd_thread(self, message, args):
+    async def cmd_thread(self, message, bug):
         """
         `$!thread <bug ID>` : Displays the full comment thread for a bug.
         Example: `$!thread 2`
         """
-        async with ListDatabase('bugs.json') as bugs:
-            if args.bug >= len(bugs):
+        async with DBView(bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
+                data = db['bugs'][bug]
                 body = '[%d] [%s] %s : %s\n' % (
-                    args.bug,
-                    bugs[args.bug]['status'],
+                    bug,
+                    data['status'],
                     ' '.join(
                         getname(self.get_user(user)) for user in
-                        bugs[args.bug]['users']
+                        data['users']
                     ),
-                    bugs[args.bug]['label'],
+                    data['label'],
                 )
-                body += 'Issue: %s\n' % bugs[args.bug]['content']
-                for comment in bugs[args.bug]['comments']:
+                body += 'Issue: %s\n' % data['content']
+                for comment in data['comments']:
                     body += 'Comment by %s\n' % comment
                 await self.send_message(
                     message.channel,
@@ -86,24 +96,23 @@ def EnableBugs(bot):
     @bot.add_command(
         'comment',
         Arg('bug', type=int, help="Bug ID"),
-        Arg('comment', type='extra', help="Your comments"),
+        Arg('comment', remainder=True, help="Your comments"),
         aliases=['bug:comment']
     )
-    async def cmd_comment(self, message, args):
+    async def cmd_comment(self, message, bug, comment):
         """
         `$!comment <bug ID> [Your comments]` : Adds your comments to the bug's
         thread. Example: `$!comment 2 The help system is working great!`
         """
-        async with ListDatabase('bugs.json') as bugs:
-            bugid = args.bug
-            if bugid >= len(bugs):
+        async with DBView('bugs', bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
-                comment = ' '.join([args.comment] + args.extra)
-                bugs[bugid]['comments'].append(
+                comment = ' '.join(comment)
+                db['bugs'][bug]['comments'].append(
                     '%s : %s' % (
                         getname(message.author),
                         comment
@@ -114,166 +123,157 @@ def EnableBugs(bot):
                     'New comment on issue:\n'
                     '[%d] [%s] %s : %s\n'
                     'Comment: [%s] : %s' % (
-                        bugid,
-                        bugs[bugid]['status'],
+                        bug,
+                        db['bugs'][bug]['status'],
                         ' '.join(
                             get_attr(self.get_user(user), 'mention', '') for user in
-                            bugs[bugid]['users']
+                            db['bugs'][bug]['users']
                         ),
-                        bugs[bugid]['label'],
+                        db['bugs'][bug]['label'],
                         message.author.mention,
                         comment
                     )
                 )
-                bugs.save()
 
     @bot.add_command(
         'bug:status',
         Arg('bug', type=int, help="Bug ID"),
-        Arg('status', type='extra', help='New Status')
+        Arg('status', remainder=True, help='New Status')
     )
-    async def cmd_bug_status(self, message, args):
+    async def cmd_bug_status(self, message, bug, status):
         """
         `$!bug:status <bug ID> <New status>` : Sets the status for the bug.
         Example: `$!bug:status 2 In Progress`
         """
-        async with ListDatabase('bugs.json') as bugs:
-            bugid = args.bug
-            if bugid >= len(bugs):
+        async with DBView('bugs', bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
-                bugs[bugid]['status'] = ' '.join([args.status] + args.extra)
+                db['bugs'][bug]['status'] = ' '.join(status)
                 await self.send_message(
                     self.fetch_channel('bugs'),
                     'Issue status changed:\n'
                     '[%d] [%s] %s : %s' % (
-                        bugid,
-                        bugs[bugid]['status'],
+                        bug,
+                        db['bugs'][bug]['status'],
                         ' '.join(
                             get_attr(self.get_user(user), 'mention', '') for user in
-                            bugs[bugid]['users']
+                            db['bugs'][bug]['users']
                         ),
-                        bugs[bugid]['label'],
+                        db['bugs'][bug]['label'],
                     )
                 )
-                bugs.save()
 
     @bot.add_command(
         'bug:label',
         Arg('bug', type=int, help='Bug ID'),
-        Arg('label', type='extra', help="New Label")
+        Arg('label', remainder=True, help="New Label")
     )
-    async def cmd_bug_label(self, message, args):
+    async def cmd_bug_label(self, message, bug, label):
         """
         `$!bug:label <bug ID> <New label>` : Sets the label for a bug report.
         Example: `$!bug:label 2 $NAME's help system`
         """
-        async with ListDatabase('bugs.json') as bugs:
-            bugid = args.bug
-            if bugid >= len(bugs):
+        async with DBView('bugs', bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
-                label = ' '.join([args.label] + args.extra)
+                label = ' '.join(label)
                 await self.send_message(
                     self.fetch_channel('bugs'),
                     'Issue label changed:\n'
                     '[%d] [%s] %s : %s\n'
                     'New label: %s' % (
-                        bugid,
-                        bugs[bugid]['status'],
+                        bug,
+                        db['bugs'][bug]['status'],
                         ' '.join(
                             get_attr(self.get_user(user), 'mention', '') for user in
-                            bugs[bugid]['users']
+                            db['bugs'][bug]['users']
                         ),
-                        bugs[bugid]['label'],
+                        db['bugs'][bug]['label'],
                         label
                     )
                 )
-                bugs[bugid]['label'] = label
-                bugs.save()
+                db['bugs'][bug]['label'] = label
 
     @bot.add_command(
         'bug:user',
         Arg('bug', type=int, help="Bug ID"),
         Arg('user', type=UserType(bot), help="Username or ID")
     )
-    async def cmd_bug_user(self, message, args):
+    async def cmd_bug_user(self, message, bug, user):
         """
         `$!bug:user <bug ID> <Username or ID>` : Subscribes a user to a bug report.
         Example: `$!bug:user 2 $ID` (that's my user ID)
         """
-        async with ListDatabase('bugs.json') as bugs:
-            bugid = args.bug
-            if bugid >= len(bugs):
+        async with DBView('bugs', bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
-                bugs[bugid]['users'].append(args.user.id)
+                db['bugs'][bug]['users'].append(user.id)
                 await self.send_message(
-                    args.user,
+                    user,
                     "You have been added to the following issue by %s:\n"
                     '[%d] [%s] : %s\n'
                     'If you would like to unsubscribe from this issue, '
                     'type `$!bug:unsubscribe %d`'% (
                         str(message.author),
-                        bugid,
-                        bugs[bugid]['status'],
-                        bugs[bugid]['label'],
-                        bugid
+                        bug,
+                        db['bugs'][bug]['status'],
+                        db['bugs'][bug]['label'],
+                        bug
                     )
                 )
                 await self.send_message(
                     message.channel,
                     "Added user to issue"
                 )
-                bugs.save()
 
     @bot.add_command(
         'bug:unsubscribe',
         Arg('bug', type=int, help="Bug ID")
     )
-    async def cmd_bug_unsubscribe(self, message, args):
+    async def cmd_bug_unsubscribe(self, message, bug):
         """
         `$!bug:unsubscribe <bug ID>` : Unsubscribes yourself from a bug report.
         Example: `$!bug:unsubscribe 2`
         """
-        async with ListDatabase('bugs.json') as bugs:
-            bugid = args.bug
-            if bugid >= len(bugs):
+        async with DBView('bugs', bugs=[]) as db:
+            if bug >= len(db['bugs']):
                 await self.send_message(
                     message.channel,
                     "No bug with that ID"
                 )
             else:
-                if bugs[bugid]['users'][0] == message.author.id:
+                if db['bugs'][bug]['users'][0] == message.author.id:
                     await self.send_message(
                         message.channel,
                         "As the creator of this issue, you cannot unsubscribe"
                     )
-                elif message.author.id not in bugs[bugid]['users']:
+                elif message.author.id not in db['bugs'][bug]['users']:
                     await self.send_message(
                         message.channel,
                         "You are not subscribed to this issue"
                     )
                 else:
-                    bugs[bugid]['users'].remove(message.author.id)
+                    db['bugs'][bug]['users'].remove(message.author.id)
                     await self.send_message(
                         message.channel,
                         "You have been unsubscribed from this issue:\n"
                         '[%d] [%s] : %s' % (
-                            bugid,
-                            bugs[bugid]['status'],
-                            bugs[bugid]['label']
+                            bug,
+                            db['bugs'][bug]['status'],
+                            db['bugs'][bug]['label']
                         )
                     )
-                    bugs.save()
 
     return bot

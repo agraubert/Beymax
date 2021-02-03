@@ -811,8 +811,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             '%d events have been dispatched' % self.nt
         )
 
-    #Not using argparse API as it does not preserve whitespace
-    @bot.add_command('_announce', Arg('destination', type=ChannelType(bot, by_name=False), nargs='?', help="Direct output to specific channel (provide a channel mention)", default=None), Arg('content', remainder=True, help="Message to echo"))
+    @bot.add_command('_announce', Arg('destination', type=ChannelType(bot, by_name=False, nullable=True), nargs='?', help="Direct output to specific channel (provide a channel mention)", default=None), Arg('content', remainder=True, help="Message to echo"))
     async def cmd_announce(self, message, destination, content):
         """
         `$!_announce <message>` : Forces me to say the given message in general.
@@ -820,7 +819,7 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         content = message.content.strip().replace(self.command_prefix+'_announce', '', 1).strip()
         # do this better with indexing
-        if destination is not None:
+        if destination is not None and destination is not False:
             if content.startswith(destination.name):
                 contant = content.replace(destination.name, '', 1)
             elif content.startswith(str(destination.id)):
@@ -828,7 +827,7 @@ def EnableUtils(bot): #prolly move to it's own bot
             elif content.startswith(destination.mention):
                 content = content.replace(destination.mention, '', 1)
         await self.send_message(
-            destination if destination is not None else self.fetch_channel('general'),
+            destination if destination is not None and destination is not False else self.fetch_channel('general'),
             # Don't use content here because we want to preserve whitespace
             content
         )

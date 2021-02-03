@@ -97,7 +97,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             )
             if response is None or response.content.lower() == 'no':
                 await self.send_message(
-                    message.channel,
+                    member,
                     "Alright. Have fun, and enjoy your stay!"
                 )
                 return
@@ -174,8 +174,8 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
     beymax.EnableAll( #enable all sub-bots
         EnableUtils,
-        # EnableBirthday,
-        # EnableBugs,
+        EnableBirthday,
+        EnableBugs,
         # EnableHelp,
         # EnableOverwatch,
         # EnableParties,
