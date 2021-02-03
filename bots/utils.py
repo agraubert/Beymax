@@ -95,7 +95,11 @@ class DBView(object):
             self._entered = True
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, exc_type, exc_val, tb):
+        if self._dirty and (exc_type is not None or exc_val is not None or tb is not None):
+            traceback.print_exc()
+            print("Database connection exiting uncleanly. Aborting changes")
+            await self.abort() # sets dirty to false so all that happens afterwards is __aexit__ releases locks
         async with DATABASE['lock']:
             self._entered = False
             if self._dirty:
@@ -146,7 +150,7 @@ class DBView(object):
     def __contains__(self, key):
         return key in DATABASE['data']
 
-    async def abort():
+    async def abort(self):
         """
         Abort any pending changes
         """

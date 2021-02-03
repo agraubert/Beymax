@@ -3,6 +3,7 @@ from .utils import DBView, getname, get_attr
 from .args import Arg, UserType
 import asyncio
 import json
+import os
 
 def EnableBugs(bot):
     if not isinstance(bot, CoreBot):
@@ -18,6 +19,7 @@ def EnableBugs(bot):
             bugs = json.load(r)
         async with DBView('bugs') as db:
             db['bugs'] = bugs
+        os.remove('bugs.json')
 
 
     @bot.add_command(
@@ -37,9 +39,9 @@ def EnableBugs(bot):
             db['bugs'].append({
                 'users': [message.author.id],
                 'status': 'Pending', #pending->investigating->solution in progress->testing solution->closed
-                'content': content,
+                'content': ' '.join(content),
                 'comments':[],
-                'label': content
+                'label': ' '.join(content)
             })
             role_mention = ''
             role_target = self.config_get('bug_role')

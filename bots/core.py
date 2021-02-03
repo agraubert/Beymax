@@ -319,8 +319,6 @@ class CoreBot(discord.Client):
         Called internally. Sets the internal event loop to run event handlers for
         a given event
         """
-        if asyncio.get_running_loop() != self.loop:
-            sys.exit("Penis")
         return [
             asyncio.ensure_future(listener(self, event, *args, **kwargs), loop=self.loop)
             for listener in self.event_listeners[event]
