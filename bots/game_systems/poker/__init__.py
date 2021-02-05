@@ -85,45 +85,44 @@ class PokerSystem(PhasedGame):
             self.bot.fetch_channel('games'),
             "Issuing refunds..."
         )
-        async with Database('players.json') as players:
+        async with DBView('players') as db:
             for player, amount in self.refund.items():
-                if player not in players:
-                    players[player] = {
+                if player not in db['players']:
+                    db['players'][player] = {
                         'level':1,
                         'xp':0,
                         'balance':10
                     }
-                players[player]['balance'] += amount
-            players.save()
+                db['players'][player]['balance'] += amount
 
     @classmethod
     async def restore(cls, bot, game):
-        async with Database('poker.json') as poker:
-            if 'players' not in poker:
+        async with DBView(poker = {}) as db:
+            if 'players' not in db['poker']:
                 raise GameEndException("No data to restore")
             poker_game = PokerSystem(bot, game)
             poker_game.players = [
-                bot.get_user(player_id) for player_id in poker['players']
+                bot.get_user(player_id) for player_id in db['poker']['players']
             ]
-            poker_game.inactive_players = set(poker['inactive_players'])
-            poker_game.dealer = poker['dealer']
-            poker_game.bidder = bot.get_user(poker['bidder'])
+            poker_game.inactive_players = set(db['poker']['inactive_players'])
+            poker_game.dealer = db['poker']['dealer']
+            poker_game.bidder = bot.get_user(db['poker']['bidder'])
             poker_game.deck = Deck([
-                Card(card) for card in poker['deck']
+                Card(card) for card in db['poker']['deck']
             ])
             poker_game.trash = Deck([
-                Card(card) for card in poker['deck']
+                Card(card) for card in db['poker']['trash']
             ])
-            poker_game.pot = poker['pot']
-            poker_game.refund = poker['refunds']
+            poker_game.pot = db['poker']['pot']
+            poker_game.refund = db['poker']['refunds']
             poker_game.hands = {
                 player_id: Hand([
                     Card(card) for card in hand
                 ])
-                for player_id, hand in poker['hands'].items()
+                for player_id, hand in db['poker']['hands'].items()
             }
             poker_game.table = Hand([
-                Card(card) for card in poker['table']
+                Card(card) for card in db['poker']['table']
             ])
             poker_game.was_played = True
             return poker_game
@@ -168,5 +167,4 @@ class PokerSystem(PhasedGame):
             await self.enter_phase('pregame')
 
     async def on_cleanup(sefl):
-        if os.path.exists('poker.json'):
-            os.remove('poker.json')
+        await DBView.overwrite(poker={})

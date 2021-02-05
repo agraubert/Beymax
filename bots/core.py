@@ -666,6 +666,8 @@ class CoreBot(discord.Client):
                 result = guild.get_member_named(reference)
                 if result is not None:
                     return result
+        elif reference is None:
+            return None
         else:
             raise TypeError("Unacceptable reference type {}".format(type(reference)))
 

@@ -60,21 +60,21 @@ class BeforeRound(LockedPhase):
     # Phase locked as it's entirely a computational phase.
     # No input is handled, so it's unreasonable to expect users to leave
     async def before_phase(self):
-        async with Database('players.json') as players:
+        async with DBView('players') as db:
             for user in self.game.players:
-                if user.id not in players:
-                    players[user.id] = {
+                if user.id not in db['players']:
+                    db['players'][user.id] = {
                         'level':1,
                         'xp':0,
                         'balance':10
                     }
-                if players[user.id]['balance'] < self.game.ante:
+                if db['players'][user.id]['balance'] < self.game.ante:
                     self.game.inactive_players.add(user.id)
                 else:
-                    players[user.id]['balance'] -= self.game.ante
+                    db['players'][user.id]['balance'] -= self.game.ante
                     self.game.pot += self.game.ante
                     self.game.refund[user.id] = self.game.ante
-            players.save()
+
         if len(self.game.inactive_players):
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
@@ -134,11 +134,11 @@ class BettingPhase(LockedPhase):
         """
         This function determines the next state to enter
         """
-        async with Database('players.json') as players:
+        async with DBView('players') as db:
             balances = {
-                player.id: players[player.id]['balance']
+                player.id: db['players'][player.id]['balance']
                 for player in self.game.players
-                if (player.id in players and player.id not in self.game.inactive_players)
+                if (player.id in db['players'] and player.id not in self.game.inactive_players)
             }
         print(balances)
         if len([pid for pid, bal in balances.items() if bal]) <= 1:
@@ -158,15 +158,15 @@ class BettingPhase(LockedPhase):
             )
         else:
             msg = "Currently, there is not bet"
-        async with Database('players.json') as players:
-            if new.id not in players:
-                players[new.id] = {
+        async with DBView('players') as db:
+            if new.id not in db['players']:
+                db['players'][new.id] = {
                     'level':1,
                     'xp':0,
                     'balance':10
                 }
-                players.save()
-            balance = players[new.id]['balance']
+
+            balance = db['players'][new.id]['balance']
 
         msg += '\nYou have %d tokens' % balance
         msg += '\nActions:'
@@ -199,8 +199,8 @@ class BettingPhase(LockedPhase):
     async def on_turn_input(self, user, channel, message):
         content = message.content.lower().strip().split()
         call = self.game.bet if user.id not in self.game.bets else self.game.bet - self.game.bets[user.id]
-        async with Database('players.json') as players:
-            balance = players[user.id]['balance']
+        async with DBView('players') as db:
+            balance = db['players'][user.id]['balance']
         if len(content) < 1 or content[0] not in {'bet', 'check', 'raise', 'call', 'fold'}:
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
@@ -234,9 +234,9 @@ class BettingPhase(LockedPhase):
                     "You do not have enough tokens to make that bet"
                 )
             else:
-                async with Database('players.json') as players:
-                    players[user.id]['balance'] -= cost
-                    players.save()
+                async with DBView('players') as db:
+                    db['players'][user.id]['balance'] -= cost
+
                 if user.id in self.game.bets:
                     self.game.bets[user.id] += cost
                 else:
@@ -282,9 +282,9 @@ class BettingPhase(LockedPhase):
                     "You do not have enough tokens to raise by that much"
                 )
             else:
-                async with Database('players.json') as players:
-                    players[user.id]['balance'] -= cost
-                    players.save()
+                async with DBView('players') as db:
+                    db['players'][user.id]['balance'] -= cost
+
                 if user.id in self.game.bets:
                     self.game.bets[user.id] += cost
                 else:
@@ -299,9 +299,9 @@ class BettingPhase(LockedPhase):
                 return await self.advance_if(self.game.bet, cost)
         elif content[0] == 'call' and self.game.bet > 0:
             cost = min(call, balance)
-            async with Database('players.json') as players:
-                players[user.id]['balance'] -= cost
-                players.save()
+            async with DBView('players') as db:
+                db['players'][user.id]['balance'] -= cost
+
                 if user.id in self.game.bets:
                     self.game.bets[user.id] += cost
                 else:
@@ -505,16 +505,16 @@ class WinPhase(LockedPhase):
                 "or will be refunded to the host (if they end the game)" % leftover
             )
             self.game.refund[self.game.bidder.id] = leftover
-        async with Database('players.json') as players:
+        async with DBView('players') as db:
             for winner in winners:
-                if winner not in players:
-                    players[winner] = {
+                if winner not in db['players']:
+                    db['players'][winner] = {
                         'level':1,
                         'xp':0,
                         'balance':10
                     }
-                players[winner]['balance'] += payout
-            players.save()
+                db['players'][winner]['balance'] += payout
+
         for player in self.game.players:
             xp = 0 #25
             # if player.id in self.game.inactive_players:

@@ -1,4 +1,4 @@
-import json
+import pickle
 import sys
 import os
 import asyncio
@@ -26,29 +26,29 @@ DATABASE = {
 
 class FrozenList(list):
     def __init__(self, scope, data):
-        self.scope = scope
         super().__init__([
             FrozenDict(scope, value) if isinstance(value, dict) else (
                 FrozenList(scope, value) if isinstance(value, list) else value
             )
             for value in data
         ])
+        self._scope = scope
 
     def __setitem__(self, idx, value):
-        raise TypeError("Read-Only access to this scope: {}".format(self.scope))
+        raise TypeError("Read-Only access to this scope: {}".format(self._scope))
 
 class FrozenDict(dict):
     def __init__(self, scope, data):
-        self.scope = scope
         super().__init__({
             key: FrozenDict(scope, value) if isinstance(value, dict) else (
                 FrozenList(scope, value) if isinstance(value, list) else value
             )
             for key, value in data.items()
         })
+        self._scope = scope
 
     def __setitem__(self, key, value):
-        raise TypeError("Read-Only access to this scope: {}".format(self.scope))
+        raise TypeError("Read-Only access to this scope: {}".format(self._scope))
 
 class DBView(object):
     """
@@ -57,6 +57,31 @@ class DBView(object):
     Allows read-access to full database. Write-access is protected through
     asyncronous context management
     """
+
+    @staticmethod
+    def readonly_view(*scopes, read_persistent=False, **defaults):
+        """
+        Used for accessing a partial view of the database in read-only mode.
+        Useful for database checks outside of coroutines.
+        Does not guarantee consistency
+        """
+        if read_persistent and os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+            with open('db.pkl', 'rb') as r:
+                fallback = pickle.load(r)
+        else:
+            fallback = {}
+        view = DBView()
+        return FrozenDict(
+            'root',
+            {
+                scope: view[scope] if scope in view else (
+                    fallback[scope] if scope in fallback else
+                    defaults[scope]
+                )
+                for scope in scopes
+                if scope in view or scope in fallback or scope in defaults
+            }
+        )
 
     @staticmethod
     async def overwrite(**data):
@@ -68,24 +93,30 @@ class DBView(object):
             for key, value in data.items():
                 db[key] = value
 
-    def __init__(self, *scopes, **defaults):
+    def __init__(self, *scopes, _add_scope_to_defaults=True, **defaults):
         self.scopes = sorted(set(scopes)) # Enforce lock ordering
-        self._defaults = {k:v for k,v in defaults.items()}
+        if _add_scope_to_defaults:
+            self._defaults = {
+                **{scope: {} for scope in scopes},
+                **{k:v for k,v in defaults.items()}
+            }
+        else:
+            self._defaults = {k:v for k,v in defaults.items()}
         self._entered = False
         self._dirty = False
 
     async def __aenter__(self):
         if len(self._defaults):
             # If we provided defaults, quickly update them
-            async with DBView(*self._defaults) as db:
+            async with DBView(*self._defaults, _add_scope_to_defaults=False) as db:
                 for key, value in self._defaults.items():
                     if key not in db:
                         db[key] = value
         async with DATABASE['lock']:
             if DATABASE['data'] is None:
-                if os.path.isfile('db.json'):
-                    with open('db.json') as r:
-                        DATABASE['data'] = json.load(r)
+                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+                    with open('db.pkl', 'rb') as r:
+                        DATABASE['data'] = pickle.load(r)
                 else:
                     DATABASE['data'] = {}
             for scope in self.scopes:
@@ -108,17 +139,17 @@ class DBView(object):
                 # even if other scopes have changed
                 # This avoids accidentally leaking changes that will later be aborted
                 # by another view
-                if os.path.isfile('db.json'):
-                    with open('db.json') as r:
-                        prev = json.load(r)
+                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+                    with open('db.pkl', 'rb') as r:
+                        prev = pickle.load(r)
                 else:
                     prev = {}
-                with open('db.json', 'w') as w:
+                with open('db.pkl', 'wb') as w:
                     prev.update({
                         key: DATABASE['data'][key]
                         for key in self.scopes
                     })
-                    json.dump(prev, w)
+                    pickle.dump(prev, w)
             # Release locks in reverse order
             for scope in reversed(self.scopes):
                 DATABASE['scope_locks'][scope].release()
@@ -144,8 +175,13 @@ class DBView(object):
     def __setitem__(self, key, value):
         if not (self._entered and key in self.scopes):
             raise TypeError("Scope {} is currently frozen".format(key))
+        if isinstance(value, (FrozenDict, FrozenList)):
+            raise TypeError("Frozen")
         self._dirty = True
         DATABASE['data'][key] = value
+        # if key == 'players':
+        #     import pdb; pdb.set_trace()
+
 
     def __contains__(self, key):
         return key in DATABASE['data']
@@ -160,9 +196,9 @@ class DBView(object):
                 # Reload our scopes from disk
                 # Remember, we have exclusive write access so we're only discarding
                 # our own changes
-                if os.path.isfile('db.json'):
-                    with open('db.json') as r:
-                        prev = json.load(r)
+                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+                    with open('db.pkl', 'rb') as r:
+                        prev = pickle.load(r)
                 else:
                     prev = {}
                 for key, value in prev.items():

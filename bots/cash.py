@@ -13,6 +13,11 @@ def ShorthandType(arg):
 
 # cash : {project : {goal, current, title, contributions, notified, end, account}}
 def EnableCash(bot):
+    import warnings
+    warnings.warn(
+        "This suite of bot commands has not been updated to the latest version of Beymax's API. It is deprecated and no longer maintained",
+        type=DeprecationWarning
+    )
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 

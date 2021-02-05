@@ -12,6 +12,7 @@ from .base import GameSystem, GameError, JoinLeaveProhibited, GameEndException
 from math import ceil, floor
 
 printable_set = set(printable)
+printable_bytes = printable.encode()
 
 def avg(n):
     return sum(n)/len(n)
@@ -48,14 +49,14 @@ def multimatch(text, patterns):
     return False
 
 class Player:
-    def __init__(self, game):
+    def __init__(self, frotz, game):
         (self.stdinRead, self.stdinWrite) = os.pipe()
         (self.stdoutRead, self.stdoutWrite) = os.pipe()
         self.buffer = queue.Queue()
         self.remainder = b''
         self.score = 0
         self.proc = subprocess.Popen(
-            './dfrotz games/%s.z5' % game,
+            '%s games/%s.z5' % (os.path.abspath(frotz), game),
             universal_newlines=False,
             shell=True,
             stdout=self.stdoutWrite,
@@ -87,9 +88,7 @@ class Player:
         # return lines[0].decode().rstrip()
         return os.read(self.stdoutRead, 256).decode()
 
-    def readchunk(self, clean=True, timeout=None):
-        if timeout is not None:
-            print("The timeout parameter is deprecated")
+    def readchunk(self, clean=True):
         if self.proc.returncode is not None:
             raise BackgroundGameExit(
                 "Player exited with returncode %d" % self.proc.returncode
@@ -154,7 +153,7 @@ class StorySystem(GameSystem):
 
     def __init__(self, bot, game):
         super().__init__(bot, game)
-        self.player = Player(game)
+        self.player = Player(bot.config_get('zmachine', default='dfrotz'), game)
         self.state = {}
 
     @classmethod
@@ -167,18 +166,19 @@ class StorySystem(GameSystem):
         # Return StorySystem if successful
         # Return None if unable to restore state
         try:
-            async with Database('story.json') as state:
-                if 'bidder' not in state:
+            async with DBView(story={'bidder': None, 'game': ''}) as db:
+                if db['story']['bidder'] is None:
                     raise GameError("No primary player defined in state")
-                system = StorySystem(bot, state['game'])
-                system.state.update(state)
-                for msg in state['transcript']:
-                    print("Replaying", msg)
-                    system.player.write(msg)
-                    await asyncio.sleep(0.5)
-                    print(system.player.readchunk())
-                    if system.player.proc.returncode is not None:
-                        break
+                system = StorySystem(bot, db['story']['game'])
+                system.state.update(db['story'])
+                if 'transcript' in db['story']:
+                    for msg in db['story']['transcript']:
+                        print("Replaying", msg)
+                        system.player.write(msg)
+                        await asyncio.sleep(0.5)
+                        print(system.player.readchunk())
+                        if system.player.proc.returncode is not None:
+                            break
                 return system
         except Exception as e:
             raise GameEndException("Unable to restore") from e
@@ -217,6 +217,7 @@ class StorySystem(GameSystem):
                     )
                     self.bot.dispatch('endgame')
             elif content == 'quit':
+                # Don't call player.quit() here. That's handled in on_end
                 self.bot.dispatch('endgame')
             else:
                 unfiltered_len = len(content)
@@ -260,9 +261,7 @@ class StorySystem(GameSystem):
         await self.save_state()
 
     async def save_state(self):
-        async with Database('story.json') as state:
-            state.update(self.state)
-            state.save()
+        await DBView.overwrite(story=self.state)
 
     async def send_join_message(self, user):
         await self.bot.send_message(
@@ -315,7 +314,7 @@ class StorySystem(GameSystem):
 
 
     async def on_end(self, user):
-        async with Database('players.json') as players:
+        async with DBView('players', 'scores') as db:
             try:
                 self.player.write('score')
                 self.player.readchunk()
@@ -323,19 +322,19 @@ class StorySystem(GameSystem):
                 pass
             finally:
                 self.player.quit()
-            async with Database('scores.json') as scores:
-                if self.game not in scores:
-                    scores[self.game] = []
-                scores[self.game].append([
-                    self.player.score,
-                    self.state['bidder']
-                ])
-                scores.save()
-                modifier = avg(
-                    [score[0] for game in scores for score in scores[game]]
-                ) / max(1, avg(
-                    [score[0] for score in scores[self.game]]
-                ))
+            if self.game not in db['scores']:
+                db['scores'][self.game] = []
+            db['scores'][self.game].append([
+                self.player.score,
+                self.state['bidder']
+            ])
+            # Modifier = (avg of all games) / (avg of this game)
+            modifier = avg(
+                [score[0] for game in db['scores'] for score in db['scores'][game]]
+            ) / max(1, avg(
+                [score[0] for score in db['scores'][self.game]]
+            ))
+            # norm score = ((score * modifier) + (transcript/25) * {modifier if modifier < 1 else 1}) * (1.05/players)
             norm_score = ceil(self.player.score * modifier)
             norm_score += floor(
                 len(self.state['transcript']) / 25 * min(
@@ -355,7 +354,7 @@ class StorySystem(GameSystem):
                     norm_score
                 )
             )
-            if self.player.score > max([score[0] for score in scores[self.game]]):
+            if self.player.score > max([score[0] for score in db['scores'][self.game]]):
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     "%s %s just set the high score on %s at %d points" % (
@@ -377,15 +376,13 @@ class StorySystem(GameSystem):
                 )
             if norm_score > 0:
                 for player in self.state['players']:
-                    players[player]['balance'] += norm_score
+                    db['players'][player]['balance'] += norm_score
                     # print("Granting xp for score payout")
                     self.bot.dispatch(
                         'grant_xp',
                         self.bot.get_user(player),
                         norm_score * 10
                     )
-            players.save()
 
     async def on_cleanup(self):
-        if os.path.exists('story.json'):
-            os.remove('story.json')
+        await DBView.overwrite(story={})

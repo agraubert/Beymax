@@ -55,7 +55,7 @@ def select_status():
 
 def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
-    # beymax = EnableGames(beymax) # Story needs priority on special message recognition
+    beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
@@ -177,10 +177,8 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         EnableBirthday,
         EnableBugs,
         EnableHelp,
-        # EnableOverwatch,
         EnableParties,
         EnablePolls,
-        # EnableCash,
     )
 
     return beymax

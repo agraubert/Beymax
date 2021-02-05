@@ -50,3 +50,7 @@
 ##           If any names are unmatched, fail. This is the least safe option, but
 ##           matches previous beymax behavior
 # permissions_matching: previous
+
+## Z-machine executable path
+## Path to a z-machine executable for playing story games (default ./dfrotz)
+# zmachine: dfrotz

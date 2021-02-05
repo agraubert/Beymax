@@ -57,15 +57,14 @@ class BeforeRound(FreePhase):
     async def on_leave(self, user):
         await super().on_leave(user)
         if user.id in self.game.refund:
-            async with Database('players.json') as players:
-                if user.id not in players:
-                    players[user.id] = {
+            async with DBView('players') as db:
+                if user.id not in db['players']:
+                    db['players'][user.id] = {
                         'level':1,
                         'xp':0,
                         'balance':10
                     }
-                players[user.id]['balance'] += self.game.refund[user.id]
-                players.save()
+                db['players'][user.id]['balance'] += self.game.refund[user.id]
             del self.game.refund[user.id]
         await self.try_advance()
         return True
@@ -112,15 +111,14 @@ class BeforeRound(FreePhase):
             self.game.inactive_players.add(user.id)
             await self.try_advance()
             return
-        async with Database('players.json') as players:
-            if user.id not in players:
-                players[user.id] = {
+        async with DBView('players') as db:
+            if user.id not in db['players']:
+                db['players'][user.id] = {
                     'level':1,
                     'xp':0,
                     'balance':10
                 }
-                players.save()
-            balance = players[user.id]['balance']
+            balance = db['players'][user.id]['balance']
         try:
             bet = int(message.content.lower().replace('tokens', '').strip())
             if bet < 1:
@@ -138,15 +136,14 @@ class BeforeRound(FreePhase):
             else:
                 self.game.refund[user.id] = bet
                 self.game.bets[user.id] = bet
-                async with Database('players.json') as players:
-                    if user.id not in players:
-                        players[user.id] = {
+                async with DBView('players') as db:
+                    if user.id not in db['players']:
+                        db['players'][user.id] = {
                             'level':1,
                             'xp':0,
                             'balance':10
                         }
-                    players[user.id]['balance'] -= bet
-                    players.save()
+                    db['players'][user.id]['balance'] -= bet
                 await self.try_advance()
         except ValueError:
             await self.bot.send_message(
@@ -203,18 +200,18 @@ class Deal(LockedPhase):
             # Refund for each player with
             # Reset
             ties = []
-            async with Database('players.json') as players:
+            async with DBView('players') as db:
                 for player in self.game.players:
                     if player.id not in self.game.inactive_players:
-                        if player.id not in players:
-                            players[player.id] = {
+                        if player.id not in db['players']:
+                            db['players'][player.id] = {
                                 'level':1,
                                 'xp':0,
                                 'balance':10
                             }
                         if len(player_scores[player.id]):
                             # Player had a natural
-                            players[player.id]['balance'] += self.game.bets[player.id]
+                            db['players'][player.id]['balance'] += self.game.bets[player.id]
                             ties.append(player.id)
                             self.bot.dispatch(
                                 'grant_xp',
@@ -227,7 +224,6 @@ class Deal(LockedPhase):
                         #         player,
                         #         5
                         #     )
-                players.save()
             msg = "$NICK had a natural 21 (%s), so the game is over. " % self.game.table.display
             if len(ties):
                 msg += "%s%s%s also had a natural 21, so their bet(s) are refunded. " % (
@@ -242,18 +238,18 @@ class Deal(LockedPhase):
             )
             await self.game.enter_phase('reset')
         elif len([uid for uid, wins in player_scores.items() if len(wins)]):
-            async with Database('players.json') as players:
+            async with DBView('players') as db:
                 for player in self.game.players:
                     if player.id not in self.game.inactive_players:
-                        if player.id not in players:
-                            players[player.id] = {
+                        if player.id not in db['players']:
+                            db['players'][player.id] = {
                                 'level':1,
                                 'xp':0,
                                 'balance':10
                             }
                         if len(player_scores[player.id]):
                             # Player had a natural
-                            players[player.id]['balance'] += int(1.5 * self.game.bets[player.id])
+                            db['players'][player.id]['balance'] += int(1.5 * self.game.bets[player.id])
                             self.bot.dispatch(
                                 'grant_xp',
                                 player,
@@ -265,9 +261,8 @@ class Deal(LockedPhase):
                         #         player,
                         #         5
                         #     )
-                players.save()
-            winners = [uid for uid, hand in self.game.hands if len(player_scores[uid])]
-            msg = "%s%s%s had a natural 21, so their bet(s) are refunded. " % (
+            winners = [uid for uid, hand in self.game.hands.items() if len(player_scores[uid])]
+            msg = "%s%s%s had a natural 21, so they win! " % (
                 ', '.join(self.bot.get_user(uid).mention for uid in winners[:-1]),
                 ' and ' if len(winners) > 1 else '',
                 self.bot.get_user(winners[-1]).mention
@@ -322,15 +317,14 @@ class MainPhase(LockedPhase):
             )
         )
         if len(hand) == 2 and len({9,10,11} & {score for score, soft in scores}):
-            async with Database('players.json') as players:
-                if player.id not in players:
-                    players[player.id] = {
+            async with DBView('players') as db:
+                if player.id not in db['players']:
+                    db['players'][player.id] = {
                         'level':1,
                         'xp':0,
                         'balance':10
                     }
-                    players.save()
-                balance = players[player.id]['balance']
+                balance = db['players'][player.id]['balance']
             msg += strike_if(
                 '`double down` (Double your bet of %d, hit, then stay)\n' % self.game.bets[player.id],
                 balance >= self.game.bets[player.id]
@@ -384,19 +378,17 @@ class MainPhase(LockedPhase):
         elif content[0] == 'double' and (len(content) == 1 or content[1] == 'down'):
             scores = evaluate_hand(self.game.hands[user.id])
             if len(self.game.hands[user.id]) == 2 and len({9,10,11} & {score for score, soft in scores}):
-                async with Database('players.json') as players:
-                    if user.id not in players:
-                        players[user.id] = {
+                async with DBView('players') as db:
+                    if user.id not in db['players']:
+                        db['players'][user.id] = {
                             'level':1,
                             'xp':0,
                             'balance':10
                         }
-                        players.save()
-                    balance = players[user.id]['balance']
+                    balance = db['players'][user.id]['balance']
                 if balance >= self.game.bets[user.id]:
-                    async with Database('players.json') as players:
-                        players[user.id]['balance'] -= self.game.bets[user.id]
-                        players.save()
+                    async with DBView('players') as db:
+                        db['players'][user.id]['balance'] -= self.game.bets[user.id]
                     self.game.refund[user.id] += self.game.bets[user.id]
                     self.game.bets[user.id] *= 2
                     if len(self.game.deck) < 1:
@@ -514,10 +506,10 @@ class WinPhase(LockedPhase):
         ties = set()
         winners = set()
         msg = "Here are the results:\n"
-        async with Database('players.json') as players:
+        async with DBView('players') as db:
             for player in self.game.players:
-                if player.id not in players:
-                    players[player.id] = {
+                if player.id not in db['players']:
+                    db['players'][player.id] = {
                         'level':1,
                         'xp':0,
                         'balance':10
@@ -549,7 +541,7 @@ class WinPhase(LockedPhase):
                                 ties.add(player.id)
                                 if player.id in self.game.refund:
                                     del self.game.refund[player.id]
-                                players[player.id]['balance'] += self.game.bets[player.id]
+                                db['players'][player.id]['balance'] += self.game.bets[player.id]
                                 self.bot.dispatch(
                                     'grant_xp',
                                     player,
@@ -560,14 +552,13 @@ class WinPhase(LockedPhase):
                                 winners.add(player.id)
                                 if player.id in self.game.refund:
                                     del self.game.refund[player.id]
-                                players[player.id]['balance'] += int(1.5 * self.game.bets[player.id])
+                                db['players'][player.id]['balance'] += int(1.5 * self.game.bets[player.id])
                                 self.bot.dispatch(
                                     'grant_xp',
                                     player,
                                     int(1.75 * self.game.bets[player.id])
                                 )
                                 del self.game.bets[player.id]
-            players.save()
         msg += "And $NICK with %s, which comes to %d%s\n" % (
             self.game.table.display,
             table_score if table_score != 0 else best_bust_score,

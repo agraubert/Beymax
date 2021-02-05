@@ -230,6 +230,7 @@ class GameSystem(object):
             by dispatching the 'score' event with the (player, score) arguments
         * Post any end-of-game messages
         """
+        # FIXME: SCORE event not used
         print("DEBUG FALLBACK on_end")
         raise NotImplementedError("Subclass must implement endgame functionality")
 

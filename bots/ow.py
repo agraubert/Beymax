@@ -75,6 +75,11 @@ def postfix(n):
     return n+'th'
 
 def EnableOverwatch(bot):
+    import warnings
+    warnings.warn(
+        "This suite of bot commands has not been updated to the latest version of Beymax's API. It is deprecated and no longer maintained",
+        type=DeprecationWarning
+    )
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
