@@ -642,6 +642,50 @@ class CoreBot(discord.Client):
                 await self.trace()
         return last_msg
 
+    async def send_rich_message(self, destination, *, content=None, author=None, author_url=None, author_icon_url=None, title=None, description=None, colour=None, footer=None, image=None, thumbnail=None, __video=None, url=None):
+        """
+        Coroutine. Send a message with rich content.
+        Arguments:
+        destination : A channel or user object to specify where to send the message.
+        content (optional): Text to display above the rich embed
+        author (optional): Creator. If a User object is passed, this will use the
+        user's nickname or username. If a string is passed, the author name will be set to that string
+        author_url (optional): Link to embed in the author's name
+        author_icon_url (optional): Link to the author's icon. If this is None and
+        author is a user object, this will use the user's avatar.
+        title (optional): Bold title displayed below author
+        description (optional): Main embed content
+        colour (optional): Discord color object for sidebar
+        footer (optional): Small text to display below embedded content
+        image (optional): URL for an image to display
+        thumbnail (optional): URL for thumbnail to display in the top right
+        ~~video (optional): URL for video to embed~~
+        url (optional): Large link to place in center of embed
+        """
+        if isinstance(author, CoreBot):
+            author = author.user
+
+        def apply_kwargs(func, **kwargs):
+            return func(**{k:v for k,v in kwargs.items() if v is not None})
+
+        embed = apply_kwargs(discord.Embed, colour=colour, title=title, url=url, description=description)
+        if author_icon_url is None and isinstance(author, discord.abc.User):
+            author_icon_url = 'https://cdn.discordapp.com/avatars/{}/{}'.format(
+                author.id,
+                author.default_avatar if author.avatar is None else author.avatar
+            )
+        if isinstance(author, discord.abc.User):
+            author = getname(author)
+        if author is not None or author_url is not None or author_icon_url is not None:
+            embed = apply_kwargs(embed.set_author, name=author, url=author_url, icon_url=author_icon_url)
+        if footer is not None:
+            embed = embed.set_footer(text=footer)
+        if image is not None:
+            embed = embed.set_image(url=image)
+        if thumbnail is not None:
+            embed = embed.set_thumbnail(url=thumbnail)
+        return await destination.send(content=content, embed=embed)
+
 
     def get_user(self, reference, *guilds):
         """

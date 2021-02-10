@@ -8,9 +8,12 @@ from bots.poll import EnablePolls
 from bots.cash import EnableCash
 from bots.games import EnableGames
 from bots.args import Arg, UserType
+from bots.utils import getname
 import discord
 import asyncio
 import random
+import aiohttp
+from editdistance import eval as leven
 random.seed()
 
 """Note:
@@ -54,6 +57,8 @@ def select_status():
 
 
 def ConstructBeymax(): #enable Beymax-Specific commands
+    MEMELOCK = asyncio.Lock()
+    MEMES = None
     beymax = CoreBot()
     beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
@@ -171,6 +176,101 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             message.author,
             2
         )
+
+    @beymax.add_command('meme', Arg('meme_name', help="Search text for the base meme"), Arg("top", help="Top text"), Arg("bottom", help="Bottom Text", nargs='?', default=None), delimiter='|')
+    async def cmd_meme(self, message, meme_name, top, bottom):
+        nonlocal MEMES
+        username = self.config_get('imgflip', 'username')
+        password = self.config_get('imgflip', 'password')
+        if username is None or password is None:
+            return await self.send_message(
+                message.channel,
+                "imgflip API credentials not set in the config"
+            )
+        async with aiohttp.ClientSession() as sesh:
+            if MEMES is None:
+                async with MEMELOCK:
+                    async with sesh.get('https://api.imgflip.com/get_memes') as response:
+                        MEMES = (await response.json())['data']['memes']
+                        print(len(MEMES))
+
+            selected = [meme for meme in MEMES if meme_name.lower() in meme['name'].lower()]
+            if len(selected) == 0:
+                selected = sorted(
+                    [meme for meme in MEMES if leven(meme['name'].lower(), meme_name.lower()) < len(meme_name)],
+                    key=lambda meme:leven(meme['name'].lower(), meme_name.lower())
+                )
+                if len(selected) == 0:
+                    return await self.send_message(
+                        message.channel,
+                        '{} I couldn\'t find any memes on imgflip matching "{}"'.format(
+                            message.author.mention,
+                            meme_name
+                        )
+                    )
+                selected = selected[0]
+                prompt = await self.send_rich_message(
+                    message.channel,
+                    content="I couldn't find any good matches for your search. Is this what you were looking for? (Yes/No)",
+                    image=selected['url'],
+                    title=selected['name']
+                )
+                response = await self.wait_for(
+                    'message',
+                    check=lambda m : m.channel == message.channel and m.author.id == message.author.id
+                )
+                try:
+                    await prompt.delete()
+                except:
+                    pass
+                try:
+                    await response.delete()
+                except:
+                    pass
+                if response.content.lower() != 'yes':
+                    return await self.send_message(
+                        message.channel,
+                        "I'm sorry, I couldn't find any matching memes. Please try again with a different query"
+                    )
+            else:
+                selected = sorted(
+                    selected,
+                    key=lambda meme:leven(meme['name'].lower(), meme_name.lower())
+                )[0]
+            meme_data = {
+                'username': username,
+                'password': password,
+                'template_id': selected['id'],
+                'text0': top
+            }
+            if bottom is not None:
+                meme_data['text1'] = bottom
+            async with sesh.post('https://api.imgflip.com/caption_image', data=meme_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if 'success' in data and data['success']:
+                        return await self.send_rich_message(
+                            message.channel,
+                            author=message.author,
+                            title=selected['name'],
+                            url=data['data']['page_url'],
+                            image=data['data']['url'],
+                            footer="{} \u2665's memes".format(
+                                getname(self.user)
+                            )
+                        )
+                    print(data)
+                    await self.send_message(
+                        message.channel,
+                        "I'm sorry, I was unable to craft your excellent meme. The imgflip api responded with status code {} and response data {}".format(
+                            response.status,
+                            data
+                        )
+                    )
+                await self.send_message(
+                    message.channel,
+                    "I'm sorry, I was unable to craft your excellent meme. The imgflip api responded with status code {}".format(response.status)
+                )
 
     beymax.EnableAll( #enable all sub-bots
         EnableUtils,
