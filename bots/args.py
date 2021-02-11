@@ -203,11 +203,6 @@ class Argspec(argparse.ArgumentParser):
         )
 
     def __call__(self, *args, delimiter=None):
-        if delimiter is not None:
-            args = [
-                arg for arg in ' '.join(args).split(delimiter)
-                if len(arg)
-            ]
         try:
             return (True, super().parse_args(args))
         except PrebuiltException as e:

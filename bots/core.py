@@ -108,7 +108,11 @@ class CoreBot(discord.Client):
                         delim = None
                     else:
                         delim = delimiter
-                    result, args = argspec(*message.content.strip().split()[1:], delimiter=delim)
+                    if delim is None:
+                        raw_args = message.content[len(cmd):].strip().split()
+                    else:
+                        raw_args = message.content[len(cmd):].strip().split(delim)
+                    result, args = argspec(*raw_args, delimiter=delimiter)
                     if not result:
                         await self.send_message(
                             message.channel,
