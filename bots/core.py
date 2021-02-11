@@ -13,6 +13,7 @@ from functools import wraps
 import re
 import traceback
 import warnings
+import json
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
@@ -161,8 +162,13 @@ class CoreBot(discord.Client):
                 if not cmd.startswith(self.command_prefix):
                     cmd = self.command_prefix + cmd
                 on_cmd = self.subscribe(cmd)(on_cmd)
-                self.commands[cmd] = func.__doc__
-            return on_cmd
+                self.commands[cmd] = {
+                    'docstring': func.__doc__,
+                    'args': spec,
+                    'argspec': Argspec(cmd, *spec, **kwargs), # Should reuse
+                    'delimiter': delimiter
+                }
+            return func
 
         return wrapper
 
@@ -339,9 +345,12 @@ class CoreBot(discord.Client):
         """
         obj = self.configuration
         for key in keys:
-            if key in obj:
-                obj = obj[key]
-            else:
+            try:
+                if key in obj:
+                    obj = obj[key]
+                else:
+                    return default
+            except TypeError:
                 return default
         return obj
 
@@ -1089,5 +1098,31 @@ def EnableUtils(bot): #prolly move to it's own bot
             message.channel,
             message.author.mention + " Your %d minute timer is up!" % minutes
         )
+
+    @bot.add_command('_viewdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
+    async def cmd_viewdb(self, message, scopes):
+        """
+        `$!_viewdb [scopes...]` : Displays the current database state
+        If scopes are provided, then only show the requested scopes
+        """
+        async with DBView() as db:
+            if scopes is None or not len(scopes):
+                await self.send_message(
+                    message.channel,
+                    json.dumps(
+                        {key:DBView.serializable(db[key]) for key in iter(db)},
+                        indent=2,
+                        sort_keys=True
+                    )
+                )
+            else:
+                await self.send_message(
+                    message.channel,
+                    json.dumps(
+                        {key:DBView.serializable(db[key]) for key in scopes if key in db},
+                        indent=2,
+                        sort_keys=True
+                    )
+                )
 
     return bot

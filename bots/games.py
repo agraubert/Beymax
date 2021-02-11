@@ -409,7 +409,7 @@ def EnableGames(bot):
             while player['xp'] >= xp_for(player['level']+1):
                 player['xp'] -= xp_for(player['level']+1)
                 player['level'] += 1
-            if player['level'] > current_level:
+            if player['level'] > current_level and ('active' in db['weekly'][uid] or uid in self._pending_activity):
                 await self.send_message(
                     user,
                     "Congratulations on reaching level %d! Your weekly token payout"
@@ -877,14 +877,15 @@ def EnableGames(bot):
                     if 'active' in db['weekly'][uid] or uid in self._pending_activity:
                         xp.append([user, 5])
                         #only notify if they were active. Otherwise don't bother them
-                        await self.send_message(
-                            self.get_user(uid),
-                            "Your allowance was %d tokens this week. Your balance is now %d "
-                            "tokens" % (
-                                payout,
-                                db['players'][uid]['balance']
+                        if self.config_get("notify_allowance"):
+                            await self.send_message(
+                                self.get_user(uid),
+                                "Your allowance was %d tokens this week. Your balance is now %d "
+                                "tokens" % (
+                                    payout,
+                                    db['players'][uid]['balance']
+                                )
                             )
-                        )
             self._pending_activity = set()
             db['weekly'] = {}
             for user, payout in xp:

@@ -5,6 +5,7 @@ import asyncio
 import warnings
 import traceback
 import discord
+import json
 
 DATABASE = {
     'lock': asyncio.Lock(),
@@ -57,6 +58,30 @@ class DBView(object):
     Allows read-access to full database. Write-access is protected through
     asyncronous context management
     """
+
+    @staticmethod
+    def serializable(value):
+        if isinstance(value, FrozenDict):
+            return {
+                k: DBView.serializable(v) for k,v in value.items()
+            }
+        elif isinstance(value, FrozenList):
+            return [
+                DBView.serializable(v) for v in value
+            ]
+        elif isinstance(value, DBView):
+            return {
+                scope: DBView.serializable(value[scope]) for scope in iter(value)
+            }
+        elif isinstance(value, set):
+            return "(set) {{{}}}".format(
+                ', '.join(json.dumps(DBView.serializable(item)) for item in value)
+            )
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return repr(value)
 
     @staticmethod
     def readonly_view(*scopes, read_persistent=False, **defaults):
@@ -186,6 +211,9 @@ class DBView(object):
     def __contains__(self, key):
         return key in DATABASE['data']
 
+    def __iter__(self):
+        yield from DATABASE['data']
+
     async def abort(self):
         """
         Abort any pending changes
@@ -205,6 +233,40 @@ class DBView(object):
                     DATABASE['data'][key] = value
             self._dirty = False
             self._entered = True
+
+class VolatileDBView(DBView):
+    async def __aenter__(self):
+        if len(self._defaults):
+            # If we provided defaults, quickly update them (volatile)
+            async with VolatileDBView(*self._defaults, _add_scope_to_defaults=False) as db:
+                for key, value in self._defaults.items():
+                    if key not in db:
+                        db[key] = value
+        async with DATABASE['lock']:
+            if DATABASE['data'] is None:
+                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+                    with open('db.pkl', 'rb') as r:
+                        DATABASE['data'] = pickle.load(r)
+                else:
+                    DATABASE['data'] = {}
+            for scope in self.scopes:
+                if scope not in DATABASE['scope_locks']:
+                    DATABASE['scope_locks'][scope] = asyncio.Lock()
+                await DATABASE['scope_locks'][scope].acquire()
+            self._entered = True
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, tb):
+        if self._dirty and (exc_type is not None or exc_val is not None or tb is not None):
+            traceback.print_exc()
+            print("Database connection exiting uncleanly. Aborting changes")
+            await self.abort() # sets dirty to false so all that happens afterwards is __aexit__ releases locks
+        async with DATABASE['lock']:
+            self._entered = False
+            # Do not save changes to disk
+            # Release locks in reverse order
+            for scope in reversed(self.scopes):
+                DATABASE['scope_locks'][scope].release()
 
 class Interpolator(dict):
     def __init__(self, bot, channel):
@@ -242,6 +304,7 @@ class Interpolator(dict):
             '$PREFIX': bot.command_prefix,
             '$!': bot.command_prefix
         })
+
 
 def sanitize(string, illegal, replacement=''):
     for char in illegal:

@@ -8,7 +8,7 @@ from bots.poll import EnablePolls
 from bots.cash import EnableCash
 from bots.games import EnableGames
 from bots.args import Arg, UserType
-from bots.utils import getname
+from bots.utils import getname, DBView
 import discord
 import asyncio
 import random
@@ -62,6 +62,40 @@ def ConstructBeymax(): #enable Beymax-Specific commands
     beymax = CoreBot()
     beymax = EnableGames(beymax) # Story needs priority on special message recognition
 
+    async def get_meme_url(session, meme_id, username, password, top_text, bottom_text=None):
+        meme_key = '{}:{}:{}'.format(
+            meme_id,
+            top_text,
+            '' if bottom_text is None else bottom_text
+        )
+        async with DBView('memecache') as db:
+            if meme_key not in db['memecache']:
+                print("Loading new meme")
+                meme = {
+                    'template_id': meme_id,
+                    'username': username,
+                    'password': password,
+                    'text0': top_text
+                }
+                if bottom_text is not None:
+                    meme['text1'] = bottom_text
+                async with session.post('https://api.imgflip.com/caption_image', data=meme) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if 'success' in data and data['success']:
+                            db['memecache'][meme_key] = {
+                                'url': data['data']['url'],
+                                'page': data['data']['page_url']
+                            }
+                        else:
+                            return False, {'status': response.status, 'response': data}
+                    else:
+                        return False, {'status': response.status, 'response': data}
+            else:
+                print("Using cached meme")
+            return True, db['memecache'][meme_key]
+
+
     @beymax.subscribe('after:ready')
     async def ready_up(self, event):
         print('Logged in as') #then run Beymax-Specific startup (print info)
@@ -79,16 +113,51 @@ def ConstructBeymax(): #enable Beymax-Specific commands
 
     @beymax.subscribe('member_join')
     async def greet_member(self, event, member): #greet new members
-        await self.send_message(
-            self.fetch_channel('general'),
-            "Welcome, "+member.mention+"!\n"
-            "I am %s, your personal ~~healthcare~~ guild companion\n"
-            "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi\n"
-            "Try typing `$!permissions` to find the list of commands you can use "
-            "or `$!ouch` to get help with them" % (
-                self.user.mention
+        username = self.config_get('imgflip', 'username')
+        password = self.config_get('imgflip', 'password')
+        rich_greet = False
+        if self.config_get("imgflip", "greet") and not (username is None or password is None):
+            async with aiohttp.ClientSession() as sesh:
+                rich_greet, meme = await get_meme_url(
+                    sesh,
+                    self.config_get('imgflip', 'greet', 'template', default='119139145'),
+                    username,
+                    password,
+                    self.config_get('imgflip', 'greet', 'top_text', default='{} in five minutes'.format(getname(member))),
+                    self.config_get('imgflip', 'greet', 'bottom_text', default='Leave Server')
+                )
+                if rich_greet:
+                    await self.send_rich_message(
+                        self.fetch_channel('general'),
+                        content=(
+                            "Welcome, "+member.mention+"!\n"
+                            "I am %s, your personal ~~healthcare~~ **server** companion\n"
+                            "https://giphy.com/gifs/hello-hi-dzaUX7CAG0Ihi\n"
+                            "Try typing `$!permissions` to find the list of commands you can use "
+                            "or `$!ouch` to get help with them" % (
+                                self.user.mention
+                            )
+                        ),
+                        author=member,
+                        image=meme['url'],
+                        footer='jk please dont go'
+                    )
+                else:
+                    print("Fail", meme)
+        if not rich_greet:
+            await self.send_rich_message(
+                self.fetch_channel('general'),
+                content=(
+                    "Welcome, "+member.mention+"!\n"
+                    "I am %s, your personal ~~healthcare~~ **server** companion\n"
+                    "Try typing `$!permissions` to find the list of commands you can use "
+                    "or `$!ouch` to get help with them" % (
+                        self.user.mention
+                    )
+                ),
+                image='https://media0.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif',
+                author=member
             )
-        )
         if not member.bot:
             await asyncio.sleep(10)
             await self.send_message(
@@ -177,8 +246,26 @@ def ConstructBeymax(): #enable Beymax-Specific commands
             2
         )
 
+    @beymax.add_special(lambda s,m: m.content.startswith('!help'))
+    async def maybe_help(self, message, content):
+        try:
+            await self.wait_for(
+                'message',
+                check=lambda m:m.author.bot,
+                timeout=5
+            )
+        except asyncio.TimeoutError:
+            await self.send_message(
+                message.channel,
+                "I think you might be talking to me. If you need help with $MENTION, use `!ouch`"
+            )
+
     @beymax.add_command('meme', Arg('meme_name', help="Search text for the base meme"), Arg("top", help="Top text"), Arg("bottom", help="Bottom Text", nargs='?', default=None), delimiter='|')
     async def cmd_meme(self, message, meme_name, top, bottom):
+        """
+        `$!meme <name> | <top text> [| <bottom text>]` : Generates a meme
+        Example: $!meme mocking spongebob | Look at me, I'm a bot
+        """
         nonlocal MEMES
         username = self.config_get('imgflip', 'username')
         password = self.config_get('imgflip', 'password')
@@ -193,8 +280,19 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                     async with sesh.get('https://api.imgflip.com/get_memes') as response:
                         MEMES = (await response.json())['data']['memes']
                         print(len(MEMES))
-
             selected = [meme for meme in MEMES if meme_name.lower() in meme['name'].lower()]
+            query = {
+                'q': meme_name,
+                'transparent_only': 0,
+                'include_nsfw': 1,
+                'allow_gifs': 0
+            }
+            try:
+                async with sesh.get('https://imgflip.com/ajax_meme_search_new', params=query) as response:
+                    if response.status == 200:
+                        selected += (await response.json())['results']
+            except:
+                await self.trace()
             if len(selected) == 0:
                 selected = sorted(
                     [meme for meme in MEMES if leven(meme['name'].lower(), meme_name.lower()) < len(meme_name)],
@@ -209,67 +307,82 @@ def ConstructBeymax(): #enable Beymax-Specific commands
                         )
                     )
                 selected = selected[0]
-                prompt = await self.send_rich_message(
-                    message.channel,
-                    content="I couldn't find any good matches for your search. Is this what you were looking for? (Yes/No)",
-                    image=selected['url'],
-                    title=selected['name']
-                )
-                response = await self.wait_for(
-                    'message',
-                    check=lambda m : m.channel == message.channel and m.author.id == message.author.id
-                )
-                try:
-                    await prompt.delete()
-                except:
-                    pass
-                try:
-                    await response.delete()
-                except:
-                    pass
-                if response.content.lower() != 'yes':
-                    return await self.send_message(
-                        message.channel,
-                        "I'm sorry, I couldn't find any matching memes. Please try again with a different query"
-                    )
             else:
                 selected = sorted(
                     selected,
                     key=lambda meme:leven(meme['name'].lower(), meme_name.lower())
                 )[0]
-            meme_data = {
-                'username': username,
-                'password': password,
-                'template_id': selected['id'],
-                'text0': top
-            }
-            if bottom is not None:
-                meme_data['text1'] = bottom
-            async with sesh.post('https://api.imgflip.com/caption_image', data=meme_data) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if 'success' in data and data['success']:
-                        return await self.send_rich_message(
-                            message.channel,
-                            author=message.author,
-                            title=selected['name'],
-                            url=data['data']['page_url'],
-                            image=data['data']['url'],
-                            footer="{} \u2665's memes".format(
-                                getname(self.user)
-                            )
-                        )
-                    print(data)
-                    await self.send_message(
+            if 'url' in selected:
+                prompt = await self.send_rich_message(
+                    message.channel,
+                    content="Is this what you were looking for? (Yes/No)",
+                    image=selected['url'],
+                    title=selected['name']
+                )
+            else:
+                result, data = await get_meme_url(
+                    sesh,
+                    selected['id'],
+                    username,
+                    password,
+                    ' ',
+                )
+                if result:
+                    prompt = await self.send_rich_message(
                         message.channel,
-                        "I'm sorry, I was unable to craft your excellent meme. The imgflip api responded with status code {} and response data {}".format(
-                            response.status,
-                            data
+                        content="Is this what you were looking for? (Yes/No)",
+                        image=data['url'],
+                        title=selected['name']
+                    )
+                else:
+                    promt = await self.send_message(
+                        message.channel,
+                        "I couldn't load a preview for this meme, but here's the title: {}. Is this what you were looking for? (Yes/No)".format(
+                            selected['name']
                         )
                     )
+            response = await self.wait_for(
+                'message',
+                check=lambda m : m.channel == message.channel and m.author.id == message.author.id
+            )
+            try:
+                await prompt.delete()
+            except:
+                pass
+            try:
+                await response.delete()
+            except:
+                pass
+            if response.content.lower() != 'yes':
+                return await self.send_message(
+                    message.channel,
+                    "I'm sorry, I couldn't find any matching memes. Please try again with a different query"
+                )
+            result, data = await get_meme_url(
+                sesh,
+                selected['id'],
+                username,
+                password,
+                top,
+                bottom
+            )
+            if result:
+                await self.send_rich_message(
+                    message.channel,
+                    author=message.author,
+                    title=selected['name'],
+                    url=data['page'],
+                    image=data['url'],
+                    footer="{} \u2665's memes".format(
+                        getname(self.user)
+                    )
+                )
+            else:
                 await self.send_message(
                     message.channel,
-                    "I'm sorry, I was unable to craft your excellent meme. The imgflip api responded with status code {}".format(response.status)
+                    "I'm sorry, I was unable to craft your excellent meme. The imgflip api responded with {}".format(
+                        data
+                    )
                 )
 
     beymax.EnableAll( #enable all sub-bots
