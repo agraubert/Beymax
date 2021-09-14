@@ -1,5 +1,5 @@
 from .utils import DBView, getname, Interpolator, standard_intents
-from .args import Arg, Argspec, UserType, ChannelType
+from .args import Arg, Argspec, UserType, ChannelType, DateType
 from .perms import PermissionsFile
 import discord
 import asyncio
@@ -14,6 +14,7 @@ import re
 import traceback
 import warnings
 import json
+from datetime import datetime
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
@@ -1124,5 +1125,46 @@ def EnableUtils(bot): #prolly move to it's own bot
                         sort_keys=True
                     )
                 )
+    @bot.add_command("remind", Arg('date', type=DateType, help="When should I remind you"))
+    async def cmd_reminder(self, message, date):
+        """
+        `$!remind (when)` : I'll send you a reminder about this message on the given date
+        """
+        async with DBView('reminders', reminders=[]) as db:
+            db['reminders'].append(
+                {
+                    'user': message.author.id,
+                    'message': message.id,
+                    'channel': message.channel.id,
+                    'date': date.strftime('%m/%d/%Y')
+                }
+            )
+            await self.send_message(
+                message.channel,
+                "Okay, I'll remind you of this message on {}".format(
+                    date.strftime('%m/%d/%Y')
+                )
+            )
+
+    @bot.add_task(3600)
+    async def test_reminders(self, *args):
+        now = datetime.now()
+        async with DBView('reminders', reminders=[]) as db:
+            for reminder in db['reminders']:
+                if datetime.strptime(reminder['date'], '%m/%d/%Y') <= now:
+                    for guild in self.guilds:
+                        channel = guild.get_channel(reminder['channel'])
+                        user = self.get_user(reminder['user'])
+                        message = await channel.fetch_message(reminder['message'])
+                        await channel.send(
+                            "Hey, {} here's your reminder".format(user.mention),
+                            reference=message.to_reference()
+                        )
+                        break
+            db['reminders'] = [
+                reminder
+                for reminder in db['reminders']
+                if datetime.strptime(reminder['date'], '%m/%d/%Y') > now
+            ]
 
     return bot
