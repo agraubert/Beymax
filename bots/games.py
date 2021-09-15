@@ -352,11 +352,11 @@ def EnableGames(bot):
                     )
                 )
 
-    @bot.add_command('_start', Arg('game', help="The game to play"))
+    @bot.add_command('start', Arg('game', help="The game to play"))
     async def cmd_start(self, message, game):
         """
-        `$!_start <game name>` : Starts one of the allowed games
-        Example: `$!_start zork1`
+        `$!start <game name>` : Starts one of the allowed games
+        Example: `$!start zork1`
         """
         async with DBView('game', game={'user': None}) as db:
             if db['game']['user'] is None:
@@ -365,11 +365,10 @@ def EnableGames(bot):
                     for game, sysname, system in listgames()
                 }
                 if game in games:
-                    db['game']['bids'] = [{
+                    db['game']['next'] = {
                         'user':message.author.id,
                         'game':game,
-                        'amount':0
-                    }]
+                    }
                     self.dispatch('startgame')
                 else:
                     await self.send_message(
@@ -382,42 +381,6 @@ def EnableGames(bot):
                     "Please wait until the current player finishes their game"
                 )
 
-    @lru_cache(4096)
-    def xp_for(level):
-        if level <= 2:
-            return 10
-        else:
-            return (2*xp_for(level-1)-xp_for(level-2))+5
-
-    @bot.subscribe('grant_xp')
-    async def grant_some_xp(self, evt, user, xp):
-        # print(
-        #     "<dev>: %d xp has been granted to %s" % (
-        #         xp, str(user)
-        #     )
-        # )
-        async with DBView('players') as db:
-            if user.id not in db['players']:
-                db['players'][user.id] = {
-                    'level':1,
-                    'xp':0,
-                    'balance':10
-                }
-            player = db['players'][user.id]
-            player['xp'] += xp
-            current_level = player['level']
-            while player['xp'] >= xp_for(player['level']+1):
-                player['xp'] -= xp_for(player['level']+1)
-                player['level'] += 1
-            if player['level'] > current_level and ('active' in db['weekly'][uid] or uid in self._pending_activity):
-                await self.send_message(
-                    user,
-                    "Congratulations on reaching level %d! Your weekly token payout"
-                    " and maximum token balance have both been increased. To check"
-                    " your balance, type `$!balance`" % player['level']
-                )
-            db['players'][user.id] = player
-
     @bot.add_command('balance')
     async def cmd_balance(self, message):
         """
@@ -426,204 +389,35 @@ def EnableGames(bot):
         async with DBView('players') as db:
             if message.author.id not in db['players']:
                 db['players'][message.author.id] = {
-                    'level':1,
-                    'xp':0,
                     'balance':10
                 }
             player = db['players'][message.author.id]
             await self.send_message(
                 message.author,
-                "You are currently level %d and have a balance of %d tokens\n"
-                "You have %d xp to go to reach the next level" % (
-                    player['level'],
-                    player['balance'],
-                    xp_for(player['level']+1)-player['xp']
+                "You have a balance of {} tokens".format(
+                    player['balance']
                 )
             )
-
-    @bot.add_command(
-        'bid',
-        Arg('amount', type=int, help='Amount of tokens to bid'),
-        Arg('game', help="The game to play")
-    )
-    async def cmd_bid(self, message, amount, game):
-        """
-        `$!bid <amount> <game>` : Place a bid to play the next game
-        Example: `$!bid 1 zork1`
-        """
-        async with DBView('game', 'players', game={'user': None}) as db:
-            if message.author.id == db['game']['user']:
-                await self.send_message(
-                    message.channel,
-                    "You can't bid on a game while you're currently hosting one."
-                    " Why not give someone else a turn?"
-                )
-                return
-            games = {
-                game:system
-                for game, sysname, system in listgames()
-            }
-            if 'bids' not in db['game']:
-                db['game']['bids'] = [{'user': None, 'amount':0, 'game':''}]
-            # print(state)
-            # print(players)
-            # print(bid)
-            # print(game)
-            if amount <= db['game']['bids'][-1]['amount']:
-                if db['game']['bids'][-1]['user'] is not None:
-                    await self.send_message(
-                        message.channel,
-                        "The current highest bid is %d tokens. Your bid must"
-                        " be at least %d tokens." % (
-                            db['game']['bids'][-1]['amount'],
-                            db['game']['bids'][-1]['amount'] + 1
-                        )
-                    )
-                    return
-                else:
-                    await self.send_message(
-                        message.channel,
-                        "The minimum bid is 1 token"
-                    )
-                    return
-            if message.author.id not in db['players']:
-                db['players'][message.author.id] = {
-                    'level':1,
-                    'xp':0,
-                    'balance':10
-                }
-            if amount > db['players'][message.author.id]['balance']:
-                await self.send_message(
-                    message.channel,
-                    "You do not have enough tokens to make that bid."
-                    "To check your token balance, use `!balance`"
-                )
-                return
-            if game not in games:
-                await self.send_message(
-                    message.channel,
-                    "That is not a valid game. To see the list of games that"
-                    " are available, use `$!games`"
-                )
-                return
-            user = self.get_user(db['game']['bids'][-1]['user'])
-            if user:
-                await self.send_message(
-                    user,
-                    "You have been outbid by %s with a bid of %d tokens."
-                    " If you would like to place another bid, use "
-                    "`$!bid %d %s`" % (
-                        getname(message.author),
-                        bid,
-                        bid+1,
-                        db['game']['bids'][-1]['game']
-                    )
-                )
-            db['game']['bids'].append({
-                'user':message.author.id,
-                'amount':amount,
-                'game':game
-            })
-            if db['game']['user'] is None:
-                self.dispatch('startgame')
-            else:
-                await self.send_message(
-                    message.channel,
-                    "Your bid has been placed. If you are not outbid, your"
-                    " game will begin after the current game has ended"
-                )
 
     @bot.add_command(
         '_payout',
         Arg('user', type=UserType(bot), help="Username or ID"),
         Arg('amount', type=int, help="Amount to pay"),
-        Arg('pay_type', choices=['xp', 'tokens'], help="Type of payout (xp or tokens)")
     )
-    async def cmd_payout(self, message, user, amount, pay_type):
+    async def cmd_payout(self, message, user, amount):
         """
-        `$!_payout <user> <amount> <xp/tokens>` : Pays xp/tokens to the provided user
-        Example: `$!_payout some_user_id 12 xp`
+        `$!_payout <user> <amount>` : Pays tokens to the provided user
+        Example: `$!_payout some_user_id 12`
         """
         async with DBView('players') as db:
             if user.id not in db['players']:
                 db['players'][user.id] = {
-                    'level':1,
-                    'xp':0,
                     'balance':10
                 }
-            if pay_type == 'tokens':
-                db['players'][user.id]['balance'] += amount
-            else:
-                self.dispatch(
-                    'grant_xp',
-                    user,
-                    amount
-                )
-
-    @bot.add_command('reup')
-    async def cmd_reup(self, message):
-        """
-        `$!reup` : Extends your current game session by 1 day
-        """
-        async with DBView('game', 'players', game={'user':None, 'bids':[]}) as db:
-            if 'reup' not in db['game']:
-                db['game']['reup'] = 1
-            if db['game']['user'] != message.author.id:
-                await self.send_message(
-                    message.channel,
-                    "You are not currently hosting a game"
-                )
-            elif not (self._game_system is None or self._game_system.played):
-                await self.send_message(
-                    message.channel,
-                    "You should play your game first"
-                )
-            elif db['players'][db['game']['user']]['balance'] < db['game']['reup']:
-                await self.send_message(
-                    message.channel,
-                    "You do not have enough tokens to extend this session "
-                    "(%d tokens)." % db['game']['reup']
-                )
-            else:
-                db['game']['time'] += 86400
-                # 1 day + the remaining time
-                db['players'][db['game']['user']]['balance'] -= db['game']['reup']
-                db['game']['reup'] += 1
-                if 'notified' in db['game']:
-                    del db['game']['notified']
-                await self.send_message(
-                    self.fetch_channel('games'),
-                    "The current game session has been extended"
-                )
+            db['players'][user.id]['balance'] += amount
 
     @bot.subscribe('endgame')
     async def end_game(self, evt, hardness='soft'):
-        async with DBView('game', 'players', game={'user': None}) as db:
-            user = self.get_user(db['game']['user'])
-            if user is not None and self._game_system is None or not self._game_system.played:
-                await self.send_message(
-                    self.fetch_channel('games'),
-                    "You quit your game without playing. "
-                    "You are being refunded %d tokens" % (
-                        db['game']['refund']
-                    )
-                )
-                if user.id not in db['players']:
-                    db['players'][user.id] = {
-                        'level':1,
-                        'xp':0,
-                        'balance':10
-                    }
-                db['players'][user.id]['balance'] += db['game']['refund']
-            elif hardness != 'soft':
-                await self.send_message(
-                    self.fetch_channel('games'),
-                    "You are being refunded %d tokens."
-                    " I apologize for the inconvenience" % (
-                        db['game']['refund']
-                    )
-                )
-                db['players'][user.id]['balance'] += db['game']['refund']
         if hardness != 'critical' and self._game_system is not None:
             try:
                 await self._game_system.on_end(user)
@@ -632,13 +426,10 @@ def EnableGames(bot):
                 await self.send_message(
                     self.fetch_channel('games'),
                     "I encountered an error while ending the game. "
-                    "Scores and payouts may not have been processed. "
-                    "If you belive this to be the case, please make a `!bug` report"
                 )
         async with DBView('game', game={'user': None}) as db:
             db['game'] = {
                 'user': None,
-                'bids': db['game']['bids'] if 'bids' in db['game'] else []
             }
             if self._game_system is not None:
                 try:
@@ -646,45 +437,29 @@ def EnableGames(bot):
                 except:
                     await self.trace()
                 self._game_system = None
-            if 'bids' not in db['game'] or len(db['game']['bids']) <= 1:
-                await self.send_message(
-                    self.fetch_channel('games'),
-                    "The game is now idle and will be awarded to the first bidder"
-                )
-            else:
-                self.dispatch('startgame')
+        await self.send_message(
+            self.fetch_channel('games'),
+            "This game has ended. Thanks for playing! Anyone may now start a new game"
+        )
 
     @bot.subscribe('startgame')
     async def start_game(self, evt):
         print("Starting game")
         async with DBView('game', 'players', game={'user': None}) as db:
             if db['game']['user'] is None:
-                for bid in reversed(db['game']['bids']):
+                if 'next' in db['game']:
+                    bid = db['game']['next'] # legacy naming
                     if bid['user'] is not None:
                         if bid['user'] not in db['players']:
                             db['players'][bid['user']] = {
-                                'level':1,
-                                'xp':0,
                                 'balance':10
                             }
                         user = self.get_user(bid['user'])
-                        if bid['amount'] > db['players'][bid['user']]['balance']:
-                            await self.send_message(
-                                user,
-                                "You do not have enough tokens to cover your"
-                                " bid of %d. Your bid is forfeit and the game"
-                                " shall pass to the next highest bidder" % (
-                                    bid['amount']
-                                )
-                            )
-                            continue
-                        db['players'][bid['user']]['balance'] -= bid['amount']
                         db['game']['user'] = bid['user']
                         db['game']['restrict'] = False
                         db['game']['game'] = bid['game']
-                        db['game']['refund'] = max(0, bid['amount'] - 1)
                         db['game']['time'] = time.time()
-                        db['game']['bids'] = [{'user':'', 'amount':0, 'game':''}]
+                        del db['game']['next']
                         await self.send_message(
                             user,
                             'You have up to 2 days to finish your game, after'
@@ -730,16 +505,14 @@ def EnableGames(bot):
                 except GameError:
                     await self.send_message(
                         self.fetch_channel('games'),
-                        "I was unable to initialize the game. "
-                        "The current game will be refunded"
+                        "I was unable to initialize the game. Please try again later"
                     )
                     await self.trace()
                     self.dispatch('endgame', 'hard')
                 except:
                     await self.send_message(
                         self.fetch_channel('games'),
-                        "I was unable to initialize the game. "
-                        "The current game will be refunded"
+                        "I was unable to initialize the game. Please try again later"
                     )
                     await self.trace()
                     self.dispatch('endgame', 'critical')
@@ -751,47 +524,8 @@ def EnableGames(bot):
                 # 'transcript': [],
                 'game': '',
                 'reup': 1,
-                'bids': [{'user': None, 'amount': 0, 'game': ''}]
             }
-            await self.send_message(
-                self.fetch_channel('games'),
-                "None of the bidders for the current game session could"
-                " honor their bids. The game is now idle and will be"
-                " awarded to the first bidder"
-            )
-
-
-    @bot.subscribe('command')
-    async def record_command(self, evt, command, user):
-        async with DBView('weekly') as db:
-            if user.id not in db['weekly']:
-                db['weekly'][user.id] = {'commands': [], 'active': False}
-            # print(week)
-            if command not in db['weekly'][user.id]['commands']:
-                db['weekly'][user.id]['commands'].append(command)
-                # print("granting xp for new command", command)
-                self.dispatch(
-                    'grant_xp',
-                    user,
-                    5
-                )
-            db['weekly'][user.id]['active'] = True
-
-    @bot.subscribe('after:message')
-    async def record_activity(self, evt, message):
-        if message.author.id != self.user.id:
-            self._pending_activity.add(message.author.id)
-
-    @bot.subscribe('cleanup')
-    async def save_activity(self, evt):
-        async with DBView('weekly') as db:
-            # print(week, self._pending_activity)
-            for uid in self._pending_activity:
-                if uid not in db['weekly']:
-                    db['weekly'][uid]={'commands': [], 'active': True}
-                else:
-                    db['weekly'][uid]['active'] = True
-            self._pending_activity = set()
+            # We shouldn't really get here these days
 
     @bot.add_command('timeleft')
     async def cmd_timeleft(self, message):
@@ -853,48 +587,15 @@ def EnableGames(bot):
                 )
 
 
-    @bot.add_task(604800) # 1 week
+    @bot.add_task(86400) # 1 day
     async def reset_week(self):
         #{uid: {}}
-        async with DBView('weekly', 'players') as db:
-            print("Resetting the week")
-            xp = []
-            for uid in db['weekly']:
-                user = self.get_user(uid)
-                if user is not None:
-                    if user.id not in db['players']:
-                        db['players'][user.id] = {
-                            'level':1,
-                            'xp':0,
-                            'balance':10
-                        }
-                    payout = db['players'][user.id]['level']
-                    if db['players'][user.id]['balance'] < 20*db['players'][user.id]['level']:
-                        payout *= 2
-                    elif db['players'][user.id]['balance'] > 100*db['players'][user.id]['level']:
-                        payout //= 10
-                    db['players'][uid]['balance'] += payout
-                    if 'active' in db['weekly'][uid] or uid in self._pending_activity:
-                        xp.append([user, 5])
-                        #only notify if they were active. Otherwise don't bother them
-                        if self.config_get("notify_allowance"):
-                            await self.send_message(
-                                self.get_user(uid),
-                                "Your allowance was %d tokens this week. Your balance is now %d "
-                                "tokens" % (
-                                    payout,
-                                    db['players'][uid]['balance']
-                                )
-                            )
-            self._pending_activity = set()
-            db['weekly'] = {}
-            for user, payout in xp:
-                # print("granting xp for activity payout")
-                self.dispatch(
-                    'grant_xp',
-                    user,
-                    payout
-                )
+        async with DBView('players') as db:
+            for pid in db['players']:
+                if db['players'][pid]['balance'] < 0:
+                    db['players'][pid]['balance'] = 1
+                else:
+                    db['players'][pid]['balance'] += 1
 
     @bot.add_task(1800) # 30 minutes
     async def check_game(self):
@@ -904,30 +605,6 @@ def EnableGames(bot):
                 user = self.get_user(db['game']['user'])
                 self.dispatch('endgame', user)
                 return
-            elif db['game']['user'] is not None and now - db['game']['time'] >= 151200: # 6 hours left
-                if 'notified' not in db['game'] or db['game']['notified'] == 'first':
-                    await self.send_message(
-                        self.get_user(db['game']['user']),
-                        "Your current game of %s is about to expire. If you wish to extend"
-                        " your game session, you can `$!reup` at a cost of %d tokens,"
-                        " which will grant you an additional day" % (
-                            db['game']['game'],
-                            db['game']['reup'] if 'reup' in db['game'] else 1
-                        )
-                    )
-                    db['game']['notified'] = 'second'
-            elif (self._game_system is not None and self._game_system.played) and db['game']['user'] is not None and now - db['game']['time'] >= 86400: # 1 day left
-                if 'notified' not in db['game']:
-                    await self.send_message(
-                        self.get_user(db['game']['user']),
-                        "Your current game of %s will expire in less than 1 day. If you"
-                        " wish to extend your game session, you can `$!reup` at a cost of"
-                        " %d tokens, which will grant you an additional day" % (
-                            db['game']['game'],
-                            db['game']['reup'] if 'reup' in db['game'] else 1
-                        )
-                    )
-                    db['game']['notified'] = 'first'
         if self._game_system is not None:
             try:
                 await self._game_system.on_check()
