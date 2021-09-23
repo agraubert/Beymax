@@ -1,4 +1,4 @@
-from .utils import DBView, getname, Interpolator, standard_intents
+from .utils import DBView, getname, Interpolator, standard_intents, TIMESTAMP_FORMAT
 from .args import Arg, Argspec, UserType, ChannelType, DateType
 from .perms import PermissionsFile
 import discord
@@ -9,14 +9,17 @@ import yaml
 import sys
 import threading
 import shlex
-from functools import wraps
+from functools import wraps, partial
 import re
 import traceback
 import warnings
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
+
+### Overhaul Todos
+# 1) Polish and update game system
 
 class CoreBot(discord.Client):
     def __init__(self, *args, **kwargs):
@@ -68,6 +71,25 @@ class CoreBot(discord.Client):
                     content = self.debounced_channels[dest.id]
                     del self.debounced_channels[dest.id]
                     await self._bulk_send_message(dest, content)
+
+        # Future dispatch events are handled as a task
+        # But tasks must be added to an existing bot
+        @self.add_task(120)
+        async def check_future_dispatch(self):
+            now = datetime.now()
+            async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
+                for event in db['core_future_dispatch']:
+                    if datetime.strptime(event['date'], TIMESTAMP_FORMAT) <= now:
+                        self.dispatch(
+                            event['event'],
+                            *event['args'],
+                            **event['kwargs']
+                        )
+                db['core_future_dispatch'] = [
+                    evt for evt in db['core_future_dispatch']
+                    if datetime.strptime(evt['date'], TIMESTAMP_FORMAT) > now
+                ]
+
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         """
@@ -219,6 +241,29 @@ class CoreBot(discord.Client):
 
             return run_special
         return wrapper
+
+    async def dispatch_future(self, when, event, *args, **kwargs):
+        """
+        Schedule the given event to be dispatched at a time in the future.
+        When can be a datetime object, timedelta object, or integer (interpreted as seconds in the future).
+        Event should be the string name of an event to dispatch.
+        Remaining arguments will be passed to the event handler on dispatch.
+        Note: Arguments and keyword arguments must be serializable.
+        To save discord objects, use DB serializers (planned)
+        """
+        if isinstance(when, int):
+            when = datetime.now() + timedelta(seconds=when)
+        elif isinstance(when, timedelta):
+            when = datetime.now() + when
+        elif not isinstance(when, datetime):
+            raise TypeError("When must be a datetime, timedelta, or int object, not {}".format(type(when)))
+        async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
+            db['core_future_dispatch'].append({
+                'date': when.strftime(TIMESTAMP_FORMAT),
+                'event': event,
+                'args': args,
+                'kwargs': kwargs
+            })
 
     def subscribe(self, event): # decorator. Sets the decorated function to run on events
         """
@@ -1130,41 +1175,29 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `$!remind (when)` : I'll send you a reminder about this message on the given date
         """
-        async with DBView('reminders', reminders=[]) as db:
-            db['reminders'].append(
-                {
-                    'user': message.author.id,
-                    'message': message.id,
-                    'channel': message.channel.id,
-                    'date': date.strftime('%m/%d/%Y')
-                }
+        await self.dispatch_future(
+            date,
+            'process-reminder',
+            userID=message.author.id,
+            channelID=message.channel.id,
+            messageID=message.id
+        )
+        await self.send_message(
+            message.channel,
+            "Okay, I'll remind you of this message on {}".format(
+                date.strftime('%m/%d/%Y')
             )
-            await self.send_message(
-                message.channel,
-                "Okay, I'll remind you of this message on {}".format(
-                    date.strftime('%m/%d/%Y')
-                )
-            )
+        )
 
-    @bot.add_task(3600)
-    async def test_reminders(self, *args):
-        now = datetime.now()
-        async with DBView('reminders', reminders=[]) as db:
-            for reminder in db['reminders']:
-                if datetime.strptime(reminder['date'], '%m/%d/%Y') <= now:
-                    for guild in self.guilds:
-                        channel = guild.get_channel(reminder['channel'])
-                        user = self.get_user(reminder['user'])
-                        message = await channel.fetch_message(reminder['message'])
-                        await channel.send(
-                            "Hey, {} here's your reminder".format(user.mention),
-                            reference=message.to_reference()
-                        )
-                        break
-            db['reminders'] = [
-                reminder
-                for reminder in db['reminders']
-                if datetime.strptime(reminder['date'], '%m/%d/%Y') > now
-            ]
+    @bot.subscribe('process-reminder')
+    async def test_reminders(self, _, userID, channelID, messageID):
+        for guild in self.guilds:
+            channel = guild.get_channel(channelID)
+            user = self.get_user(userID)
+            message = await channel.fetch_message(messageID)
+            await channel.send(
+                "Hey, {} here's your reminder".format(user.mention),
+                reference=message.to_reference()
+            )
 
     return bot

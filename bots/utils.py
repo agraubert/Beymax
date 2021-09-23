@@ -13,6 +13,8 @@ DATABASE = {
     'data': None
 }
 
+TIMESTAMP_FORMAT = "%m/%d/%Y - %H:%M:%S"
+
 # def parse_id_keys(obj):
 #     if isinstance(obj, dict):
 #         try:

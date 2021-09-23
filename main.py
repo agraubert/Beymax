@@ -2,10 +2,8 @@ from bots.core import CoreBot, EnableUtils
 from bots.birthday import EnableBirthday
 from bots.bug import EnableBugs
 from bots.help import EnableHelp
-from bots.ow import EnableOverwatch
 from bots.party import EnableParties
 from bots.poll import EnablePolls
-from bots.cash import EnableCash
 from bots.games import EnableGames
 from bots.args import Arg, UserType
 from bots.utils import getname, DBView

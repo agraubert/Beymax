@@ -1,12 +1,20 @@
 from .core import CoreBot
 from .utils import DBView, get_attr
 from .args import Arg, DateType
-from .ow import postfix
 import asyncio
 import re
 import datetime
 import os
 import json
+
+def postfix(n):
+    if n[-1] == '1':
+        return n+'st'
+    elif n[-1] == '2':
+        return n+'nd'
+    elif n[-1] == '3':
+        return n+'rd'
+    return n+'th'
 
 def EnableBirthday(bot):
     if not isinstance(bot, CoreBot):
@@ -39,6 +47,9 @@ def EnableBirthday(bot):
         `$!birthday <your birthday>` : Informs me of your birthday so I
          can congratulate you when it comes. Example: `$!birthday 1/1/1970`
         """
+        # Birthdays will not use the dispatch-future system
+        # the system adds more complexity to this case
+        # and cannot handle changes to birthdays
         async with DBView('birthdays', birthdays={}) as db:
             db['birthdays'][message.author.id] = {
                 'month': birthday.month,

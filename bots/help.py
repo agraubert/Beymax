@@ -5,25 +5,6 @@ import asyncio
 import sys
 import math
 
-def binwords(message, **bins):
-    try:
-        lookup = {member:target for target,members in bins.items() for member in members}
-        results = {}
-        for word in message.split():
-            if word in lookup:
-                key = lookup[word]
-                if key not in results:
-                    results[key] = 1
-                else:
-                    results[key] += 1
-        if 'help' in results:
-            results['help'] /= 2
-        return max(
-            (count, item) for item,count in results.items()
-        )[-1]
-    except:
-        return
-
 def trim(docstring):
     if not docstring:
         return ''

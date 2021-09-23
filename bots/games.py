@@ -491,7 +491,6 @@ def EnableGames(bot):
                                 bid['game']
                             )
                         )
-                        break
             if db['game']['user'] is not None:
                 try:
                     print(db['game'])

@@ -159,8 +159,15 @@ def EnableParties(bot):
                     'id':channel.id,
                     'guild':message.guild.id,
                     'creator':message.author.id,
+                    'reference_channel': message.channel.id,
+                    'reference_message': message.id,
                     'time': time.time()
                 })
+                await self.dispatch_future(
+                    PARTY_DURATION,
+                    'cleanup-party',
+                    partyID=channel.id,
+                )
         else:
             await self.send_message(
                 message.channel,
@@ -174,83 +181,85 @@ def EnableParties(bot):
         `$!disband` : Closes any active party voice channels you have
         """
         if message.guild is not None:
+            pruned = False
             async with DBView('parties', parties=[]) as db:
-                pruned = []
-                for i in range(len(db['parties'])):
-                    if message.guild.id == db['parties'][i]['guild'] and message.author.id == db['parties'][i]['creator']:
-                        channel = discord.utils.get(
-                            self.get_all_channels(),
-                            id=db['parties'][i]['id'],
-                            type=discord.ChannelType.voice
-                        )
-                        if channel is not None:
-                            pruned.append(
-                                '`%s`' % db['parties'][i]['name']
-                                if str(db['parties'][i]['name']) == str(channel.name)
-                                else '`%s` AKA `%s`' % (
-                                    channel.name,
-                                    db['parties'][i]['name']
-                                )
-                            )
-                            await channel.delete()
-                        db['parties'][i] = None
-                db['parties'] = [party for party in db['parties'] if party is not None]
-            if len(pruned) == 1:
-                await self.send_message(
-                    message.channel,
-                    '%s has been disbanded. If you would like to create another party, use the `$!party` command'
-                    % pruned[0]
-                )
-            elif len(pruned) > 1:
-                await self.send_message(
-                    message.channel,
-                    'The following parties have been disbanded:\n'
-                    '\n'.join(pruned)+
-                    '\nIf you would like to create another party, use the `$!party` command'
-                )
-            else:
+                for party in db['parties']:
+                    if message.guild.id == party['guild'] and message.author.id == party['creator']:
+                        await kill_party(self, party)
+                        pruned = True
+                db['parties'] = [
+                    party for party in db['parties']
+                    if party is not None and party['creator'] != message.author.id
+                ]
+            if not pruned:
                 await self.send_message(
                     message.channel,
                     "You don't have an active party"
                 )
 
-    @bot.add_task(600) # 10 min
-    async def prune_parties(self):
-        current = time.time()
+    @bot.subscribe('cleanup-party')
+    async def prune_parties(self, _, partyID):
+        party = None
         async with DBView('parties', parties=[]) as db:
-            pruned = []
-            for i in range(len(db['parties'])):
-                if current - db['parties'][i]['time'] >= PARTY_DURATION:
-                    channel = discord.utils.get(
-                        self.get_all_channels(),
-                        id=db['parties'][i]['id'],
-                        type=discord.ChannelType.voice
+            for p in db['parties']:
+                if p['id'] == partyID:
+                    party = p
+                    break
+        if party is not None:
+            await kill_party(self, party)
+        async with DBView('parties', parties=[]) as db:
+            db['parties'] = [
+                p for p in db['parties']
+                if p is not None and p['id'] != partyID
+            ]
+
+    async def kill_party(bot, party):
+        channel = discord.utils.get(
+            bot.get_all_channels(),
+            id=party['id'],
+            type=discord.ChannelType.voice
+        )
+        if channel is not None:
+            if len(channel.members):
+                # Rescheduler event, since channel is still active
+                await bot.dispatch_future(
+                    3600, # 1 hour,
+                    'cleanup-party',
+                    partyID=party['id']
+                )
+                return
+            name = (
+                '`{}`'.format(party['name'])
+                if str(party['name']) == str(channel.name)
+                else
+                '`{}` AKA `{}`'.format(
+                    channel.name,
+                    party['name']
+                )
+            )
+            await channel.delete()
+            reference = discord.utils.get(
+                bot.get_all_channels(),
+                id=party['reference_channel'],
+                type=discord.ChannelType.text
+            )
+            ref_message = None
+            if reference is not None:
+                ref_message = await reference.fetch_message(party['reference_message'])
+            if reference is not None and ref_message is not None:
+                await reference.send(
+                    "{} has been disbanded. If you would like to create another party, use the `$!party` command".format(
+                        name
+                    ),
+                    reference=ref_message.to_reference()
+                )
+            else:
+                await self.send_message(
+                    self.fetch_channel('general'),
+                    "{} has been disbanded. If you would like to create another party, use the `$!party` command".format(
+                        name
                     )
-                    if channel is None or not len(channel.members):
-                        if channel is not None:
-                            pruned.append(
-                                '`%s`' % db['parties'][i]['name']
-                                if str(db['parties'][i]['name']) == str(channel.name)
-                                else '`%s` AKA `%s`' % (
-                                    channel.name,
-                                    db['parties'][i]['name']
-                                )
-                            )
-                            await channel.delete()
-                        db['parties'][i] = None
-            db['parties'] = [party for party in db['parties'] if party is not None]
-        if len(pruned) == 1:
-            await self.send_message(
-                self.fetch_channel('general'),
-                '%s has been disbanded. If you would like to create another party, use the `$!party` command'
-                 % pruned[0]
-            )
-        elif len(pruned) > 1:
-            await self.send_message(
-                self.fetch_channel('general'),
-                'The following parties have been disbanded:\n'
-                '\n'.join(pruned)+
-                '\nIf you would like to create another party, use the `$!party` command'
-            )
+                )
+
 
     return bot
