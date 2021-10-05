@@ -18,9 +18,6 @@ from datetime import datetime, timedelta
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
-### Overhaul Todos
-# 1) Polish and update game system
-
 class CoreBot(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, intents=standard_intents(), **kwargs)
@@ -265,6 +262,23 @@ class CoreBot(discord.Client):
                 'kwargs': kwargs
             })
 
+    def migration(self, key):
+        """
+        Migrations run after the bot has connected to discord and has readied.
+        Discord interactions will be ready
+        """
+        def wrapper(func):
+            @self.subscribe('after:ready')
+            async def run_migration(self, _):
+                # check migration
+                async with DBView('core_migrations') as db:
+                    if key not in db['core_migrations']:
+                        # run migration
+                        await func(self)
+                        # update db migration state
+                        db['core_migrations'][key] = datetime.now().strftime(TIMESTAMP_FORMAT)
+        return wrapper
+
     def subscribe(self, event): # decorator. Sets the decorated function to run on events
         """
         Decorator. Sets the decorated function to be run whenever the given event
@@ -474,65 +488,6 @@ class CoreBot(discord.Client):
             async with DBView(ignores=[]) as db:
                 self.ignored_users = set(db['ignores'])
             self.permissions = await PermissionsFile.load(self, 'permissions.yml')
-            # if os.path.exists('permissions.yml'):
-            #     with open('permissions.yml') as reader:
-            #         self.permissions = yaml.load(reader)
-            #     #get user by name: guild.get_member_named
-            #     #get user by id: guild.get_member
-            #     #iterate over guild.role_hierarchy until the command is found (default enabled)
-            #     #validate the permissions object
-            #     if not isinstance(self.permissions, dict):
-            #         sys.exit("permissions.yml must be a dictionary")
-            #     if 'defaults' not in self.permissions:
-            #         sys.exit("permissions.yml must define defaults")
-            #     validate_permissions(self.permissions['defaults'], True)
-            #     if 'rules' in self.permissions:
-            #         if not isinstance(self.permissions['rules'], list):
-            #             sys.exit("rules key of permissions.yml must be a list")
-            #     seen_roles = set()
-            #     for target in self.permissions['rules']:
-            #         validate_permissions(target)
-            #         if 'role' in target:
-            #             if target['role'] in seen_roles:
-            #                 sys.exit("Duplicate role encountered in permissions.yml")
-            #             seen_roles.add(target['role'])
-            #     self.permissions['roles'] = {
-            #         discord.utils.find(
-            #             lambda role: role.name == obj['role'] or role.id == obj['role'],
-            #             [_role for guild in self.guilds for _role in guild.roles]
-            #         ).id:obj for obj in self.permissions['rules']
-            #         if 'role' in obj
-            #     }
-            #     try:
-            #         tmp = [
-            #             (self.getid(user),obj) for obj in self.permissions['rules']
-            #             if 'users' in obj
-            #             for user in obj['users']
-            #         ]
-            #     except NameError as e:
-            #         raise SystemExit("Unable to find user") from e
-            #     self.permissions['users'] = {}
-            #     for uid, rule in tmp:
-            #         if uid not in self.permissions['users']:
-            #             self.permissions['users'][uid] = [rule]
-            #         else:
-            #             self.permissions['users'][uid].append(rule)
-            #     for uid in self.permissions['users']:
-            #         self.permissions['users'][uid].sort(
-            #             key=lambda x:len(x['users'])
-            #         )
-            #     self.permissions['defaults']['_grant'] = 'by default'
-            #     for user in self.permissions['users']:
-            #         for i in range(len(self.permissions['users'][user])):
-            #             nUsers = len(self.permissions['users'][user][i]['users'])
-            #             self.permissions['users'][user][i]['_grant'] = (
-            #                 'directly to you' if nUsers == 1 else
-            #                 'to you and %d other people' % nUsers
-            #             )
-            #     for role in self.permissions['roles']:
-            #         self.permissions['roles'][role]['_grant'] = 'by role `%s`' % (
-            #             self.permissions['roles'][role]['role']
-            #         )
             self.task_worker = threading.Thread(
                 target=CoreBot._run_tasks,
                 args=(self,),

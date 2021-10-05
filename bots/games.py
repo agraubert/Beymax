@@ -17,6 +17,7 @@ from .game_systems.story import StorySystem
 from .game_systems.poker import PokerSystem
 
 from functools import lru_cache
+from .utils import getname
 
 # def avg(n):
 #     return sum(n)/len(n)
@@ -393,8 +394,9 @@ def EnableGames(bot):
                 }
             player = db['players'][message.author.id]
             await self.send_message(
-                message.author,
-                "You have a balance of {} tokens".format(
+                message.channel,
+                "{}, you have a balance of {} tokens".format(
+                    getname(message.author),
                     player['balance']
                 )
             )
@@ -420,7 +422,7 @@ def EnableGames(bot):
     async def end_game(self, evt, hardness='soft'):
         if hardness != 'critical' and self._game_system is not None:
             try:
-                await self._game_system.on_end(user)
+                await self._game_system.on_end()
             except:
                 await self.trace()
                 await self.send_message(

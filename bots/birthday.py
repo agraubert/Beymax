@@ -20,8 +20,8 @@ def EnableBirthday(bot):
     if not isinstance(bot, CoreBot):
         raise TypeError("This function must take a CoreBot")
 
-    @bot.subscribe('before:ready')
-    async def cleanup(self, _):
+    @bot.migration('remove birthdays.json')
+    async def cleanup(self):
         if not os.path.exists('birthdays.json'):
             return
         with open('birthdays.json') as r:
@@ -33,6 +33,12 @@ def EnableBirthday(bot):
                     db['birthdays'][uid]['notified'] = 0
         os.remove('birthdays.json')
 
+    @bot.migration('ensure integer birthday ids')
+    async def migrate_ids(self):
+        async with DBView('birthdays') as db:
+            db['birthdays'] = {
+                int(uid):data for uid, data in db['birthdays'].items()
+            }
 
     @bot.add_command(
         'birthday',

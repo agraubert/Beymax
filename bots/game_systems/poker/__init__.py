@@ -27,7 +27,7 @@ class PokerSystem(PhasedGame):
             game,
             **self.GAMES[game]
         )
-        self.bidder = None
+        self.host = None
         self.ante = 0
         self.inactive_players = set()
         self.pot = 0
@@ -68,7 +68,7 @@ class PokerSystem(PhasedGame):
                 'players': [player.id for player in self.players],
                 'inactive_players': [player_id for player_id in self.inactive_players],
                 'dealer': self.dealer,
-                'bidder': self.bidder.id,
+                'host': self.host.id,
                 'deck': [repr(card) for card in self.deck.cards],
                 'trash': [repr(card) for card in self.trash.cards],
                 'pot': self.pot,
@@ -89,8 +89,6 @@ class PokerSystem(PhasedGame):
             for player, amount in self.refund.items():
                 if player not in db['players']:
                     db['players'][player] = {
-                        'level':1,
-                        'xp':0,
                         'balance':10
                     }
                 db['players'][player]['balance'] += amount
@@ -106,7 +104,7 @@ class PokerSystem(PhasedGame):
             ]
             poker_game.inactive_players = set(db['poker']['inactive_players'])
             poker_game.dealer = db['poker']['dealer']
-            poker_game.bidder = bot.get_user(db['poker']['bidder'])
+            poker_game.host = bot.get_user(db['poker']['host'])
             poker_game.deck = Deck([
                 Card(card) for card in db['poker']['deck']
             ])
@@ -127,14 +125,14 @@ class PokerSystem(PhasedGame):
             poker_game.was_played = True
             return poker_game
 
-    async def on_restore(self, bidder):
-        self.bidder = bidder
-        if not self.is_playing(bidder):
-            self.players.append(bidder)
+    async def on_restore(self, host):
+        self.host = host
+        if not self.is_playing(host):
+            self.players.append(host)
         if self.game == 'Texas-Hold-em':
-            return await texas_restore(self, bidder)
+            return await texas_restore(self, host)
         elif self.game == 'Blackjack':
-            return await blackjack_restore(self, bidder)
+            return await blackjack_restore(self, host)
         else:
             await self.bot.send_message(
                 self.bot.fetch_channel('games'),
@@ -143,6 +141,9 @@ class PokerSystem(PhasedGame):
             self.bot.dispatch('endgame', 'critical')
 
     def advance_index(self):
+        """
+        Advances the player index around the table
+        """
         # for i in range(len(self.layers)):
         #     player = self.game.players[(self.index + i) % len(self.game.players)]
         #     if player.id not in self.game.inactive_players:
@@ -152,10 +153,10 @@ class PokerSystem(PhasedGame):
         self.index = (self.index + 1) % len(self.players)
         return self.player_at(self.index)
 
-    async def on_start(self, bidder):
-        self.bidder = bidder
-        if not self.is_playing(bidder):
-            self.players.append(bidder)
+    async def on_start(self, host):
+        self.host = host
+        if not self.is_playing(host):
+            self.players.append(host)
 
     async def on_end(self, *args, **kwargs):
         if sum(v for v in self.refund.values()) > 0:

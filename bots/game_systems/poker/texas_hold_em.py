@@ -14,12 +14,12 @@ class PreGame(FreePhase):
         await super().on_join(user)
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
-            "%s, please specify the ante: " % getname(self.game.bidder)
+            "%s, please specify the ante: " % getname(self.game.host)
         )
         return True
 
     async def before_phase(self):
-        await self.set_player(self.game.bidder)
+        await self.set_player(self.game.host)
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
             "The game is about to start."
@@ -64,8 +64,6 @@ class BeforeRound(LockedPhase):
             for user in self.game.players:
                 if user.id not in db['players']:
                     db['players'][user.id] = {
-                        'level':1,
-                        'xp':0,
                         'balance':10
                     }
                 if db['players'][user.id]['balance'] < self.game.ante:
@@ -157,12 +155,10 @@ class BettingPhase(LockedPhase):
                 )
             )
         else:
-            msg = "Currently, there is not bet"
+            msg = "Currently, there is no bet on the table"
         async with DBView('players') as db:
             if new.id not in db['players']:
                 db['players'][new.id] = {
-                    'level':1,
-                    'xp':0,
                     'balance':10
                 }
 
@@ -504,28 +500,15 @@ class WinPhase(LockedPhase):
                 " This balance will stay in the pot for the next round, "
                 "or will be refunded to the host (if they end the game)" % leftover
             )
-            self.game.refund[self.game.bidder.id] = leftover
+            self.game.refund[self.game.host.id] = leftover
         async with DBView('players') as db:
             for winner in winners:
                 if winner not in db['players']:
                     db['players'][winner] = {
-                        'level':1,
-                        'xp':0,
                         'balance':10
                     }
                 db['players'][winner]['balance'] += payout
 
-        for player in self.game.players:
-            xp = 0 #25
-            # if player.id in self.game.inactive_players:
-            #     xp -= 15
-            if player.id in winners:
-                xp += int(1.75 * payout) + leftover
-            self.bot.dispatch(
-                'grant_xp',
-                player,
-                xp
-            )
         await self.game.enter_phase('reset')
 
     async def after_phase(self):

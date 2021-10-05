@@ -158,7 +158,11 @@ class StorySystem(GameSystem):
 
     @classmethod
     def games(cls):
-        return [f[:-3] for f in os.listdir('games') if f.endswith('.z5')]
+        return (
+            [f[:-3] for f in os.listdir('games') if f.endswith('.z5')]
+            if os.path.isdir('games')
+            else []
+        )
 
     @classmethod
     async def restore(cls, bot, game):
@@ -166,8 +170,8 @@ class StorySystem(GameSystem):
         # Return StorySystem if successful
         # Return None if unable to restore state
         try:
-            async with DBView(story={'bidder': None, 'game': ''}) as db:
-                if db['story']['bidder'] is None:
+            async with DBView(story={'host': None, 'game': ''}) as db:
+                if db['story']['host'] is None:
                     raise GameError("No primary player defined in state")
                 system = StorySystem(bot, db['story']['game'])
                 system.state.update(db['story'])
@@ -285,7 +289,7 @@ class StorySystem(GameSystem):
     async def on_start(self, user):
         self.state = {
             'transcript': [],
-            'bidder': user.id,
+            'host': user.id,
             'players': [user.id],
             'game': self.game,
             'score': 0
@@ -313,7 +317,7 @@ class StorySystem(GameSystem):
         await self.save_state()
 
 
-    async def on_end(self, user):
+    async def on_end(self):
         async with DBView('players', 'scores') as db:
             try:
                 self.player.write('score')
@@ -326,7 +330,7 @@ class StorySystem(GameSystem):
                 db['scores'][self.game] = []
             db['scores'][self.game].append([
                 self.player.score,
-                self.state['bidder']
+                self.state['host']
             ])
             # Modifier = (avg of all games) / (avg of this game)
             modifier = avg(
@@ -359,7 +363,7 @@ class StorySystem(GameSystem):
                     self.bot.fetch_channel('games'),
                     "%s %s just set the high score on %s at %d points" % (
                         (
-                            self.bot.get_user(self.state['bidder']).mention
+                            self.bot.get_user(self.state['host']).mention
                             if len(self.state['players']) <= 1
                             else
                             (

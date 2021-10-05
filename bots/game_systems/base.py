@@ -9,7 +9,7 @@ import asyncio
 # join : dispatched when a player joins the game
 # leave : dispatched when a player leaves the game
 # input : dispatched when a message is recieved from any user playing the game
-# check : dispatched every 30 minutes. If the game chooses to implement this event, it should make sure that the game is still active, otherwise dispatch and end event
+# check : dispatched every 30 minutes. If the game chooses to implement this event, it should make sure that the game is still active, otherwise dispatch the end event
 # end : dispatched when the game is ending, but only if the game was played
 # cleanup : dispatched unconditionally after the game ends
 
@@ -26,7 +26,8 @@ class GameEndException(GameError):
     Special subclass of GameError.
     Indicates a non-recoverable error in the game state
     This will immediately end the game and dispatch the end, and cleanup events.
-    Use only for internal errors, which indicate the game needs to be refunded
+    Use only for internal errors. This indicates an error in the underlying game
+    state that cannot be recovered
     """
     pass
 
@@ -42,12 +43,9 @@ class JoinLeaveProhibited(GameError):
 
 
 # Endgame hardness:
-# * 'soft' (default) : Assume the game exited cleanly. Refund based on the game's played property
-#   dispatch game.on_end, then cleanup
-# * 'hard' : Game indicated an internal fail state. Refund the game
-#   dispatch game.on_end, then cleanup
-# * 'critical' : A critical event raised an unhandled exception. Refund the game
-#   Run cleanup without running 'end' event
+# * 'soft' (default) : Assume the game exited cleanly.
+# * 'hard' : Game indicated an internal fail state. This indicates a GameError was encountered
+# * 'critical' : A critical event raised an unhandled exception. No end event is dispatched
 # Exception handling
 # During main state events, normal exceptions raised will print an error, but assume the game is still running
 # GameEndExceptions are interpreted as non-recoverable errors, which will dispatch the 'end' event (hard)
@@ -193,8 +191,8 @@ class GameSystem(object):
         up until the bot closes, or the 'end' event is dispatched
 
         Exceptions raised by this event will be handled by one of two routes:
-        * Exceptions deriving from GameEndException will print an error message,
-            refund the game, and dispatch the 'end' event
+        * Exceptions deriving from GameEndException will print an error message
+            and dispatch the 'end' event
         * Any other exceptions will print an error message, but assume the game
             is still active
         """
@@ -212,7 +210,7 @@ class GameSystem(object):
 
         Exceptions raised by this event will be handled by one of two routes:
         * Exceptions deriving from GameEndException will print an error message,
-            refund the game, and dispatch the 'end' event
+            and dispatch the 'end' event
         * Any other exceptions will print an error message, but assume the game
             is still active
         """
@@ -425,6 +423,7 @@ class PhasedGame(GameSystem):
             await self.enter_phase('default')
 
     async def enter_phase(self, phase):
+        print("DBG: Entering phase", phase)
         if isinstance(phase, Phase):
             # User provided a Phase object. Assume it's been constructed properly
             next_phase = phase
