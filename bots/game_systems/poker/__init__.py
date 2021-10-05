@@ -92,6 +92,7 @@ class PokerSystem(PhasedGame):
                         'balance':10
                     }
                 db['players'][player]['balance'] += amount
+                self.pot = max(self.pot - amount, 0)
 
     @classmethod
     async def restore(cls, bot, game):

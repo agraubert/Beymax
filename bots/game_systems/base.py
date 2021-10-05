@@ -423,7 +423,6 @@ class PhasedGame(GameSystem):
             await self.enter_phase('default')
 
     async def enter_phase(self, phase):
-        print("DBG: Entering phase", phase)
         if isinstance(phase, Phase):
             # User provided a Phase object. Assume it's been constructed properly
             next_phase = phase
@@ -499,11 +498,9 @@ class PhasedGame(GameSystem):
         If you wish to override the fallback event handler (to process joins when no phase is active)
         use on_default_join.
         """
-        print("HANDLE JOIN", user)
         await self._activate_default()
         if self.active_phase is not None:
             if not await self.active_phase.on_join(user):
-                print("DEFER")
                 self._defer_join.append(user)
                 await self.bot.send_message(
                     user,
@@ -514,7 +511,6 @@ class PhasedGame(GameSystem):
                 self.players.add(user)
         else:
             if not await self.on_default_join(user):
-                print("DEFER")
                 self._defer_join.append(user)
                 await self.bot.send_message(
                     user,
@@ -542,11 +538,9 @@ class PhasedGame(GameSystem):
         If you wish to override the fallback event handler (to process leaves when no phase is active)
         use on_default_leave.
         """
-        print("HANDLE LEAVE", user)
         await self._activate_default()
         if self.active_phase is not None:
             if not await self.active_phase.on_leave(user):
-                print("DEFER")
                 self._defer_leave.append(user)
                 await self.bot.send_message(
                     user,
@@ -557,7 +551,6 @@ class PhasedGame(GameSystem):
                 self.players.remove(user)
         else:
             if not await self.on_default_leave(user):
-                print("DEFER")
                 self._defer_leave.append(user)
                 await self.bot.send_message(
                     user,

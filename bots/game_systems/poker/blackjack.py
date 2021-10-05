@@ -150,7 +150,6 @@ class Deal(LockedPhase):
     Beymax is dealt 1 up and 1 down
     """
     async def before_phase(self):
-        print("before phase")
         self.game.was_played = True
         self.game.square = set()
         for player in self.game.players:
@@ -464,7 +463,6 @@ class WinPhase(LockedPhase):
                     db['players'][player.id] = {
                         'balance':10
                     }
-                print("Player", player.id, "Pre-balance", db['players'][player.id]['balance'])
                 # assert player.id in self.game.square != player.id in self.game.inactive_players, (self.game.inactive_players, self.game.square)
                 if player.id in self.game.hands:
                     hand = self.game.hands[player.id]
@@ -488,14 +486,12 @@ class WinPhase(LockedPhase):
                                 if player.id in self.game.refund:
                                     del self.game.refund[player.id]
                                 db['players'][player.id]['balance'] += self.game.bets[player.id]
-                                print("Paying", self.game.bets[player.id], "to", player.id)
                                 del self.game.bets[player.id]
                             elif best_score > table_score:
                                 winners.add(player.id)
                                 if player.id in self.game.refund:
                                     del self.game.refund[player.id]
                                 db['players'][player.id]['balance'] += int(1.5 * self.game.bets[player.id])
-                                print("Paying", 1.5*self.game.bets[player.id], "to", player.id, "balance", db['players'][player.id]['balance'])
                                 del self.game.bets[player.id]
         msg += "And $NICK with %s, which comes to %d%s\n" % (
             self.game.table.display,

@@ -2,6 +2,16 @@ import asyncio
 from ...utils import DBView, getname
 from .utils import FreePhase, LockedPhase, Hand, strike_if
 
+# For handling side-pots:
+# During betting phases, set a side amount (lowest balance among remaining players)
+# During a player's turn, if they have more money than the side amount:
+#   add a line to their prompt saying "Bets above % tokens will start a new side pot"
+#   When a bet is made that interacts with a side pot: "% tokens of your bet were paid into side pot %"
+# When a side pot is active: "% tokens in main pot\n % tokens in side pot %..."
+# When a new side pot is opened: "New side pot %, with players %...."
+
+# Interim: Side pot logic is complicated. For now, simply do not allow bets higher than the lowest balance
+
 class PreGame(FreePhase):
     """
     This phase represents the standby period before a game starts
@@ -498,9 +508,8 @@ class WinPhase(LockedPhase):
                 "There was a leftover balance of %d tokens"
                 " which could not be evenly paid to the winners."
                 " This balance will stay in the pot for the next round, "
-                "or will be refunded to the host (if they end the game)" % leftover
+                "or will be kept by $NICK as a tip if the game ends before the next round." % leftover
             )
-            self.game.refund[self.game.host.id] = leftover
         async with DBView('players') as db:
             for winner in winners:
                 if winner not in db['players']:
