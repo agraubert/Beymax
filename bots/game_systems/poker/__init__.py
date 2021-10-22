@@ -170,3 +170,115 @@ class PokerSystem(PhasedGame):
 
     async def on_cleanup(sefl):
         await DBView.overwrite(poker={})
+
+class SidePot(object):
+    """
+    Used to represent a specific side pot in a poker game
+    """
+    def __init__(self, parent, num):
+        self.parent = parent # The parent gamepots object
+        self.num = num
+        self.players = set() # player ids
+        self.value = 0
+        self.bets = {} # id: value mappings for unfinalized bets this round
+
+    def exclude(self, value):
+        db = DBView.readonly_view('players')
+        balances = {
+            player: db['players'][player]['balance'] if player in db['players'] else 10
+            for player in self.players
+        }
+        pot = self.parent.new_pot()
+        pot.players |= {
+            player for player, balance in balances.items()
+            if balance > value
+        }
+        return pot
+
+    def consume(self):
+        """
+        Consumes the active bets
+        """
+        self.bets = {}
+
+    def __getitem__(self, player):
+        return self.bets[player]
+
+    def update_bet(self, player, value):
+        """
+        Update a player's bet.
+        If bet his higher than capacity, issue a new side pot.
+        """
+        assert value>0, "Bets must be positive"
+        if value > cap:
+            side_value = value - cap
+            value = cap
+            side_pot = self.exclude(value)
+            side_pot.update_bet(player, side_value)
+        self.bets[player] += value
+        self.value += value
+
+    @property
+    def maxbet(self):
+        return max(self.bets.values())
+
+    def remainder(self, player):
+        """
+        Get amount left for the current player to square with the current
+        bet in this pot
+        """
+        return self.bets[player] - self.maxbet
+
+    def get_capacity(self):
+        """
+        Gets the maximum bet this pot can take before splitting a side pot
+        """
+        db = DBView.readonly_view('players')
+        return min(
+            db['players'][player]['balance'] if player in db['players'] else 10
+            for player in self.players
+        )
+
+
+class GamePots(object):
+    """
+    Fancy List object for Side Pots
+    """
+
+    def __init__(self):
+        self.pots = []
+
+    @property
+    def sum(self):
+        return sum(pot.value for pot in self.pots)
+
+    def new_pot(self):
+        self.pots.append(SidePot(self, len(self.pots)))
+        return self.pots[-1]
+
+    def get_participating(self, player):
+        return [
+            pot
+            for pot in self.pots
+            if player in pot.players
+        ]
+
+    def get_latest(self, player):
+        return self.get_participating(player)[-1]
+
+    def get_call(self, player):
+        return sum(
+            pot.remainder(player)
+            for pot in self.pots
+        )
+
+    def distribute_bet(self, player, value):
+        pots = self.get_participating(player)
+        for pot in pots[:-1]:
+            r = pot.remainder(player)
+            value -= r
+            if value < 0:
+                raise PokerError("huh?")
+            pot.update_bet(player, r)
+        if value > 0:
+            new = pots[-1].update_bet(player, value)

@@ -298,7 +298,7 @@ def EnableGames(bot):
         )
 
     @bot.add_special(checker)
-    async def state_router(self, message, content):
+    async def state_router(self, message):
         # Routes messages depending on the game state
         # if not allowed:
         async with DBView(game={'user': None}) as db:

@@ -7,7 +7,6 @@ import time
 import os
 import yaml
 import sys
-import threading
 import shlex
 from functools import wraps, partial
 import re
@@ -71,7 +70,7 @@ class CoreBot(discord.Client):
 
         # Future dispatch events are handled as a task
         # But tasks must be added to an existing bot
-        @self.add_task(120)
+        @self.add_task(30)
         async def check_future_dispatch(self):
             now = datetime.now()
             async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
@@ -488,14 +487,8 @@ class CoreBot(discord.Client):
             async with DBView(ignores=[]) as db:
                 self.ignored_users = set(db['ignores'])
             self.permissions = await PermissionsFile.load(self, 'permissions.yml')
-            self.task_worker = threading.Thread(
-                target=CoreBot._run_tasks,
-                args=(self,),
-                daemon=True,
-                name="CoreBot Background Task Thread"
-            )
+            asyncio.ensure_future(self.task_runner(), loop=self.loop)
 
-            self.task_worker.start()
         except:
             traceback.print_exc()
             sys.exit("Unhandled exception during startup")
@@ -580,6 +573,11 @@ class CoreBot(discord.Client):
             do_sub |= hasattr(destination, 'guild') and self.get_user(uid, destination.guild) is None
             do_sub |= hasattr(destination, 'recipients') and uid not in {user.id for user in destination.recipients}
             if do_sub:
+                warnings.warn(
+                    "Mention backup substitution will no longer be supported in the future",
+                    DeprecationWarning
+                )
+                await self.trace()
                 # have to replace the mention with a `@Username`
                 user = self.get_user(uid)
                 if user is not None:
@@ -786,26 +784,24 @@ class CoreBot(discord.Client):
             for event in self.special_order:
                 if self.special[event](self, message):
                     print("Running special", event)
-                    self.dispatch(event, message, content) # FIXME: events should not take content
+                    self.dispatch(event, message)
                     break
 
-    def _run_tasks(self):
+    async def task_runner(self):
         """
-        Background worker to run tasks. Every 60 seconds, while the bot is online,
+        Background worker to run tasks. Every 30 seconds, while the bot is online,
         check if it is time for any registered tasks to run
         """
         while True:
-            time.sleep(60)
+            await asyncio.sleep(30)
             # Check if it is time to run any tasks
             #
             current = time.time()
-            ran_task = False
             for task, (interval, qualname) in self.tasks.items():
                 last = 0
                 if 'tasks' in self.update_times and task in self.update_times['tasks']:
                     last = self.update_times['tasks'][task]
                 if current - last > interval:
-                    print("Running task", task, '(', qualname, ')')
                     self.dispatch(task)
 
     async def on_guild_join(self, guild):
@@ -1087,17 +1083,20 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         `$!timer <minutes>` : Sets a timer to run for the specified number of minutes
         """
+        await self.dispatch_future(
+            datetime.now() + timedelta(minutes=minutes),
+            'timer-reminder-expired',
+            userID=message.author.id,
+            channelID=message.channel.id,
+            messageID=message.id,
+            text="{}, your {} minute timer is up!".format(message.author.mention, minutes),
+        )
         await self.send_message(
             message.channel,
             "Okay, I'll remind you in %d minute%s" % (
                 minutes,
                 '' if minutes == 1 else 's'
             )
-        )
-        await asyncio.sleep(60 * minutes)
-        await self.send_message(
-            message.channel,
-            message.author.mention + " Your %d minute timer is up!" % minutes
         )
 
     @bot.add_command('_viewdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
@@ -1132,10 +1131,11 @@ def EnableUtils(bot): #prolly move to it's own bot
         """
         await self.dispatch_future(
             date,
-            'process-reminder',
+            'timer-reminder-expired',
             userID=message.author.id,
             channelID=message.channel.id,
-            messageID=message.id
+            messageID=message.id,
+            text="Hey, {} here's your reminder".format(message.author.mention),
         )
         await self.send_message(
             message.channel,
@@ -1144,14 +1144,14 @@ def EnableUtils(bot): #prolly move to it's own bot
             )
         )
 
-    @bot.subscribe('process-reminder')
-    async def test_reminders(self, _, userID, channelID, messageID):
+    @bot.subscribe('timer-reminder-expired')
+    async def test_reminders(self, _, userID, channelID, messageID, text):
         for guild in self.guilds:
             channel = guild.get_channel(channelID)
             user = self.get_user(userID)
             message = await channel.fetch_message(messageID)
             await channel.send(
-                "Hey, {} here's your reminder".format(user.mention),
+                text,
                 reference=message.to_reference()
             )
 

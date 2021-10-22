@@ -37,7 +37,7 @@ def EnableHelp(bot):
     bot.help_sessions = {}
 
     @bot.add_special(lambda b,m:b.config_get('dm_help') and isinstance(m.channel, (discord.DMChannel, discord.GroupChannel)) and not m.content.startswith(b.command_prefix))
-    async def start_help(self, message, content):
+    async def start_help(self, message):
         """
         Small condition to trigger a help session if the user DMs beymax
         """
