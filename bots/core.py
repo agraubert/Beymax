@@ -1202,13 +1202,12 @@ def EnableUtils(bot): #prolly move to it's own bot
 
     @bot.subscribe('timer-reminder-expired')
     async def test_reminders(self, _, userID, channelID, messageID, text):
-        for guild in self.guilds:
-            channel = guild.get_channel(channelID)
-            user = self.get_user(userID)
-            message = await channel.fetch_message(messageID)
-            await channel.send(
-                text,
-                reference=message.to_reference()
-            )
+        channel = self.get_channel(channelID)
+        user = self.get_user(userID)
+        message = await channel.fetch_message(messageID)
+        await channel.send(
+            text,
+            reference=message.to_reference()
+        )
 
     return bot
