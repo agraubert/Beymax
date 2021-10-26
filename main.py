@@ -48,7 +48,8 @@ def select_status():
             'with the guild settings',
             'with the Discord API',
             'with your very lives',
-            'Metadata Salesman'
+            'Metadata Salesman',
+            'with the STONK market'
         ],
         1
     )[0]

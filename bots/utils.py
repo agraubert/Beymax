@@ -27,6 +27,13 @@ TIMESTAMP_FORMAT = "%m/%d/%Y - %H:%M:%S"
 #         return [parse_id_keys(elem) for elem in obj]
 #     return obj
 
+class Defaultable(object):
+    """
+    Useful for defining function defaults with mutable objects,
+    while disconnecting the default from the underlying
+    """
+    pass
+
 class FrozenList(list):
     def __init__(self, scope, data):
         super().__init__([
@@ -215,6 +222,9 @@ class DBView(object):
 
     def __iter__(self):
         yield from DATABASE['data']
+
+    def __repr__(self):
+        return repr(DATABASE['data'])
 
     async def abort(self):
         """

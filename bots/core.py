@@ -6,6 +6,7 @@ import asyncio
 import time
 import os
 import yaml
+from math import ceil
 import sys
 import shlex
 from functools import wraps, partial
@@ -75,7 +76,11 @@ class CoreBot(discord.Client):
             now = datetime.now()
             async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
                 for event in db['core_future_dispatch']:
-                    if datetime.strptime(event['date'], TIMESTAMP_FORMAT) <= now:
+                    target
+                    if target <= now:
+                        overshoot = (now - target).total_seconds()
+                        if overshoot > 1:
+                            print("WARNING: Future dispatch", event['event'], "overshot by", overshoot)
                         self.dispatch(
                             event['event'],
                             *event['args'],
@@ -85,6 +90,14 @@ class CoreBot(discord.Client):
                     evt for evt in db['core_future_dispatch']
                     if datetime.strptime(evt['date'], TIMESTAMP_FORMAT) > now
                 ]
+                if len(db['core_future_dispatch']):
+                    check_future_dispatch.update_interval(
+                        min(
+                            ceil((datetime.strptime(event['date'], TIMESTAMP_FORMAT) - now).total_seconds())
+                            for evt in db['core_future_dispatch']
+                        ),
+                        False
+                    )
 
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
@@ -199,6 +212,7 @@ class CoreBot(discord.Client):
 
         The decorated function must be a coroutine (async def) and take only the bot object as an argument
         """
+        #FIXME: Add dynamic interval updates
         def wrapper(func):
             taskname = 'task:'+func.__name__
             if taskname in self.tasks:
@@ -207,9 +221,27 @@ class CoreBot(discord.Client):
 
             @self.subscribe(taskname)
             async def run_task(self, task):
+                print("Running", taskname, func.__qualname__)
+                # If the task set a temporary interval, check it here
+                if isinstance(self.tasks[taskname][0], tuple):
+                    print("Task", taskname, "Reverting interval to", self.tasks[taskname][0][1])
+                    self.tasks[taskname] = (self.tasks[taskname][0][1], func.__qualname__)
+                # Run task
                 await func(self)
+                # Update last executed time (Used for restoring task intervals after shutdown)
                 async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
                     db['tasks']['tasks'][taskname] = time.time()
+
+            def update_interval(next_interval, permanent=True):
+                next_interval = max(1, next_interval)
+                print("Task", taskname, "update task interval to", next_interval, "(persistent)" if permanent else "(temporary)")
+                self.tasks[taskname] = (
+                    next_interval if permanent else (next_interval, interval),
+                    func.__qualname__
+                )
+
+            run_task.update_interval = update_interval
+
             return run_task
         return wrapper
 
@@ -459,8 +491,7 @@ class CoreBot(discord.Client):
                     print("Invalidating task time cache")
                     db['tasks'] = {'key':taskkey, 'tasks':{}}
                 else:
-                    print("Not task invalidating cache")
-                self.update_times = db['tasks']
+                    print("Not invalidating task cache")
 
             self.channel_references['general'] = self._general
             if 'channels' in self.configuration:
@@ -583,7 +614,8 @@ class CoreBot(discord.Client):
                 if user is not None:
                     content = content.replace(
                         match.group(0),
-                        '`@%s#%s`' % (user.name, str(user.discriminator)),
+                        # '`@%s#%s`' % (user.name, str(user.discriminator)),
+                        '`!{}#{}!`'.format(user.name, user.discriminator),
                         1
                     )
         if skip_debounce or quote != '' or len(kwargs):
@@ -789,20 +821,44 @@ class CoreBot(discord.Client):
 
     async def task_runner(self):
         """
-        Background worker to run tasks. Every 30 seconds, while the bot is online,
+        Background worker to run tasks. At most every 30 seconds, while the bot is online,
         check if it is time for any registered tasks to run
         """
+        wait_time = 30
         while True:
-            await asyncio.sleep(30)
+            if wait_time != 30:
+                print("Task runner using dynamic sleep of", wait_time)
+            await asyncio.sleep(max(0, wait_time))
+            wait_time = 30
             # Check if it is time to run any tasks
             #
             current = time.time()
+            # db[tasks] is updated after each task is dispatched. Just get a r/o
+            # export to check times.
+            taskdata = DBView.readonly_view('tasks', tasks={'tasks': {}})['tasks']['tasks']
+            handles = []
             for task, (interval, qualname) in self.tasks.items():
+                if isinstance(interval, tuple):
+                    interval = interval[0]
                 last = 0
-                if 'tasks' in self.update_times and task in self.update_times['tasks']:
-                    last = self.update_times['tasks'][task]
-                if current - last > interval:
-                    self.dispatch(task)
+                if task in taskdata:
+                    last = taskdata[task]
+                if (current - last) >= interval:
+                    handles += self.dispatch(task)
+            start_wait = time.monotonic()
+            if len(handles):
+                await asyncio.wait(handles)
+            taskdata = DBView.readonly_view('tasks', tasks={'tasks': {}})['tasks']['tasks']
+            current = time.time()
+            wait_time = ceil(min(
+                30 + start_wait - time.monotonic(),
+                *(
+                    (taskdata[task] if task in taskdata else 0) + (
+                        interval[0] if isinstance(interval, tuple) else interval
+                    ) - current
+                    for task, (interval, qualname) in self.tasks.items()
+                )
+            ))
 
     async def on_guild_join(self, guild):
         """
