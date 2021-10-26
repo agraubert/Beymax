@@ -76,7 +76,7 @@ class CoreBot(discord.Client):
             now = datetime.now()
             async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
                 for event in db['core_future_dispatch']:
-                    target = datetime.strptime(evt['date'], TIMESTAMP_FORMAT)
+                    target = datetime.strptime(event['date'], TIMESTAMP_FORMAT)
                     if target <= now:
                         overshoot = (now - target).total_seconds()
                         if overshoot > 1:
