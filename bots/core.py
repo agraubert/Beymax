@@ -264,8 +264,8 @@ class CoreBot(discord.Client):
             self.special_order.append(event)
 
             @self.subscribe(event)
-            async def run_special(self, evt, message, content):
-                await func(self, message, content)
+            async def run_special(self, evt, message):
+                await func(self, message)
 
             return run_special
         return wrapper

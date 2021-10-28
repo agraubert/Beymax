@@ -234,7 +234,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         return random.random() < 0.05
 
     @beymax.add_special(pick)
-    async def react(self, message, content):
+    async def react(self, message):
         await message.add_reaction(
             b'\xf0\x9f\x91\x8d'.decode() if random.random() < 0.8 else b'\xf0\x9f\x8d\x86'.decode() # :thumbsup: and sometimes :eggplant:
         )
@@ -246,7 +246,7 @@ def ConstructBeymax(): #enable Beymax-Specific commands
         )
 
     @beymax.add_special(lambda s,m: m.content.startswith('!help'))
-    async def maybe_help(self, message, content):
+    async def maybe_help(self, message):
         try:
             await self.wait_for(
                 'message',
