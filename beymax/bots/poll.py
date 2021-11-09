@@ -11,28 +11,10 @@ emoji_lookup = {
     for i in range(10)
 }
 
-# @Polls.subscribe('after:firstready')
-# async def notify_broken_polls(self, event):
-#     async with DBView('polls') as db:
-#         for poll, data in db['polls'].items():
-#             channel = self.get_channel(data['channel'])
-#             author = self.get_user(data['author'])
-#             message = await channel.fetch_message(data['message'])
-#             await message.edit(
-#                 content=format_poll(data, disconnected=True)
-#             )
-#             await self.send_message(
-#                 author,
-#                 "Unfortunately, due to a $SELF restart, your poll in {} will no"
-#                 " longer update with live vote counts in the message. Votes can"
-#                 " still be counted in reactions"
-#             )
-#         db['polls'] = {}
-
 @Polls.add_command(
     'poll',
     Arg('title', help="Poll Title"),
-    Arg("options", nargs='*', help="Poll options"),
+    Arg("options", nargs='+', help="Poll options"),
     delimiter='|'
 )
 async def cmd_poll(self, message, title, options):
@@ -75,18 +57,6 @@ async def cmd_poll(self, message, title, options):
         'options': opts,
         'participated': [],
     }
-    options="\n".join(
-        "{num}) {opt}".format(num=num+1, opt=opt)
-        for num, opt in enumerate(opts)
-    )
-    body = (
-        "{header}\n\n"
-        "{options}\n\n"
-        "React with your vote!"
-    ).format(
-        header=header,
-        options=options
-    )
     target = await self.send_message(
         message.channel,
         format_poll(polldata),
@@ -101,11 +71,11 @@ async def cmd_poll(self, message, title, options):
             await message.delete()
         except:
             print("Warning: Unable to delete poll source message")
-        async with DBView('polls') as db:
-            polldata['message'] = target.id
-            polldata['channel'] = target.channel.id
-            polldata['author'] = message.author.id
-            db['polls'][target.id] = polldata
+    async with DBView('polls') as db:
+        polldata['message'] = target.id
+        polldata['channel'] = target.channel.id
+        polldata['author'] = message.author.id
+        db['polls'][target.id] = polldata
 
 def format_poll(polldata, disconnected=False):
     options="\n".join(
