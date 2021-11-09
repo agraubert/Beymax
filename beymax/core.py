@@ -1,5 +1,5 @@
 from .utils import DBView, getname, Interpolator, standard_intents, TIMESTAMP_FORMAT
-from .args import Arg, Argspec, UserType, ChannelType, DateType
+from .args import Argspec
 from .perms import PermissionsFile
 import discord
 import asyncio
@@ -18,10 +18,11 @@ from datetime import datetime, timedelta
 
 mention_pattern = re.compile(r'<@.*?(\d+)>')
 
-class CoreBot(discord.Client):
+class Client(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, intents=standard_intents(), **kwargs)
         self.nt = 0
+        self.first_ready = True
         self.configuration = {}
         self.primary_guild = None
         self.channel_references = {} # reference name -> channel name/id
@@ -41,6 +42,70 @@ class CoreBot(discord.Client):
         else:
             self.configuration = {}
         self.command_prefix = self.config_get('prefix', default='!')
+
+        @self.subscribe('firstready')
+        async def first_ready(self, event):
+            try:
+                print("Connected to the following guilds")
+                if 'primary_guild' in self.configuration:
+                    self.primary_guild = discord.utils.get(
+                        self.guilds,
+                        id=self.configuration['primary_guild']
+                    )
+                    if self.primary_guild is None:
+                        sys.exit("Primary guild set, but no matching guild was found")
+                    else:
+                        print("Validated primary guild:", self.primary_guild.name)
+                else:
+                    print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
+                first = True
+                for guild in list(self.guilds):
+                    print(guild.name, guild.id)
+                    await self.on_guild_join(guild)
+                print("Listening for", len(self.commands), "commands, using prefix", self.command_prefix)
+                print("Running", len(self.tasks), "tasks")
+                self._general = discord.utils.get(
+                    self.get_all_channels(),
+                    name='general',
+                    type=discord.ChannelType.text
+                )
+                async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
+                    taskkey = ''.join(sorted(self.tasks))
+                    if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
+                        print("Invalidating task time cache")
+                        db['tasks'] = {'key':taskkey, 'tasks':{}}
+                    else:
+                        print("Not invalidating task cache")
+
+                self.channel_references['general'] = self._general
+                if 'channels' in self.configuration:
+                    for name in self.channel_references:
+                        if name in self.configuration['channels']:
+                            channel = discord.utils.get(
+                                self.get_all_channels(),
+                                name=self.configuration['channels'][name],
+                                type=discord.ChannelType.text
+                            )
+                            if channel is None:
+                                channel = discord.utils.get(
+                                    self.get_all_channels(),
+                                    id=self.configuration['channels'][name],
+                                    type=discord.ChannelType.text
+                                )
+                            if channel is None:
+                                raise NameError("No channel by name of "+self.configuration['channels'][name])
+                            self.channel_references[name] = channel
+                        else:
+                            print("Warning: Channel reference", name, "is not defined")
+                # Preload server ignores. Readonly, but default to list
+                async with DBView(ignores=[]) as db:
+                    self.ignored_users = set(db['ignores'])
+                self.permissions = await PermissionsFile.load(self, 'permissions.yml')
+                asyncio.ensure_future(self.task_runner(), loop=self.loop)
+
+            except:
+                traceback.print_exc()
+                sys.exit("Unhandled exception during startup")
 
         # Debounced messages are done through an event handler, so there must be a subscription
         # However, since this is a core feature, the subscription can't be added in a sub-bot
@@ -358,18 +423,14 @@ class CoreBot(discord.Client):
             return self.fetch_channel('general')
         return channel
 
-    def EnableAll(self, *bots): #convenience function to enable a bunch of subbots at once
+    def enableSuites(self, *suites):
         """
-        Enables all of the given Enable_ sub-bot suites.
+        Enables all the given command suites
         Arguments:
-        *bots : A set of functions which take the bot object. Each function should perform setup required to
-            initialize a sub-bot, such as registering commands, tasks, and channel references
+        *suites : One or more CommandSuites
         """
-        for bot in bots:
-            if callable(bot):
-                self = bot(self)
-            else:
-                raise TypeError("Bot is not callable")
+        for suite in suites:
+            suite.attach(self)
         return self
 
     def strip_prefix(self, command):
@@ -453,76 +514,11 @@ class CoreBot(discord.Client):
         Do not override. Instead, use @bot.subsribe('ready') to add additional handling
         to this event
         """
-        try:
-            print("Connected to the following guilds")
-            if 'primary_guild' in self.configuration:
-                self.primary_guild = discord.utils.get(
-                    self.guilds,
-                    id=self.configuration['primary_guild']
-                )
-                if self.primary_guild is None:
-                    sys.exit("Primary guild set, but no matching guild was found")
-                else:
-                    print("Validated primary guild:", self.primary_guild.name)
-            else:
-                print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
-            first = True
-            for guild in list(self.guilds):
-                print(guild.name, guild.id)
-                await self.on_guild_join(guild)
-            print("Commands:", [cmd for cmd in self.commands])
-            print(
-                "Tasks:",
-                '\n'.join([
-                    '%s every %d seconds (Runs %s)' % (
-                        taskname,
-                        *self.tasks[taskname]
-                    ) for taskname in self.tasks
-                ])
-            )
-            self._general = discord.utils.get(
-                self.get_all_channels(),
-                name='general',
-                type=discord.ChannelType.text
-            )
-            async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
-                taskkey = ''.join(sorted(self.tasks))
-                if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
-                    print("Invalidating task time cache")
-                    db['tasks'] = {'key':taskkey, 'tasks':{}}
-                else:
-                    print("Not invalidating task cache")
-
-            self.channel_references['general'] = self._general
-            if 'channels' in self.configuration:
-                for name in self.channel_references:
-                    if name in self.configuration['channels']:
-                        channel = discord.utils.get(
-                            self.get_all_channels(),
-                            name=self.configuration['channels'][name],
-                            type=discord.ChannelType.text
-                        )
-                        if channel is None:
-                            channel = discord.utils.get(
-                                self.get_all_channels(),
-                                id=self.configuration['channels'][name],
-                                type=discord.ChannelType.text
-                            )
-                        if channel is None:
-                            raise NameError("No channel by name of "+self.configuration['channels'][name])
-                        self.channel_references[name] = channel
-                    else:
-                        print("Warning: Channel reference", name, "is not defined")
-            print(self.channel_references)
-            # Preload server ignores. Readonly, but default to list
-            async with DBView(ignores=[]) as db:
-                self.ignored_users = set(db['ignores'])
-            self.permissions = await PermissionsFile.load(self, 'permissions.yml')
-            asyncio.ensure_future(self.task_runner(), loop=self.loop)
-
-        except:
-            traceback.print_exc()
-            sys.exit("Unhandled exception during startup")
+        if self.first_ready:
+            self.dispatch('firstready')
+        else:
+            print("Reconnected to discord")
+        self.first_ready = False
 
     async def trace(self, send=True):
         """
@@ -887,327 +883,119 @@ class CoreBot(discord.Client):
         elif len(self.guilds) > 1:
             print("Warning: Joining to multiple guilds is not supported behavior")
 
-def EnableUtils(bot): #prolly move to it's own bot
-    """
-    A sub-bot to enable utility functions
-    """
-    #add some core commands
-    if not isinstance(bot, CoreBot):
-        raise TypeError("This function must take a CoreBot")
 
-    bot.reserve_channel('dev') # Reserve a reference for a development channel
+class CommandSuite(object):
+    def __init__(self, name):
+        self.name = name
+        self.bot = None
+        self.commands = []
+        self.tasks = []
+        self.special = []
+        self.subscriptions = []
+        self.migrations = []
+        self.channels = []
 
-    @bot.add_command('_task', Arg('task', remainder=True, help='task name'))
-    async def cmd_task(self, message, task):
+    def attach(self, bot):
         """
-        `$!_task <task name>` : Manually runs the named task
+        Attaches this command suite to the given bot
         """
-        key = ' '.join(task)
-        if not key.startswith('task:'):
-            key = 'task:'+key
-        if key in self.tasks:
-            print("Manually running task", key, '(', self.tasks[key][1], ')')
-            self.dispatch(key)
-        else:
-            await self.send_message(
-                message.channel,
-                "No such task"
-            )
-
-    @bot.add_command('_nt')
-    async def cmd_nt(self, message):
-        await self.send_message(
-            message.channel,
-            '%d events have been dispatched' % self.nt
-        )
-
-    @bot.add_command('_announce', Arg('destination', type=ChannelType(bot, by_name=False, nullable=True), nargs='?', help="Direct output to specific channel (provide a channel mention)", default=None), Arg('content', remainder=True, help="Message to echo"))
-    async def cmd_announce(self, message, destination, content):
-        """
-        `$!_announce <message>` : Forces me to say the given message in general.
-        Example: `$!_announce I am really cool`
-        """
-        content = message.content.strip().replace(self.command_prefix+'_announce', '', 1).strip()
-        # do this better with indexing
-        if destination is not None and destination is not False:
-            if content.startswith(destination.name):
-                contant = content.replace(destination.name, '', 1)
-            elif content.startswith(str(destination.id)):
-                content = content.replace(str(destination.id), '', 1)
-            elif content.startswith(destination.mention):
-                content = content.replace(destination.mention, '', 1)
-        await self.send_message(
-            destination if destination is not None and destination is not False else self.fetch_channel('general'),
-            # Don't use content here because we want to preserve whitespace
-            content
-        )
-
-    @bot.add_command('permissions')
-    async def cmd_perms(self, message):
-        """
-        `$!permissions` : Gets a list of commands you have permissions to use
-        """
-        chain = self.permissions.query(message.author)
-        cmds = []
-        for command in sorted(self.commands):
-            (allow, rule) = self.permissions.query(message.author, self.strip_prefix(command), _chain=chain)
-            if allow:
-                cmds.append((
-                    command,
-                    rule
-                ))
-        body = ["Here are the commands you have permissions to use:"]
-        for cmd, rule in cmds:
-            body.append('`%s` : Granted **%s**' % (
-                cmd,
-                'by default' if rule.type is None else (
-                    "by role `{}`".format(rule.data['name']) if rule.type is 'role'
-                    else (
-                        'to you and {} others'.format(rule.data['priority'] - 1)
-                        if rule.data['priority'] > 1
-                        else 'directly to you'
-                    )
-                )
-            ))
-        if isinstance(message.channel, discord.abc.PrivateChannel) and self.primary_guild is None:
-            body.append(
-                "You may have additional permissions granted to you by a role"
-                " but I cannot check those within a private chat. Try the"
-                " `$!permissions` command in a guild channel"
-            )
-        await self.send_message(
-            message.author,
-            '\n'.join(body)
-        )
-
-    @bot.add_command('ignore', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
-    async def cmd_ignore(self, message, user):
-        """
-        `$!ignore <user id or user#tag>` : Ignore all commands by the given user
-        until the next time I'm restarted
-        Example: `$!ignore Username#1234` Ignores all commands from Username#1234
-        """
-        if user.id in self.ignored_users:
-            await self.send_message(
-                message.channel,
-                "This user is already ignored"
-            )
-            return
-        self.ignored_users.add(user.id)
-        await DBView.overwrite(ignores=list(self.ignored_users))
-        for guild in self.guilds:
-            if user is not None:
-                general = self.fetch_channel('general')
-                if general.guild != guild:
-                    general = discord.utils.get(
-                        guild.channels,
-                        name='general',
-                        type=discord.ChannelType.text
-                    )
-                if self.config_get('ignore_role') != None:
-                    blacklist_role = self.config_get('ignore_role')
-                    for role in guild.roles:
-                        if role.id == blacklist_role or role.name == blacklist_role:
-                            await self.add_roles(
-                                user,
-                                role
-                            )
-                try:
-                    await self.send_message(
-                        general,
-                        "%s has asked me to ignore %s. %s can no longer issue any commands"
-                        " until they have been `$!pardon`-ed" % (
-                            str(message.author),
-                            str(user),
-                            getname(user)
-                        )
-                    )
-                except:
-                    pass
-        await self.send_message(
-            user,
-            "I have been asked to ignore you by %s. Please contact them"
-            " to petition this decision." % (str(message.author))
-        )
-
-    @bot.add_command('pardon', Arg('user', type=UserType(bot, by_nick=False), help="Username or ID"))
-    async def cmd_pardon(self, message, user):
-        """
-        `$!pardon <user id or user#tag>` : Pardons the user and allows them to issue
-        commands again.
-        Example: `$!pardon Username#1234` pardons Username#1234
-        """
-        if user.id not in self.ignored_users:
-            await self.send_message(
-                message.channel,
-                "This user is not currently ignored"
-            )
-            return
-        self.ignored_users.remove(user.id)
-        await DBView.overwrite(ignores=list(self.ignored_users))
-        for guild in self.guilds:
-            if user is not None:
-                general = self.fetch_channel('general')
-                if general.guild != guild:
-                    general = discord.utils.get(
-                        guild.channels,
-                        name='general',
-                        type=discord.ChannelType.text
-                    )
-                if self.config_get('ignore_role') != None:
-                    blacklist_role = self.config_get('ignore_role')
-                    for role in guild.roles:
-                        if role.id == blacklist_role or role.name == blacklist_role:
-                            await user.remove_roles(
-                                role
-                            )
-                try:
-                    await self.send_message(
-                        general,
-                        "%s has pardoned %s" % (
-                            str(message.author),
-                            str(user)
-                        )
-                    )
-                except:
-                    pass
-        await self.send_message(
-            user,
-            "You have been pardoned by %s. I will resume responding to "
-            "your commands." % (str(message.author))
-        )
-
-    @bot.add_command('idof', Arg('query', remainder=True, help="Entity to search for"))
-    async def cmd_idof(self, message, query):
-        """
-        `$!idof <entity>` : Gets a list of all known entities by that name
-        Example: `$!idof general` would list all users, channels, and roles with that name
-        """
-        guilds = [message.guild] if message.guild is not None else self.guilds
-        result = []
-        query = ' '.join(query).lower()
-        for guild in guilds:
-            first = True
-            if query in guild.name.lower():
-                if first:
-                    first = False
-                    result.append('From guild `%s`' % guild.name)
-                result.append('Guild `%s` : %s' % (guild.name, guild.id))
-            for channel in guild.channels:
-                if query in channel.name.lower():
-                    if first:
-                        first = False
-                        result.append('From guild `%s`' % guild.name)
-                    result.append('Channel `%s` : %s' % (channel.name, channel.id))
-            for role in guild.roles:
-                if query in role.name.lower():
-                    if first:
-                        first = False
-                        result.append('From guild `%s`' % guild.name)
-                    result.append('Role `%s` : %s' % (role.name, role.id))
-            for member in guild.members:
-                if member.nick is not None and query in member.nick.lower():
-                    if first:
-                        first = False
-                        result.append('From guild `%s`' % guild.name)
-                    result.append('Member `%s` aka `%s` : %s' % (
-                        str(member),
-                        member.nick,
-                        member.id
-                    ))
-                elif query in member.name.lower():
-                    if first:
-                        first = False
-                        result.append('From guild `%s`' % guild.name)
-                    result.append('Member `%s`: %s' % (
-                        str(member),
-                        member.id
-                    ))
-        if len(result):
-            await self.send_message(
-                message.channel,
-                '\n'.join(result)
-            )
-        else:
-            await self.send_message(
-                message.channel,
-                "I was unable to find any entities by that name"
-            )
-
-    @bot.add_command('timer', Arg('minutes', type=int, help="How many minutes"))
-    async def cmd_timer(self, message, minutes):
-        """
-        `$!timer <minutes>` : Sets a timer to run for the specified number of minutes
-        """
-        await self.dispatch_future(
-            datetime.now() + timedelta(minutes=minutes),
-            'timer-reminder-expired',
-            userID=message.author.id,
-            channelID=message.channel.id,
-            messageID=message.id,
-            text="{}, your {} minute timer is up!".format(message.author.mention, minutes),
-        )
-        await self.send_message(
-            message.channel,
-            "Okay, I'll remind you in %d minute%s" % (
-                minutes,
-                '' if minutes == 1 else 's'
+        print(
+            "Enabling command suite {}: {} commands, {} tasks, {} special message handlers, {} event handlers, {} db migrations, {} channel references".format(
+                self.name,
+                len(self.commands),
+                len(self.tasks),
+                len(self.special),
+                len(self.subscriptions),
+                len(self.migrations),
+                len(self.channels)
             )
         )
+        self.bot = bot
+        for channel in self.channels:
+            bot.reserve_channel(channel)
 
-    @bot.add_command('_viewdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
-    async def cmd_viewdb(self, message, scopes):
-        """
-        `$!_viewdb [scopes...]` : Displays the current database state
-        If scopes are provided, then only show the requested scopes
-        """
-        async with DBView() as db:
-            if scopes is None or not len(scopes):
-                await self.send_message(
-                    message.channel,
-                    json.dumps(
-                        {key:DBView.serializable(db[key]) for key in iter(db)},
-                        indent=2,
-                        sort_keys=True
-                    )
-                )
-            else:
-                await self.send_message(
-                    message.channel,
-                    json.dumps(
-                        {key:DBView.serializable(db[key]) for key in scopes if key in db},
-                        indent=2,
-                        sort_keys=True
-                    )
-                )
-    @bot.add_command("remind", Arg('date', type=DateType, help="When should I remind you"))
-    async def cmd_reminder(self, message, date):
-        """
-        `$!remind (when)` : I'll send you a reminder about this message on the given date
-        """
-        await self.dispatch_future(
-            date,
-            'timer-reminder-expired',
-            userID=message.author.id,
-            channelID=message.channel.id,
-            messageID=message.id,
-            text="Hey, {} here's your reminder".format(message.author.mention),
-        )
-        await self.send_message(
-            message.channel,
-            "Okay, I'll remind you of this message on {}".format(
-                date.strftime('%m/%d/%Y')
+        for migration in self.migrations:
+            bot.migration(migration['key'])(migration['function'])
+
+        for subscription in self.subscriptions:
+            bot.subscribe(subscription['event'])(subscription['function'])
+
+        for special in self.special:
+            bot.add_special(special['checker'])(special['function'])
+
+        for task in self.tasks:
+            bot.add_task(task['interval'])(task['function'])
+
+        for command in self.commands:
+            bot.add_command(command['command'], *command['args'], **command['kwargs'])(command['function'])
+
+    def add_command(self, command, *args, **kwargs):
+        def wrapper(func):
+            self.commands.append(
+                {
+                    'command': command,
+                    'args': args,
+                    'kwargs': kwargs,
+                    'function': func
+                }
             )
-        )
+            return func
+        return wrapper
 
-    @bot.subscribe('timer-reminder-expired')
-    async def test_reminders(self, _, userID, channelID, messageID, text):
-        channel = self.get_channel(channelID)
-        user = self.get_user(userID)
-        message = await channel.fetch_message(messageID)
-        await channel.send(
-            text,
-            reference=message.to_reference()
-        )
+    def add_task(self, interval):
+        def wrapper(func):
+            self.tasks.append(
+                {
+                    'interval': interval,
+                    'function': func
+                }
+            )
+            return func
+        return wrapper
 
-    return bot
+    def add_special(self, checker):
+        def wrapper(func):
+            self.special.append(
+                {
+                    'checker': checker,
+                    'function': func
+                }
+            )
+            return func
+        return wrapper
+
+    def subscribe(self, event):
+        def wrapper(func):
+            self.subscriptions.append(
+                {
+                    'event': event,
+                    'function': func
+                }
+            )
+            return func
+        return wrapper
+
+    def migration(self, key):
+        """
+        Migrations run after the bot has connected to discord and has readied.
+        Discord interactions will be ready
+        """
+        def wrapper(func):
+            self.migrations.append(
+                {
+                    'key': key,
+                    'function': func
+                }
+            )
+            return func
+        return wrapper
+
+    def reserve_channel(self, name):
+        """
+        Call to declare a channel reference. The bot configuration can then map
+        this reference to an actual channel. By default all undefined references
+        map to general
+        Arguments:
+        name : A string channel reference to reserve
+        """
+        self.channels.append(name)

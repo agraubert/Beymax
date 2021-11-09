@@ -7,7 +7,7 @@ import discord
 import asyncio
 import threading
 import time
-from ..utils import DBView
+from ...utils import DBView
 from .base import GameSystem, GameError, JoinLeaveProhibited, GameEndException
 from math import ceil, floor
 

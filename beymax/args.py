@@ -6,6 +6,11 @@ import re
 mention_pattern = re.compile(r'<@\D?(\d+)>')
 channel_mention_pattern = re.compile(r'<#(\d+)>')
 
+def get_client(obj):
+    if hasattr(obj, 'bot') and obj.bot is not None:
+        return obj.bot
+    return obj
+
 def ljoin(args, op='or'):
     output = ', '.join(args[:-1])
     if len(args) > 2:
@@ -36,7 +41,7 @@ class EType(object):
 
 class GuildType(EType):
     def __call__(self, arg):
-        guild = self.search_iter(self.client.guilds, arg)
+        guild = self.search_iter(get_client(self.client).guilds, arg)
         if guild is not None:
             return guild
         raise argparse.ArgumentTypeError(
@@ -48,9 +53,9 @@ class GuildType(EType):
 
 class GuildComponentType(EType):
     def guilds(self):
-        if self.client.primary_guild is not None:
-            yield self.client.primary_guild
-        yield from self.client.guilds
+        if get_client(self.client).primary_guild is not None:
+            yield get_client(self.client).primary_guild
+        yield from get_client(self.client).guilds
 
 class RoleType(GuildComponentType):
     def __call__(self, arg):
