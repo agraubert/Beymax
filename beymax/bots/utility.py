@@ -281,7 +281,7 @@ async def cmd_viewdb(self, message, scopes):
                 json.dumps(
                     {key:DBView.serializable(db[key]) for key in iter(db)},
                     indent=2,
-                    sort_keys=True
+                    sort_keys=False
                 )
             )
         else:
@@ -290,9 +290,36 @@ async def cmd_viewdb(self, message, scopes):
                 json.dumps(
                     {key:DBView.serializable(db[key]) for key in scopes if key in db},
                     indent=2,
-                    sort_keys=True
+                    sort_keys=False
                 )
             )
+
+@Utility.add_command('_flushdb', Arg('scopes', help='List of DB scopes to delete', nargs='+', default=None))
+async def cmd_flushdb(self, message, scopes):
+    """
+    `$!_flushdb [scopes...]` : Deletes the given scopes from the database
+    """
+    async with DBView(*scopes) as db:
+        for scope in scopes:
+            db[scope] = {}
+
+@Utility.add_command('_printdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
+async def cmd_printdb(self, message, scopes):
+    """
+    `$!_printdb [scopes...]` : Displays the current database state
+    If scopes are provided, then only show the requested scopes
+    """
+    async with DBView() as db:
+        if scopes is None or not len(scopes):
+            print(
+                {key:DBView.serializable(db[key]) for key in iter(db)}
+            )
+        else:
+            print(
+                {key:DBView.serializable(db[key]) for key in scopes if key in db}
+            )
+
+
 @Utility.add_command("remind", Arg('date', type=DateType, help="When should I remind you"))
 async def cmd_reminder(self, message, date):
     """

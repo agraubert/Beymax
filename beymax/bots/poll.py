@@ -1,15 +1,33 @@
 from ..core import CommandSuite
-from ..utils import getname
+from ..utils import getname, keycap_emoji, DBView
 from ..args import Arg
 import discord
 import asyncio
 
 Polls = CommandSuite('Polls')
 
-@Polls.subscribe('before:firstready')
-async def fixme_add_polls(self, event):
-    # This is a dumb pattern. CommandSuites should retain their own state
-    self.polls = {}
+emoji_lookup = {
+    keycap_emoji(i+1): i
+    for i in range(10)
+}
+
+# @Polls.subscribe('after:firstready')
+# async def notify_broken_polls(self, event):
+#     async with DBView('polls') as db:
+#         for poll, data in db['polls'].items():
+#             channel = self.get_channel(data['channel'])
+#             author = self.get_user(data['author'])
+#             message = await channel.fetch_message(data['message'])
+#             await message.edit(
+#                 content=format_poll(data, disconnected=True)
+#             )
+#             await self.send_message(
+#                 author,
+#                 "Unfortunately, due to a $SELF restart, your poll in {} will no"
+#                 " longer update with live vote counts in the message. Votes can"
+#                 " still be counted in reactions"
+#             )
+#         db['polls'] = {}
 
 @Polls.add_command(
     'poll',
@@ -36,37 +54,109 @@ async def cmd_poll(self, message, title, options):
             " field that you want to leave blank"
         )
     opts = [opt.replace('~<blank>', '') for opt in opts if len(opt)]
-    body = getname(message.author)+" has started a poll:\n"
-    body+=title+"\n"
-    body+="\n".join((
-            "%d) %s"%(num+1, opt)
-            for (num, opt) in
-            enumerate(opts)
-        ))
-    body+="\n\nReact with your vote"
+    if len(opts) > 10:
+        return await self.send_message(
+            message.channel,
+            "Currently this command only supports polls of up to 10 options."
+        )
+    header = (
+        "{author} has started a poll:\n"
+        "{title}"
+    ).format(
+        author=getname(message.author),
+        title=title,
+    )
+    polldata = {
+        'header': header,
+        'votes': {
+            opt: 0
+            for opt in opts
+        },
+        'options': opts,
+        'participated': [],
+    }
+    options="\n".join(
+        "{num}) {opt}".format(num=num+1, opt=opt)
+        for num, opt in enumerate(opts)
+    )
+    body = (
+        "{header}\n\n"
+        "{options}\n\n"
+        "React with your vote!"
+    ).format(
+        header=header,
+        options=options
+    )
     target = await self.send_message(
         message.channel,
-        body,
+        format_poll(polldata),
         skip_debounce=True
     )
     for i in range(1,len(opts)+1):
         await target.add_reaction(
-            (b'%d\xe2\x83\xa3'%i).decode()#hack to create number emoji reactions
+            keycap_emoji(i)
         )
     if not isinstance(message.channel, discord.abc.PrivateChannel):
         try:
             await message.delete()
         except:
             print("Warning: Unable to delete poll source message")
-        self.polls[target.id] = (message.author, {self.user.id})
+        async with DBView('polls') as db:
+            polldata['message'] = target.id
+            polldata['channel'] = target.channel.id
+            polldata['author'] = message.author.id
+            db['polls'][target.id] = polldata
 
-@Polls.subscribe('reaction_add')
-async def on_reaction_add(self, event, reaction, user):
-    if reaction.message.id in self.polls:
-        creator, reactors = self.polls[reaction.message.id]
-        if user.id not in reactors:
-            await self.send_message(
-                creator,
-                getname(user)+" has voted on your poll in "+reaction.message.channel.name
+def format_poll(polldata, disconnected=False):
+    options="\n".join(
+        "{num}: {opt}{votes}".format(
+            num=keycap_emoji(num+1),
+            opt=opt,
+            votes='' if disconnected or polldata['votes'][opt] == 0 else ' ({} vote{})'.format(
+                polldata['votes'][opt],
+                's' if polldata['votes'][opt] != 1 else ''
             )
-            self.polls[reaction.message.id][1].add(user.id)
+        )
+        for num, opt in enumerate(polldata['options'])
+    )
+    return (
+        "{header}\n\n"
+        "{options}\n\n"
+        "React with your vote!"
+    ).format(
+        header=polldata['header'],
+        options=options,
+    )
+
+@Polls.subscribe('raw_reaction_add')
+@Polls.subscribe('raw_reaction_remove')
+async def on_poll_react(self, event, payload):
+    emoji = payload.emoji
+    polls = DBView.readonly_view('polls', polls={})['polls']
+    if emoji.is_unicode_emoji() and payload.message_id in polls:
+        data = polls[payload.message_id]
+        channel = self.get_channel(data['channel'])
+        author = self.get_user(data['author'])
+        message = await channel.fetch_message(data['message'])
+        user = self.get_user(payload.user_id)
+        for reaction in message.reactions:
+            if reaction.emoji == payload.emoji.name:
+                await update_poll(self, event, author, message, reaction, user)
+
+
+
+async def update_poll(self, event, author, message, reaction, user):
+    async with DBView('polls') as db:
+        if reaction.message.id in db['polls'] and (not reaction.custom_emoji) and reaction.emoji in emoji_lookup:
+            opt_index = emoji_lookup[reaction.emoji]
+            db['polls'][reaction.message.id]['votes'][db['polls'][reaction.message.id]['options'][opt_index]] = reaction.count - 1 # Beymax
+            data = db['polls'][reaction.message.id]
+            await message.edit(
+                content=format_poll(data)
+            )
+            if user.id not in data['participated']:
+                await self.send_message(
+                    author,
+                    getname(user)+" has voted on your poll in "+reaction.message.channel.name
+                )
+                db['polls'][reaction.message.id]['participated'].append(user.id)

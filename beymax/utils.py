@@ -27,6 +27,13 @@ TIMESTAMP_FORMAT = "%m/%d/%Y - %H:%M:%S"
 #         return [parse_id_keys(elem) for elem in obj]
 #     return obj
 
+def keycap_emoji(num):
+    if num < 0 or num > 10:
+        raise ValueError("Only the range [0-10] is supported")
+    if num == 10:
+        return u"\U0001F51F"
+    return "{}\N{COMBINING ENCLOSING KEYCAP}".format(num)
+
 class Defaultable(object):
     """
     Useful for defining function defaults with mutable objects,
