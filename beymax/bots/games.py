@@ -36,7 +36,7 @@ Games = CommandSuite('Games')
 
 Games.reserve_channel('games')
 
-@Games.subscribe('before:firstready')
+@Games.subscribe('before:ready', once=True)
 async def fixme_add_game_system(self, event):
     # Temporary placeholder for a better way to attach in-memory state to the core bot
     self._game_system = None
@@ -88,7 +88,6 @@ async def check_and_restore(self, db):
 
 # FIXME: Duplicate endgame: Add exclusive wait-for context manager
 # FIXME: Game score payout scaling
-        
 
 @Games.add_command('invite', Arg('user', type=UserType(Games), help="Username, nickname, or ID of user"))
 async def cmd_invite(self, message, user):

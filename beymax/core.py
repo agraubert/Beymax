@@ -35,17 +35,16 @@ class Client(discord.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, intents=standard_intents(), **kwargs)
         self.nt = 0
-        self.first_ready = True
         self.configuration = {}
         self.primary_guild = None
         self.channel_references = {} # reference name -> channel name/id
         self.event_listeners = {} # event name -> [listener functions (self, event)]
         # changed to set in favor of event API
+        self.event_preemption = {} # event name -> counter for preempting beymax-level events
         self.commands = {} # !cmd -> docstring. Functions take (self, message, content)
         self.ignored_users = set()
         self.tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
-        self.special = {} # eventname -> checker. callable takes (self, message) and returns True if function should be run. Func takes (self, message, content)
-        self.special_order = []
+        self.special = [] # list of (check, handler)
         self._dbg_event_queue = []
         self.debounced_channels = {}
         self.channel_lock = asyncio.Lock()
@@ -56,7 +55,7 @@ class Client(discord.Client):
             self.configuration = {}
         self.command_prefix = self.config_get('prefix', default='!')
 
-        @self.subscribe('firstready')
+        @self.subscribe('ready', once=True)
         async def first_ready(self, event):
             try:
                 print("Connected to the following guilds")
@@ -333,19 +332,19 @@ class Client(discord.Client):
         * The bot object
         * The message object
         * A list of lowercased, whitespace delimited strings
+
+        Note: Special message handlers are exclusive. The first one with a matching
+        condition will be executed and no others
         """
+        # NOTE: If exclusivity is not required, just use subscribe(after:message)
         def wrapper(func):
-            event = 'special:'+func.__name__
-            if event in self.special:
-                raise NameError("This special event already exists! Change the name of the special function")
-            self.special[event] = check
-            self.special_order.append(event)
-
-            @self.subscribe(event)
-            async def run_special(self, evt, message):
-                await func(self, message)
-
-            return run_special
+            event = 'special:{}'.format(func.__name__)
+            if event in self.event_listeners:
+                raise NameError("Special handler already defined")
+            # Ugly lambda function: parse out and drop the event argument
+            self.subscribe(event)(lambda s,e,*a,**k: func(s,*a,**k)) # If we add the condition we can double check
+            self.special.append((check, event))
+            return func
         return wrapper
 
     async def dispatch_future(self, when, event, *args, **kwargs):
@@ -388,7 +387,7 @@ class Client(discord.Client):
         Discord interactions will be ready
         """
         def wrapper(func):
-            @self.subscribe('after:firstready')
+            @self.subscribe('after:ready', once=True)
             async def run_migration(self, _):
                 # check migration
                 async with DBView('core_migrations') as db:
@@ -399,12 +398,16 @@ class Client(discord.Client):
                         db['core_migrations'][key] = datetime.now().strftime(TIMESTAMP_FORMAT)
         return wrapper
 
-    def subscribe(self, event): # decorator. Sets the decorated function to run on events
+    def subscribe(self, event, *, condition=None, once=False): # decorator. Sets the decorated function to run on events
         """
         Decorator. Sets the decorated function to be run whenever the given event
         is dispatched.
         Arguments:
         event : A string argument name. WHen that argument is dispatched, the decorated function will run
+        condition: Optional condition run with the same arguments as the event. If true, subscriber is run
+        once: If true, subscriber will unsubscribe after running
+
+        Note: If a condition is set and once is true, but the listener raises an exception, it will still unsubscribe
 
         The decorated function must be a coroutine (async def). The function must take
         the event name as the first argument, and any additional arguments/keyword arguments
@@ -414,12 +417,19 @@ class Client(discord.Client):
         def wrapper(func):
             if str(event) not in self.event_listeners:
                 self.event_listeners[str(event)] = []
-            self.event_listeners[str(event)].append(func)
+
+            async def handle_event(*args, **kwargs):
+                if condition is None or condition(*args, **kwargs):
+                    if once:
+                        func.unsubscribe(event)
+                    return await func(*args, **kwargs)
+
+            self.event_listeners[str(event)].append(handle_event)
             # func.unsubscribe will unsubscribe the function from the event
             # calling without args unsubscribes from the most recent event that this
             # function was subscribed to. An event can be specified to unsubscribe
             # from a specific event, if the function was subscribed to several
-            func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(func)
+            func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(handle_event)
             return func
         return wrapper
 
@@ -505,6 +515,9 @@ class Client(discord.Client):
         Called internally. Sets the internal event loop to run event handlers for
         a given event
         """
+        if event in self.event_preemption and self.event_preemption[event] > 0:
+            # If this event is currently being preempted, do not alert listeners
+            return []
         return [
             asyncio.ensure_future(listener(self, event, *args, **kwargs), loop=self.loop)
             for listener in self.event_listeners[event]
@@ -529,20 +542,6 @@ class Client(discord.Client):
             except TypeError:
                 return default
         return obj
-
-    async def on_ready(self):
-        """
-        Coroutine. Default event handler for the bot going online.
-        Handles core functions such as checking primary_guild configuration and
-        parsing the permissions file into a set of rules.
-        Do not override. Instead, use @bot.subsribe('ready') to add additional handling
-        to this event
-        """
-        if self.first_ready:
-            self.dispatch('firstready')
-        else:
-            print("Reconnected to discord")
-        self.first_ready = False
 
     async def trace(self, send=True, channel=None):
         """
@@ -816,11 +815,14 @@ class Client(discord.Client):
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            for event in self.special_order:
-                if self.special[event](self, message):
-                    print("Running special", event)
+            print("Handlers:", self.special)
+            for check, event in self.special:
+                if check(self, message):
+                    print("debug: special", event)
                     self.dispatch(event, message)
                     break
+                else:
+                    print("debug: skipped special", event)
 
     async def task_runner(self):
         """
@@ -890,6 +892,36 @@ class Client(discord.Client):
         elif len(self.guilds) > 1:
             print("Warning: Joining to multiple guilds is not supported behavior")
 
+    def wait_for(self, event, *, check=None, timeout=None):
+        """
+        Wait for a single instance of an event.
+        Optional condition and timeout values.
+
+        If you wait for a message and apply a condition, there is some special
+        logic to preempt conflicting special message handlers
+        """
+        if event == 'message' and check is not None:
+            key = os.urandom(4).hex() # Get a random dummy event name
+            # Inject a phony special handler to the front of the queue
+            # If this wait_for accepts a message, then it will preempt other handlers
+            # Ugly lambda to drop the self argument when running wait_for conditions
+            self.special = [((lambda s,m: check(m)), key)] + self.special
+
+            waitable = super().wait_for(event, check=check, timeout=timeout)
+
+            # coroutine to add the try-finally logic
+            async def waiter():
+                try:
+                    return await waitable
+                finally:
+                    self.special = [
+                        (cond, evt) for cond, evt in self.special
+                        if evt != key
+                    ]
+
+            return waiter()
+        return super().wait_for(event, check=check, timeout=timeout)
+
 
 class CommandSuite(object):
     def __init__(self, name):
@@ -925,7 +957,11 @@ class CommandSuite(object):
             bot.migration(migration['key'])(migration['function'])
 
         for subscription in self.subscriptions:
-            bot.subscribe(subscription['event'])(subscription['function'])
+            bot.subscribe(
+                subscription['event'],
+                condition=subscription['condition'],
+                once=subscription['once']
+            )(subscription['function'])
 
         for special in self.special:
             bot.add_special(special['checker'])(special['function'])
@@ -971,12 +1007,14 @@ class CommandSuite(object):
             return func
         return wrapper
 
-    def subscribe(self, event):
+    def subscribe(self, event, *, condition=None, once=False):
         def wrapper(func):
             self.subscriptions.append(
                 {
                     'event': event,
-                    'function': func
+                    'function': func,
+                    'condition': condition,
+                    'once': once
                 }
             )
             return func

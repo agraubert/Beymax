@@ -93,7 +93,7 @@ async def get_meme_url(session, meme_id, username, password, top_text, bottom_te
         return True, db['memecache'][meme_key]
 
 
-@Extras.subscribe('after:firstready')
+@Extras.subscribe('after:ready', once=True)
 async def ready_up(self, event):
     print('Logged in as') #then run Beymax-Specific startup (print info)
     print(self.user.name, self.user.id)
