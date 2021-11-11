@@ -1,6 +1,5 @@
 from beymax.core import Client, CommandSuite
 from beymax.bots.birthday import Birthdays
-from beymax.bots.bug import Bugs
 from beymax.bots.help import Help
 from beymax.bots.party import Parties
 from beymax.bots.poll import Polls
@@ -388,7 +387,6 @@ if __name__ == '__main__':
             Extras,
             Utility,
             Birthdays,
-            Bugs,
             Help,
             Parties,
             Polls
