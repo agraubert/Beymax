@@ -76,7 +76,6 @@ class GameSystem(object):
         """
         Returns the list of games supported by this system
         """
-        print("DEBUG FALLBACK games")
         return []
 
     @classmethod
@@ -87,7 +86,6 @@ class GameSystem(object):
         Any exception raised by this routine will immediately end the game without
         running the 'end' event
         """
-        print("DEBUG FALLBACK restore")
         raise NotImplementedError("Subclass must implement restore functionality")
 
     @property
@@ -95,7 +93,6 @@ class GameSystem(object):
         """
         Readonly property. Returns True if the system considers the current game to have been played
         """
-        print("DEBUG FALLBACK played")
         return False
 
     def is_playing(self, user):
@@ -103,7 +100,6 @@ class GameSystem(object):
         Method returns True if the provided user object is one of the players for this game.
         Subclass is responsible for keeping track of which players are in the game
         """
-        print("DEBUG FALLBACK is_playing")
         return False
 
     async def on_init(self):
@@ -113,8 +109,7 @@ class GameSystem(object):
         Any exception raised by this routine will immediately end the game without
         running the 'end' event
         """
-        print("DEBUG FALLBACK on_init")
-        return
+        pass
 
     async def on_start(self, user):
         """
@@ -124,8 +119,7 @@ class GameSystem(object):
         Any exception raised by this routine will immediately end the game without
         running the 'end' event
         """
-        print("DEBUG FALLBACK on_start")
-        return
+        pass
 
     async def on_restore(self, user):
         """
@@ -139,8 +133,7 @@ class GameSystem(object):
         Any exception raised by this routine will immediately end the game without
         running the 'end' evnet
         """
-        print("DEBUG FALLBACK on_restore")
-        return
+        pass
 
     async def on_ready(self):
         """
@@ -153,8 +146,7 @@ class GameSystem(object):
         Any exception raised by this routine will immediately end the game without
         running the 'end' event.
         """
-        print("DEBUG FALLBACK on_ready")
-        return
+        pass
 
     async def on_join(self, user):
         """
@@ -167,7 +159,6 @@ class GameSystem(object):
 
         If you wish to prevent players from joining the game, raise JoinLeaveProhibited
         """
-        print("DEBUG FALLBACK on_join")
         raise NotImplementedError("Subclass must implement join functionality")
 
     async def on_leave(self, user):
@@ -180,7 +171,6 @@ class GameSystem(object):
 
         If you wish to prevent players from leaving the game, raise JoinLeaveProhibited
         """
-        print("DEBUG FALLBACK on_leave")
         raise NotImplementedError("Subclass must implement leave functionality")
 
     async def on_input(self, user, channel, message):
@@ -188,7 +178,7 @@ class GameSystem(object):
         Dispatched any time a message is sent by a user playing this game (as determined
         by is_playing).
         This event will only be dispatched after the 'ready' event has dispatched
-        up until the bot closes, or the 'end' event is dispatched
+        up until theCoreBot bot closes, or the 'end' event is dispatched
 
         Exceptions raised by this event will be handled by one of two routes:
         * Exceptions deriving from GameEndException will print an error message
@@ -196,7 +186,6 @@ class GameSystem(object):
         * Any other exceptions will print an error message, but assume the game
             is still active
         """
-        print("DEBUG FALLBACK on_input")
         raise NotImplementedError("Subclass must implement input functionality")
 
     async def on_check(self):
@@ -214,8 +203,7 @@ class GameSystem(object):
         * Any other exceptions will print an error message, but assume the game
             is still active
         """
-        print("DEBUG FALLBACK on_check")
-        return
+        pass
 
     async def on_end(self):
         """
@@ -225,11 +213,9 @@ class GameSystem(object):
         This routine is expected to accomplish the following tasks, iff the game has been played:
         * Pay XP and Tokens to players, with amounts being determined by the game
         * Determine the highest score of the players, and inform the highscore system
-            by dispatching the 'score' event with the (player, score) arguments
+            by writing to the scores database table
         * Post any end-of-game messages
         """
-        # FIXME: SCORE event not used
-        print("DEBUG FALLBACK on_end")
         raise NotImplementedError("Subclass must implement endgame functionality")
 
     async def on_cleanup(self):
@@ -239,8 +225,7 @@ class GameSystem(object):
 
         No more events will be dispatched after running cleanup
         """
-        print("DEBUG FALLBACK on_cleanup")
-        return
+        pass
 
 
 class Phase(object):
@@ -268,7 +253,7 @@ class Phase(object):
         Function run once when entering the phase
         Take any setup actions required
         """
-        return
+        pass
 
     async def after_phase(self):
         """
@@ -278,7 +263,7 @@ class Phase(object):
         This does not get triggered if the game ends during the phase.
         This is only run by calling enter_phase on the parent game
         """
-        return
+        pass
 
     async def set_player(self, user):
         """
@@ -304,7 +289,7 @@ class Phase(object):
         Override to handle changing of turns.
         Use to handle cleanup/setup actions going into the new player's turn.
         """
-        return
+        pass
 
     async def on_input(self, user, channel, message):
         """
@@ -326,14 +311,14 @@ class Phase(object):
         """
         Override to handle arbitrary user messages. This event runs unconditionally
         """
-        return
+        pass
 
     async def on_turn_input(self, user, channel, message):
         """
         Override to hanlde message from the turn player.
         This is run iff self.turn is not None and self.turn == user
         """
-        return
+        pass
 
     async def on_join(self, user):
         """
@@ -349,7 +334,7 @@ class Phase(object):
         The player will not be added to the list until a phase returns True from
         the on_join event.
         """
-        return
+        pass
 
     async def on_leave(self, user):
         """
@@ -365,7 +350,7 @@ class Phase(object):
         The player will not be removed from the list until a phase returns True from
         the on_leave event
         """
-        return
+        pass
 
 
 
@@ -400,7 +385,7 @@ class PhasedGame(GameSystem):
 
     def __init__(self, bot, game, **phases):
         """
-        Initialize with a CoreBot, a game name and optionally, keyword arguments for the phase map.
+        Initialize with a Beymax.Client, a game name and optionally, keyword arguments for the phase map.
         The keyword phases are stored such that self.enter_phase(key) would activate
         the phase provided by key=phase to this function
         phases can be any of the following:
@@ -455,7 +440,7 @@ class PhasedGame(GameSystem):
         If a 'default' phase is registered, this will be dispatched just before
         the default phase responds to any events
         """
-        return
+        pass
 
     async def on_after_main(self):
         """
@@ -469,7 +454,7 @@ class PhasedGame(GameSystem):
 
         Use on_end for anything that needs to be run no matter how the game ends
         """
-        return
+        pass
 
     async def on_input(self, user, channel, message):
         """
@@ -488,7 +473,7 @@ class PhasedGame(GameSystem):
         """
         Dispatched when input is recieved without an active phase
         """
-        return
+        pass
 
     async def on_join(self, user):
         """

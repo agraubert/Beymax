@@ -145,12 +145,6 @@ class PokerSystem(PhasedGame):
         """
         Advances the player index around the table
         """
-        # for i in range(len(self.layers)):
-        #     player = self.game.players[(self.index + i) % len(self.game.players)]
-        #     if player.id not in self.game.inactive_players:
-        #         self.index = (self.index + i) % len(self.game.players)
-        #         return player
-        # raise PokerError("All players inactive")
         self.index = (self.index + 1) % len(self.players)
         return self.player_at(self.index)
 

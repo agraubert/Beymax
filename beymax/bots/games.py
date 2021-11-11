@@ -46,13 +46,11 @@ def listgames():
         for game in system.games():
             yield game, system.name, system
 
-# FIXME: All game-related commands should check-for and issue a restore if necessary
-# FIXME: Duplicate endgame: Add exclusive wait-for context manager
-# FIXME: Game score payout scaling
-
-# FIXME: Why is this not subscribed to restore or something?
-async def restore_game(self):
-    async with DBView(game={'user': None}) as db:
+async def check_and_restore(self, db):
+    """
+    Checks if the game is live in the DB but not active on the instance
+    """
+    if db['game']['user'] is not None and self._game_system is None:
         if db['game']['user'] is not None and self._game_system is None:
             await self.send_message(
                 self.fetch_channel('games'),
@@ -88,6 +86,10 @@ async def restore_game(self):
                 self.dispatch('endgame', 'critical')
                 raise
 
+# FIXME: Duplicate endgame: Add exclusive wait-for context manager
+# FIXME: Game score payout scaling
+        
+
 @Games.add_command('invite', Arg('user', type=UserType(Games), help="Username, nickname, or ID of user"))
 async def cmd_invite(self, message, user):
     """
@@ -108,8 +110,7 @@ async def cmd_invite(self, message, user):
                 "(who had the winning `$!bid` can invite players)"
             )
         else:
-            if self._game_system is None:
-                await restore_game(self)
+            await check_and_restore(self, db)
             if self._game_system.is_playing(user):
                 return await self.send_message(
                     message.channel,
@@ -137,9 +138,7 @@ async def cmd_join(self, message):
     """
     `$!join` : Joins the current game, if you've been invited
     """
-    print("joining")
     async with DBView('game', game={'user': None}) as db:
-        print("Acquired state")
         if db['game']['user'] is None:
             await self.send_message(
                 message.channel,
@@ -151,16 +150,13 @@ async def cmd_join(self, message):
                 "You have not been invited to play this game"
             )
         else:
-            print("State is joinable")
+            await check_and_restore(self, db)
             db['game']['invites'].remove(message.author.id)
             await self.send_message(
                 message.channel,
                 "Attempting to join the game..."
             )
-            if self._game_system is None:
-                await restore_game(self)
             try:
-                print("Joining")
                 await self._game_system.on_join(message.author)
             except JoinLeaveProhibited:
                 await self.send_message(
@@ -196,15 +192,13 @@ async def cmd_leave(self, message):
     If you are the host of the game, leaving will end the game
     """
     async with DBView('game', game={'user': None}) as db:
-        print("LEAVING GAME")
         if db['game']['user'] is None:
             await self.send_message(
                 message.channel,
                 "There are no games in progress. You can start one with `$!bid`"
             )
         else:
-            if self._game_system is None:
-                await restore_game(self)
+            await check_and_restore(self, db)
             if not self._game_system.is_playing(message.author):
                 await self.send_message(
                     message.channel,
@@ -273,7 +267,7 @@ async def cmd_leave(self, message):
                         )
 
 
-@Games.add_command('games')
+@Games.add_command('games', aliases=['listgames'])
 async def cmd_games(self, message):
     """
     `$!games` : Lists the available games
@@ -281,11 +275,14 @@ async def cmd_games(self, message):
     await self.send_message(
         message.channel,
         "\n\n===========\n\n".join(
-            "**%s**\n%s" % (
+            "**{}**\n{}".format(
                 system.name,
-                ',   '.join(sorted(
-                    '`%s`' % game for game in system.games()
-                ))
+                (
+                    ',  '.join(
+                        '`{}`'.format(game)
+                        for game in system.games()
+                    ) if len(system.games()) else "(No games currently available)"
+                )
             )
             for system in SYSTEMS
         )
@@ -304,8 +301,7 @@ async def state_router(self, message):
     # Routes messages depending on the game state
     # if not allowed:
     async with DBView(game={'user': None}) as db:
-        if db['game']['user'] is not None and self._game_system is None:
-            await restore_game(self)
+        await check_and_restore(self, db)
         if self._game_system.is_playing(message.author):
             try:
                 await self._game_system.on_input(
@@ -448,7 +444,6 @@ async def end_game(self, evt, hardness='soft'):
 
 @Games.subscribe('startgame')
 async def start_game(self, evt):
-    print("Starting game")
     async with DBView('game', 'players', game={'user': None}) as db:
         if db['game']['user'] is None:
             if 'next' in db['game']:
@@ -533,35 +528,37 @@ async def start_game(self, evt):
         }
         # We shouldn't really get here these days
 
-@Games.add_command('timeleft')
+@Games.add_command('timeleft', aliases=['nowplaying', 'np'])
 async def cmd_timeleft(self, message):
     """
     `$!timeleft` : Gets the remaining time for the current game
     """
-    async with DBView('game', {'user': None, 'bids': []}) as db:
+    async with DBView('game', game={'user': None, 'bids': []}) as db:
         if db['game']['user'] is None:
             await self.send_message(
                 message.channel,
-                "Currently, nobody is playing a game"
+                "Nobody is currently playing anything. Start a game with `$!start`"
             )
         else:
+            await check_and_restore(self, db)
+            # I would use timedelta here, but it's actually kind of garbage
+            # It doesn't support this kind of simplification
             delta = (db['game']['time'] + 172800) - time.time()
             d_days = delta // 86400
             delta = delta % 86400
             d_hours = delta // 3600
             delta = delta % 3600
             d_minutes = delta // 60
-            d_seconds = delta % 60
             await self.send_message(
                 message.channel,
-                "%s's game of %s will end in %d days, %d hours, %d minutes, "
-                "and %d seconds" % (
+                "{} is now playing {} ({}). Their session will end in {} days,"
+                " {} hours, and {} minutes".format(
                     getname(self.get_user(db['game']['user'])),
-                    db['game']['game'],
+                    self._game_system.game,
+                    self._game_system.name,
                     d_days,
                     d_hours,
                     d_minutes,
-                    d_seconds
                 )
             )
 
@@ -594,7 +591,7 @@ async def cmd_highscore(self, message, game):
 
 
 @Games.add_task(86400) # 1 day
-async def reset_week(self):
+async def pay_daily(self):
     #{uid: {}}
     async with DBView('players') as db:
         for pid in db['players']:
@@ -606,6 +603,7 @@ async def reset_week(self):
 @Games.add_task(1800) # 30 minutes
 async def check_game(self):
     async with DBView('game', game={'user': None, 'bids': []}) as db:
+        await check_and_restore(self, db)
         now = time.time()
         if db['game']['user'] is not None and now - db['game']['time'] >= 172800: # 2 days
             user = self.get_user(db['game']['user'])
@@ -616,21 +614,3 @@ async def check_game(self):
             await self._game_system.on_check()
         except:
             await self.trace()
-
-@Games.add_command('nowplaying', aliases=['np'])
-async def cmd_np(self, message):
-    if self._game_system is not None:
-        async with DBView('game', game={'user': None, 'bids': []}) as db:
-            await self.send_message(
-                message.channel,
-                "{} is now playing {} ({})".format(
-                    getname(self.get_user(db['game']['user'])),
-                    self._game_system.game,
-                    self._game_system.name
-                )
-            )
-    else:
-        await self.send_message(
-            message.channel,
-            "Nobody is currently playing anything. Start a game with `$!start`"
-        )

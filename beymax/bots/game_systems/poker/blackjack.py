@@ -104,8 +104,14 @@ class BeforeRound(FreePhase):
     async def on_any_input(self, user, channel, message):
         if message.content.lower().strip() == 'fold':
             self.game.inactive_players.add(user.id)
-            await self.try_advance()
-            return
+            return await self.try_advance()
+        if user.id in self.game.bets and self.game.bets[user.id] > 0:
+            return await self.bot.send_message(
+                self.bot.fetch_channel('games'),
+                "You've already placed a bet of {} for this round and cannot change it".format(
+                    self.game.bets[user.id]
+                )
+            )
         async with DBView('players') as db:
             if user.id not in db['players']:
                 db['players'][user.id] = {
@@ -231,6 +237,10 @@ class Deal(LockedPhase):
                 ', '.join(self.bot.get_user(uid).mention for uid in winners[:-1]),
                 ' and ' if len(winners) > 1 else '',
                 self.bot.get_user(winners[-1]).mention
+            )
+            await self.bot.send_message(
+                self.bot.fetch_channel('games'),
+                msg
             )
             await self.game.enter_phase('reset')
         else:

@@ -21,7 +21,8 @@ class BackgroundGameExit(GameError):
     pass
 
 more_patterns = [
-    re.compile(r'\*+(MORE|more)\*+')
+    re.compile(r'\*+(MORE|more)\*+'), # Match ****MORE****
+    re.compile(r'.*\.\.\.+\s*$') # Match ....
 ]
 
 score_patterns = [
@@ -49,7 +50,7 @@ def multimatch(text, patterns):
             return result
     return False
 
-class Player:
+class Player(object):
     def __init__(self, frotz, game):
         (self.stdinRead, self.stdinWrite) = os.pipe()
         (self.stdoutRead, self.stdoutWrite) = os.pipe()
@@ -124,7 +125,7 @@ class Player:
         # clean metadata
         if multimatch(content[-1], more_patterns):
             self.write('\n')
-            time.sleep(0.25)
+            time.sleep(0.5)
             content += self.readchunk(False)
 
         # print("Merged content:", content)
@@ -282,7 +283,7 @@ class StorySystem(GameSystem):
     async def send_join_message(self, user):
         await self.bot.send_message(
             user,
-            'Here are the controls for the story-mode system:\n'
+            'Here are the controls for the Interactive Story system:\n'
             '`$` : Simply type `$` to enter a blank line to the game\n'
             'That can be useful if the game is stuck or '
             'if it ignored your last input\n'
@@ -294,7 +295,7 @@ class StorySystem(GameSystem):
             ' ones that I handle personally\n'
             'Lastly, if you want to make a comment in the channel'
             ' without me forwarding your message to the game, '
-            'simply start the message with `$!`, for example:'
+            'simply start the message with `$! `, for example:'
             ' `$! Any ideas on how to unlock this door?`'
         )
 

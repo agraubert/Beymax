@@ -16,9 +16,22 @@ import warnings
 import json
 from datetime import datetime, timedelta
 
-mention_pattern = re.compile(r'<@.*?(\d+)>')
+# mention_pattern = re.compile(r'<@.*?(\d+)>')
+
+# Release targets:
+# * Gamba
+# * Fixes noted in games suite
+# * Event lifecycle concept: intercept:event (delays handling of other events), stopPropagation (weird, wouldn't hit discord-level handlers)
+# * Should specials be moved to after:message subscribers?
 
 class Client(discord.Client):
+    """
+    Beymax Client
+    This Client class adds an additional layer on top of the standard discord api.
+    Beymax's API is bot-focused with features like commands and background tasks.
+    This Client is geared towards custom single-server bots, although it can
+    serve multiple servers
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, intents=standard_intents(), **kwargs)
         self.nt = 0
@@ -58,7 +71,6 @@ class Client(discord.Client):
                         print("Validated primary guild:", self.primary_guild.name)
                 else:
                     print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
-                first = True
                 for guild in list(self.guilds):
                     print(guild.name, guild.id)
                     await self.on_guild_join(guild)
@@ -124,10 +136,10 @@ class Client(discord.Client):
                 else:
                     # print("DEBOUNCE: Appending to queue for", dest.id)
                     self.debounced_channels[dest.id]+='\n'+content
-                MSG_LEN = len(self.debounced_channels[dest.id])
+                msg_len = len(self.debounced_channels[dest.id])
             await asyncio.sleep(.5) # wait 500ms for other messages
             async with self.channel_lock:
-                if MSG_LEN == len(self.debounced_channels[dest.id]):
+                if msg_len == len(self.debounced_channels[dest.id]):
                     # No other messages were added to the queue while waiting
                     # print("DEBOUNCE: Finally sending", dest.id)
                     content = self.debounced_channels[dest.id]
@@ -260,7 +272,7 @@ class Client(discord.Client):
             for cmd in [command] + aliases:
                 if not cmd.startswith(self.command_prefix):
                     cmd = self.command_prefix + cmd
-                on_cmd = self.subscribe(cmd)(on_cmd)
+                self.subscribe(cmd)(on_cmd) # why on_cmd = ?
                 self.commands[cmd] = {
                     'docstring': func.__doc__,
                     'args': spec,
@@ -279,7 +291,6 @@ class Client(discord.Client):
 
         The decorated function must be a coroutine (async def) and take only the bot object as an argument
         """
-        #FIXME: Add dynamic interval updates
         def wrapper(func):
             taskname = 'task:'+func.__name__
             if taskname in self.tasks:
@@ -377,7 +388,7 @@ class Client(discord.Client):
         Discord interactions will be ready
         """
         def wrapper(func):
-            @self.subscribe('after:ready')
+            @self.subscribe('after:firstready')
             async def run_migration(self, _):
                 # check migration
                 async with DBView('core_migrations') as db:
@@ -533,7 +544,7 @@ class Client(discord.Client):
             print("Reconnected to discord")
         self.first_ready = False
 
-    async def trace(self, send=True):
+    async def trace(self, send=True, channel=None):
         """
         Coroutine. Prints a stack trace to the console, and optionally sends it to the registered
         bugs channel
@@ -551,7 +562,7 @@ class Client(discord.Client):
             msg = ''.join(msg)
         if send and self.config_get('send_traces'):
             await self.send_message(
-                self.fetch_channel('bugs'),
+                self.fetch_channel('bugs') if channel is None else channel,
                 msg,
                 quote='```'
             )
@@ -610,26 +621,6 @@ class Client(discord.Client):
         except:
             traceback.print_exc()
             print("Interpolation Error: ", {**interp})
-        for match in mention_pattern.finditer(content):
-            uid = match.group(1)
-            do_sub = isinstance(destination, discord.User) and destination.id != uid
-            do_sub |= hasattr(destination, 'guild') and self.get_user(uid, destination.guild) is None
-            do_sub |= hasattr(destination, 'recipients') and uid not in {user.id for user in destination.recipients}
-            if do_sub:
-                warnings.warn(
-                    "Mention backup substitution will no longer be supported in the future",
-                    DeprecationWarning
-                )
-                await self.trace(False)
-                # have to replace the mention with a `@Username`
-                user = self.get_user(uid)
-                if user is not None:
-                    content = content.replace(
-                        match.group(0),
-                        # '`@%s#%s`' % (user.name, str(user.discriminator)),
-                        '`!{}#{}!`'.format(user.name, user.discriminator),
-                        1
-                    )
         if skip_debounce or quote != '' or len(kwargs):
             return await self._bulk_send_message(
                 destination,
@@ -889,7 +880,7 @@ class Client(discord.Client):
                         type=discord.ChannelType.text
                     ),
                     "Unfortunately, this instance of $NAME is not configured"
-                    " to run on multiple guilds. Please contact the owner"
+                    " to run on multiple servers. Please contact the owner"
                     " of this instance, or run your own instance of $NAME."
                     " Goodbye!"
                 )
@@ -1015,3 +1006,22 @@ class CommandSuite(object):
         name : A string channel reference to reserve
         """
         self.channels.append(name)
+
+
+class MultiserverClient(Client):
+    """
+    This is a multi-server version of the standard Beymax client. This class
+    requires more setup than a standard client.
+    * Supports auto-sharding controlled by a master shard which controls load balance
+    * Supports manual-sharding to allow geo-scaling
+    * Handshake between shards uses a public key exchange
+    * Supports database eventual-consistency for server-specific databases to
+        eventually sync between shards
+    * Supports live configuration changes, with contextual config loaded within
+        each command
+    * Supports background tasks being run globally or in the context of each server
+    * Permissions and more generally, commands, not supported in DMs
+
+    This client is planned but has no release target
+    """
+    pass
