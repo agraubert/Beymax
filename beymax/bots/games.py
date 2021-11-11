@@ -86,7 +86,6 @@ async def check_and_restore(self, db):
                 self.dispatch('endgame', 'critical')
                 raise
 
-# FIXME: Duplicate endgame: Add exclusive wait-for context manager
 # FIXME: Game score payout scaling
 
 @Games.add_command('invite', Arg('user', type=UserType(Games), help="Username, nickname, or ID of user"))

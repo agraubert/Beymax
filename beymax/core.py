@@ -21,8 +21,7 @@ from datetime import datetime, timedelta
 # Release targets:
 # * Gamba
 # * Fixes noted in games suite
-# * Event lifecycle concept: intercept:event (delays handling of other events), stopPropagation (weird, wouldn't hit discord-level handlers)
-# * Should specials be moved to after:message subscribers?
+# * remove func qualname from tasks
 
 class Client(discord.Client):
     """
@@ -50,132 +49,13 @@ class Client(discord.Client):
         self.channel_lock = asyncio.Lock()
         if os.path.exists('config.yml'):
             with open('config.yml') as reader:
-                self.configuration = yaml.load(reader)
+                self.configuration = yaml.load(reader, Loader=yaml.SafeLoader)
         else:
             self.configuration = {}
         self.command_prefix = self.config_get('prefix', default='!')
 
-        @self.subscribe('ready', once=True)
-        async def first_ready(self, event):
-            try:
-                print("Connected to the following guilds")
-                if 'primary_guild' in self.configuration:
-                    self.primary_guild = discord.utils.get(
-                        self.guilds,
-                        id=self.configuration['primary_guild']
-                    )
-                    if self.primary_guild is None:
-                        sys.exit("Primary guild set, but no matching guild was found")
-                    else:
-                        print("Validated primary guild:", self.primary_guild.name)
-                else:
-                    print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
-                for guild in list(self.guilds):
-                    print(guild.name, guild.id)
-                    await self.on_guild_join(guild)
-                print("Listening for", len(self.commands), "commands, using prefix", self.command_prefix)
-                print("Running", len(self.tasks), "tasks")
-                self._general = discord.utils.get(
-                    self.get_all_channels(),
-                    name='general',
-                    type=discord.ChannelType.text
-                )
-                async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
-                    taskkey = ''.join(sorted(self.tasks))
-                    if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
-                        print("Invalidating task time cache")
-                        db['tasks'] = {'key':taskkey, 'tasks':{}}
-                    else:
-                        print("Not invalidating task cache")
-
-                self.channel_references['general'] = self._general
-                if 'channels' in self.configuration:
-                    for name in self.channel_references:
-                        if name in self.configuration['channels']:
-                            channel = discord.utils.get(
-                                self.get_all_channels(),
-                                name=self.configuration['channels'][name],
-                                type=discord.ChannelType.text
-                            )
-                            if channel is None:
-                                channel = discord.utils.get(
-                                    self.get_all_channels(),
-                                    id=self.configuration['channels'][name],
-                                    type=discord.ChannelType.text
-                                )
-                            if channel is None:
-                                raise NameError("No channel by name of "+self.configuration['channels'][name])
-                            self.channel_references[name] = channel
-                        else:
-                            print("Warning: Channel reference", name, "is not defined")
-                # Preload server ignores. Readonly, but default to list
-                async with DBView(ignores=[]) as db:
-                    self.ignored_users = set(db['ignores'])
-                self.permissions = await PermissionsFile.load(self, 'permissions.yml')
-                asyncio.ensure_future(self.task_runner(), loop=self.loop)
-
-            except:
-                traceback.print_exc()
-                sys.exit("Unhandled exception during startup")
-
-        # Debounced messages are done through an event handler, so there must be a subscription
-        # However, since this is a core feature, the subscription can't be added in a sub-bot
-        @self.subscribe('debounce-send')
-        async def _debounced_send_message(self, evt, dest, content):
-            """
-            Debounces outbound messages per-channel.
-            If any kwargs are provided, this sends immediately (no logical way to
-            concatenate the kwargs)
-            Waits 1s before sending a message, then
-            """
-            async with self.channel_lock:
-                if dest.id not in self.debounced_channels:
-                    # print("DEBOUNCE: Starting new queue for", dest.id)
-                    self.debounced_channels[dest.id] = content
-                else:
-                    # print("DEBOUNCE: Appending to queue for", dest.id)
-                    self.debounced_channels[dest.id]+='\n'+content
-                msg_len = len(self.debounced_channels[dest.id])
-            await asyncio.sleep(.5) # wait 500ms for other messages
-            async with self.channel_lock:
-                if msg_len == len(self.debounced_channels[dest.id]):
-                    # No other messages were added to the queue while waiting
-                    # print("DEBOUNCE: Finally sending", dest.id)
-                    content = self.debounced_channels[dest.id]
-                    del self.debounced_channels[dest.id]
-                    await self._bulk_send_message(dest, content)
-
-        # Future dispatch events are handled as a task
-        # But tasks must be added to an existing bot
-        @self.add_task(30)
-        async def check_future_dispatch(self):
-            now = datetime.now()
-            async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
-                for event in db['core_future_dispatch']:
-                    target = datetime.strptime(event['date'], TIMESTAMP_FORMAT)
-                    if target <= now:
-                        overshoot = (now - target).total_seconds()
-                        if overshoot > 1:
-                            print("WARNING: Future dispatch", event['event'], "overshot by", overshoot)
-                        self.dispatch(
-                            event['event'],
-                            *event['args'],
-                            **event['kwargs']
-                        )
-                db['core_future_dispatch'] = [
-                    evt for evt in db['core_future_dispatch']
-                    if datetime.strptime(evt['date'], TIMESTAMP_FORMAT) > now
-                ]
-                if len(db['core_future_dispatch']):
-                    check_future_dispatch.update_interval(
-                        min(
-                            ceil((datetime.strptime(event['date'], TIMESTAMP_FORMAT) - now).total_seconds())
-                            for evt in db['core_future_dispatch']
-                        ),
-                        False
-                    )
-
-        self.check_future_dispatch = check_future_dispatch
+        # Add the core api tasks and event subscriptions
+        APIEssentials.attach(self)
 
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
@@ -238,17 +118,15 @@ class Client(discord.Client):
                         await self.send_message(
                             message.channel,
                             "I've encountered an error communicating with Discord."
-                            " This may be a transient issue, but if it occurs again"
-                            " you should submit a bug report: `$!bug <Discord Exception> %s`"
-                            % (message.content.replace('`', ''))
+                            " This should be a transient issue, but if it happens again"
+                            " report it to your server administrator"
                         )
                     except:
                         await self.trace()
                         await self.send_message(
                             message.channel,
                             "I encountered unexpected error while processing your"
-                            " command. Please submit a bug report: `$!bug <Python Exception> %s`"
-                            % (message.content.replace('`', ''))
+                            " command. Please report this to your server administrator"
                         )
                     self.dispatch('command', cmd, message.author)
                 else:
@@ -309,18 +187,22 @@ class Client(discord.Client):
                 async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
                     db['tasks']['tasks'][taskname] = time.time()
 
-            def update_interval(next_interval, permanent=True):
-                next_interval = max(1, next_interval)
-                print("Task", taskname, "update task interval to", next_interval, "(persistent)" if permanent else "(temporary)")
-                self.tasks[taskname] = (
-                    next_interval if permanent else (next_interval, interval),
-                    func.__qualname__
-                )
-
-            run_task.update_interval = update_interval
-
             return run_task
         return wrapper
+
+    def update_interval(self, taskname, next_interval, permanent=True):
+        if not taskname.startswith('task:'):
+            taskname = 'task:{}'.format(taskname)
+        if taskname not in self.tasks:
+            raise NameError("No such task", taskname)
+        next_interval = max(1, next_interval)
+        print("Task", taskname, "update task interval to", next_interval, "(persistent)" if permanent else "(temporary)")
+        previous, qualname = self.tasks[taskname]
+        previous = previous[1] if isinstance(previous, tuple) else previous
+        self.tasks[taskname] = (
+            next_interval if permanent else (next_interval, previous),
+            qualname
+        )
 
     def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
         """
@@ -371,7 +253,8 @@ class Client(discord.Client):
             })
         # Check to see if check_future_dispatch needs to be rescheduled
         interval = self.tasks['task:check_future_dispatch'][0]
-        self.check_future_dispatch.update_interval(
+        self.update_interval(
+            'check_future_dispatch',
             # Update the next check_future_dispatch invocation to take place ASAP
             # task runner will trigger in at most 30 seconds
             # cfd will run and self-update its interval to best match the next dispatch
@@ -815,14 +698,10 @@ class Client(discord.Client):
         else:
             # If this was not a command, check if any of the special functions
             # would like to run on this message
-            print("Handlers:", self.special)
             for check, event in self.special:
                 if check(self, message):
-                    print("debug: special", event)
                     self.dispatch(event, message)
                     break
-                else:
-                    print("debug: skipped special", event)
 
     async def task_runner(self):
         """
@@ -1044,6 +923,129 @@ class CommandSuite(object):
         name : A string channel reference to reserve
         """
         self.channels.append(name)
+
+APIEssentials = CommandSuite('Beymax Core API Essentials')
+
+# Debounced messages are done through an event handler, so there must be a subscription
+# However, since this is a core feature, the subscription can't be added in a sub-bot
+@APIEssentials.subscribe('debounce-send')
+async def _debounced_send_message(self, evt, dest, content):
+    """
+    Debounces outbound messages per-channel.
+    If any kwargs are provided, this sends immediately (no logical way to
+    concatenate the kwargs)
+    Waits 1s before sending a message, then
+    """
+    async with self.channel_lock:
+        if dest.id not in self.debounced_channels:
+            # print("DEBOUNCE: Starting new queue for", dest.id)
+            self.debounced_channels[dest.id] = content
+        else:
+            # print("DEBOUNCE: Appending to queue for", dest.id)
+            self.debounced_channels[dest.id]+='\n'+content
+        msg_len = len(self.debounced_channels[dest.id])
+    await asyncio.sleep(.5) # wait 500ms for other messages
+    async with self.channel_lock:
+        if msg_len == len(self.debounced_channels[dest.id]):
+            # No other messages were added to the queue while waiting
+            # print("DEBOUNCE: Finally sending", dest.id)
+            content = self.debounced_channels[dest.id]
+            del self.debounced_channels[dest.id]
+            await self._bulk_send_message(dest, content)
+
+# Future dispatch events are handled as a task
+# But tasks must be added to an existing bot
+@APIEssentials.add_task(30)
+async def check_future_dispatch(self):
+    now = datetime.now()
+    async with DBView('core_future_dispatch', core_future_dispatch=[]) as db:
+        for event in db['core_future_dispatch']:
+            target = datetime.strptime(event['date'], TIMESTAMP_FORMAT)
+            if target <= now:
+                overshoot = (now - target).total_seconds()
+                if overshoot > 1:
+                    print("WARNING: Future dispatch", event['event'], "overshot by", overshoot)
+                self.dispatch(
+                    event['event'],
+                    *event['args'],
+                    **event['kwargs']
+                )
+        db['core_future_dispatch'] = [
+            evt for evt in db['core_future_dispatch']
+            if datetime.strptime(evt['date'], TIMESTAMP_FORMAT) > now
+        ]
+        if len(db['core_future_dispatch']):
+            self.update_interval(
+                'check_future_dispatch',
+                min(
+                    ceil((datetime.strptime(event['date'], TIMESTAMP_FORMAT) - now).total_seconds())
+                    for evt in db['core_future_dispatch']
+                ),
+                False
+            )
+
+@APIEssentials.subscribe('ready', once=True)
+async def first_ready(self, event):
+    try:
+        print("Connected to the following guilds")
+        if 'primary_guild' in self.configuration:
+            self.primary_guild = discord.utils.get(
+                self.guilds,
+                id=self.configuration['primary_guild']
+            )
+            if self.primary_guild is None:
+                sys.exit("Primary guild set, but no matching guild was found")
+            else:
+                print("Validated primary guild:", self.primary_guild.name)
+        else:
+            print("Warning: No primary guild set in configuration. Role permissions cannot be validated in PM's")
+        for guild in list(self.guilds):
+            print(guild.name, guild.id)
+            await self.on_guild_join(guild)
+        print("Listening for", len(self.commands), "commands, using prefix", self.command_prefix)
+        print("Running", len(self.tasks), "tasks")
+        self._general = discord.utils.get(
+            self.get_all_channels(),
+            name='general',
+            type=discord.ChannelType.text
+        )
+        async with DBView('tasks', tasks={'key': None, 'tasks': {}}) as db:
+            taskkey = ''.join(sorted(self.tasks))
+            if 'key' not in db['tasks'] or db['tasks']['key'] != taskkey:
+                print("Invalidating task time cache")
+                db['tasks'] = {'key':taskkey, 'tasks':{}}
+            else:
+                print("Not invalidating task cache")
+
+        self.channel_references['general'] = self._general
+        if 'channels' in self.configuration:
+            for name in self.channel_references:
+                if name in self.configuration['channels']:
+                    channel = discord.utils.get(
+                        self.get_all_channels(),
+                        name=self.configuration['channels'][name],
+                        type=discord.ChannelType.text
+                    )
+                    if channel is None:
+                        channel = discord.utils.get(
+                            self.get_all_channels(),
+                            id=self.configuration['channels'][name],
+                            type=discord.ChannelType.text
+                        )
+                    if channel is None:
+                        raise NameError("No channel by name of "+self.configuration['channels'][name])
+                    self.channel_references[name] = channel
+                else:
+                    print("Warning: Channel reference", name, "is not defined")
+        # Preload server ignores. Readonly, but default to list
+        async with DBView(ignores=[]) as db:
+            self.ignored_users = set(db['ignores'])
+        self.permissions = await PermissionsFile.load(self, 'permissions.yml')
+        asyncio.ensure_future(self.task_runner(), loop=self.loop)
+
+    except:
+        traceback.print_exc()
+        sys.exit("Unhandled exception during startup")
 
 
 class MultiserverClient(Client):
