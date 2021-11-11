@@ -46,6 +46,10 @@ def listgames():
         for game in system.games():
             yield game, system.name, system
 
+# FIXME: All game-related commands should check-for and issue a restore if necessary
+# FIXME: Duplicate endgame: Add exclusive wait-for context manager
+# FIXME: Game score payout scaling
+
 # FIXME: Why is this not subscribed to restore or something?
 async def restore_game(self):
     async with DBView(game={'user': None}) as db:
@@ -460,16 +464,16 @@ async def start_game(self, evt):
                     db['game']['game'] = bid['game']
                     db['game']['time'] = time.time()
                     del db['game']['next']
+                    # FIXME: Only send this message once. Next time a user starts a game, give them the
+                    # short version and let them ask for help
                     await self.send_message(
                         user,
                         'You have up to 2 days to finish your game, after'
                         ' which, your game will automatically end\n'
                         'Here are the global game-system controls:\n'
-                        'Any message you type in the games channel will be interpreted'
+                        'Any message you type in the games channel ({}) will be interpreted'
                         ' as input to the game **unless** your message starts with `$!`'
                         ' (my commands)\n'
-                        '`$!reup` : Use this command to add a day to your game session\n'
-                        'This costs 1 token, and the cost will increase each time\n'
                         '`$!invite <user>` : Use this command to invite users to the game.'
                         ' Note that not all games will allow players to join'
                         ' or may only allow players to join at specific times\n'
@@ -481,7 +485,9 @@ async def start_game(self, evt):
                         ' nobody but you will be allowed to send messages.'
                         ' Note: even when other users are allowed to send'
                         ' messages, the game will only process messages'
-                        ' from users who are actually playing'
+                        ' from users who are actually playing'.format(
+                            self.fetch_channel('games').name
+                        )
                     )
                     await self.send_message(
                         self.fetch_channel('games'),
@@ -491,6 +497,8 @@ async def start_game(self, evt):
                             bid['game']
                         )
                     )
+                    # Prevent game messages from showing up until after the above one
+                    await asyncio.sleep(1)
         if db['game']['user'] is not None:
             try:
                 print(db['game'])
@@ -522,7 +530,6 @@ async def start_game(self, evt):
             'user': None,
             # 'transcript': [],
             'game': '',
-            'reup': 1,
         }
         # We shouldn't really get here these days
 
@@ -609,3 +616,21 @@ async def check_game(self):
             await self._game_system.on_check()
         except:
             await self.trace()
+
+@Games.add_command('nowplaying', aliases=['np'])
+async def cmd_np(self, message):
+    if self._game_system is not None:
+        async with DBView('game', game={'user': None, 'bids': []}) as db:
+            await self.send_message(
+                message.channel,
+                "{} is now playing {} ({})".format(
+                    getname(self.get_user(db['game']['user'])),
+                    self._game_system.game,
+                    self._game_system.name
+                )
+            )
+    else:
+        await self.send_message(
+            message.channel,
+            "Nobody is currently playing anything. Start a game with `$!start`"
+        )

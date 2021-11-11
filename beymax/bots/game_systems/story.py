@@ -27,7 +27,8 @@ more_patterns = [
 score_patterns = [
     re.compile(r'([0-9]+)/[0-9]+'),
     re.compile(r'Score:[ ]*([-]*[0-9]+)'),
-    re.compile(r'([0-9]+):[0-9]+ [AaPp][Mm]')
+    re.compile(r'([0-9]+):[0-9]+ [AaPp][Mm]'),
+    re.compile(r'Your score is (\d+)')
 ]
 
 clean_patterns = [
@@ -55,6 +56,7 @@ class Player:
         self.buffer = queue.Queue()
         self.remainder = b''
         self.score = 0
+        self.closed = False
         self.proc = subprocess.Popen(
             '%s games/%s.z5' % (os.path.abspath(frotz), game),
             universal_newlines=False,
@@ -75,8 +77,14 @@ class Player:
         os.write(self.stdinWrite, text.encode())
 
     def reader(self):
-        while True:
-            self.buffer.put(self.readline())
+        while not self.closed:
+            # self.buffer.put(self.readline())
+            try:
+                line = self.readline()
+                print("RAW:", line)
+                self.buffer.put(line)
+            except OSError:
+                self.closed = True
 
     def readline(self):
         # intake = self.remainder
@@ -94,16 +102,19 @@ class Player:
                 "Player exited with returncode %d" % self.proc.returncode
             )
         try:
-            content = [self.buffer.get(timeout=10)]
+            content = [self.buffer.get(timeout=5)]
         except queue.Empty:
             raise BackgroundGameExit(
                 "No content in buffer"
             )
-        try:
-            while not self.buffer.empty():
-                content.append(self.buffer.get(timeout=0.5))
-        except queue.Empty:
-            pass
+        time.sleep(1)
+        while not self.buffer.empty():
+            try:
+                while not self.buffer.empty():
+                    content.append(self.buffer.get(timeout=1))
+            except queue.Empty:
+                pass
+            time.sleep(1)
 
         #now merge up lines
         # print("Raw content:", ''.join(content))
@@ -137,6 +148,7 @@ class Player:
         try:
             self.write('quit')
             self.write('y')
+            self.closed = True
             try:
                 self.proc.wait(1)
             except:
@@ -209,7 +221,7 @@ class StorySystem(GameSystem):
             elif content == 'score':
                 self.player.write('score')
                 self.player.readchunk()
-                self.sate['score'] = self.player.score
+                self.state['score'] = self.player.score
                 await self.bot.send_message(
                     self.bot.fetch_channel('games'),
                     'Your score is %d' % self.player.score

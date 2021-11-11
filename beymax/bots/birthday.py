@@ -54,6 +54,11 @@ async def cmd_birthday(self, message, birthday):
     # Birthdays will not use the dispatch-future system
     # the system adds more complexity to this case
     # and cannot handle changes to birthdays
+    if birthday > datetime.datetime.now():
+        return await self.send_message(
+            message.channel,
+            "I highly doubt that"
+        )
     async with DBView('birthdays', birthdays={}) as db:
         db['birthdays'][message.author.id] = {
             'month': birthday.month,
