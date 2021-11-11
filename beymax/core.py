@@ -164,6 +164,8 @@ class Client(discord.Client):
                         False
                     )
 
+        self.check_future_dispatch = check_future_dispatch
+
 
     def add_command(self, command, *spec, aliases=None, delimiter=None, **kwargs): #decorator. Attaches the decorated function to the given command(s)
         """
@@ -357,6 +359,17 @@ class Client(discord.Client):
                 'args': args,
                 'kwargs': kwargs
             })
+        # Check to see if check_future_dispatch needs to be rescheduled
+        interval = self.tasks['task:check_future_dispatch'][0]
+        self.check_future_dispatch.update_interval(
+            # Update the next check_future_dispatch invocation to take place ASAP
+            # task runner will trigger in at most 30 seconds
+            # cfd will run and self-update its interval to best match the next dispatch
+            1,
+            False
+        )
+
+
 
     def migration(self, key):
         """
@@ -530,9 +543,12 @@ class Client(discord.Client):
         x,y,z = sys.exc_info()
         if x is None and y is None and z is None:
             msg = traceback.format_stack()
+            traceback.print_stack()
+            print("(Manual trace)")
         else:
             msg = traceback.format_exc()
-        print(msg)
+        if isinstance(msg, list):
+            msg = ''.join(msg)
         if send and self.config_get('send_traces'):
             await self.send_message(
                 self.fetch_channel('bugs'),
@@ -604,7 +620,7 @@ class Client(discord.Client):
                     "Mention backup substitution will no longer be supported in the future",
                     DeprecationWarning
                 )
-                await self.trace()
+                await self.trace(False)
                 # have to replace the mention with a `@Username`
                 user = self.get_user(uid)
                 if user is not None:
