@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 # Release targets:
 # * Gamba
-# * Fixes noted in games suite
+# * Only send game description once
 # * remove func qualname from tasks
 
 class Client(discord.Client):

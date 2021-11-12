@@ -353,12 +353,7 @@ class StorySystem(GameSystem):
             ))
             # norm score = ((score * modifier) + (transcript/25) * {modifier if modifier < 1 else 1}) * (1.05/players)
             norm_score = ceil(self.player.score * modifier)
-            norm_score += floor(
-                len(self.state['transcript']) / 25 * min(
-                    modifier,
-                    1
-                )
-            )
+            print(self.player.score, modifier, norm_score)
             if len(self.state['players']) > 1:
                 norm_score *= 1.05 / len(self.state['players'])
             if self.player.score > 0:
@@ -394,12 +389,6 @@ class StorySystem(GameSystem):
             if norm_score > 0:
                 for player in self.state['players']:
                     db['players'][player]['balance'] += norm_score
-                    # print("Granting xp for score payout")
-                    self.bot.dispatch(
-                        'grant_xp',
-                        self.bot.get_user(player),
-                        norm_score * 10
-                    )
 
     async def on_cleanup(self):
         await DBView.overwrite(story={})

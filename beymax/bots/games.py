@@ -86,8 +86,6 @@ async def check_and_restore(self, db):
                 self.dispatch('endgame', 'critical')
                 raise
 
-# FIXME: Game score payout scaling
-
 @Games.add_command('invite', Arg('user', type=UserType(Games), help="Username, nickname, or ID of user"))
 async def cmd_invite(self, message, user):
     """
@@ -278,7 +276,7 @@ async def cmd_games(self, message):
                 (
                     ',  '.join(
                         '`{}`'.format(game)
-                        for game in system.games()
+                        for game in sorted(system.games())
                     ) if len(system.games()) else "(No games currently available)"
                 )
             )

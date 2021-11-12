@@ -294,14 +294,41 @@ async def cmd_viewdb(self, message, scopes):
                 )
             )
 
-@Utility.add_command('_flushdb', Arg('scopes', help='List of DB scopes to delete', nargs='+', default=None))
+@Utility.add_command('_dropdb', Arg('scopes', help='List of DB scopes to delete', nargs='+', default=None))
 async def cmd_flushdb(self, message, scopes):
     """
-    `$!_flushdb [scopes...]` : Deletes the given scopes from the database
+    `$!_dropdb [scopes...]` : Deletes the given scopes from the database
     """
     async with DBView(*scopes) as db:
-        for scope in scopes:
-            db[scope] = {}
+        await self.send_message(
+            message.channel,
+            "You are about to delete {} scopes with {} records. Is that okay?".format(
+                len(scopes),
+                sum(len(db[scope]) for scope in scopes)
+            )
+        )
+        try:
+            response = await self.wait_for(
+                'message',
+                check=lambda m: m.author==message.author and m.channel == message.channel,
+                timeout=15,
+            )
+        except asyncio.TimeoutError:
+            await self.send_message(
+                message.channel,
+                "I don't got all day! If you want to delete more tables,"
+                " you'll have to issue that command again"
+            )
+            return
+        if response.content.strip().lower() == 'yes':
+            for scope in scopes:
+                db[scope] = {}
+        else:
+            await self.send_message(
+                message.channel,
+                "Cancelled"
+            )
+
 
 @Utility.add_command('_printdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
 async def cmd_printdb(self, message, scopes):
