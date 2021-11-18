@@ -455,31 +455,6 @@ async def start_game(self, evt):
                     db['game']['game'] = bid['game']
                     db['game']['time'] = time.time()
                     del db['game']['next']
-                    # FIXME: Only send this message once. Next time a user starts a game, give them the
-                    # short version and let them ask for help
-                    await self.send_message(
-                        user,
-                        'You have up to 2 days to finish your game, after'
-                        ' which, your game will automatically end\n'
-                        'Here are the global game-system controls:\n'
-                        'Any message you type in the games channel ({}) will be interpreted'
-                        ' as input to the game **unless** your message starts with `$!`'
-                        ' (my commands)\n'
-                        '`$!invite <user>` : Use this command to invite users to the game.'
-                        ' Note that not all games will allow players to join'
-                        ' or may only allow players to join at specific times\n'
-                        '`$!leave` : Use this command to leave the game.'
-                        ' As the host, this will force the game to end\n'
-                        '`$!toggle-comments` : Use this command to toggle permissions in the games channel\n'
-                        'Right now, anyone can send messages in the channel'
-                        ' while you\'re playing. If you use `$!toggle-comments`,'
-                        ' nobody but you will be allowed to send messages.'
-                        ' Note: even when other users are allowed to send'
-                        ' messages, the game will only process messages'
-                        ' from users who are actually playing'.format(
-                            self.fetch_channel('games').name
-                        )
-                    )
                     await self.send_message(
                         self.fetch_channel('games'),
                         '%s is now playing %s\n'
@@ -488,8 +463,50 @@ async def start_game(self, evt):
                             bid['game']
                         )
                     )
-                    # Prevent game messages from showing up until after the above one
-                    await asyncio.sleep(1)
+                    if 'intro' in db['players'][user.id]:
+                        await self.send_message(
+                            user,
+                            "Your game is about to start. Would you like me "
+                            " to give you the instructions again? (Yes/No)"
+                        )
+                        user = self.get_user(user.id) # Refresh object
+                        try:
+                            response = await self.wait_for(
+                                'message',
+                                check=lambda m: m.author == user and m.channel == user.dm_channel,
+                                timeout=60,
+                            )
+                        except asyncio.TimeoutError:
+                            pass
+                        if response.content.lower().strip() == 'yes':
+                            del db['players'][user.id]['intro']
+                    if 'intro' not in db['players'][user.id]:
+                        db['players'][user.id]['intro'] = True
+                        await self.send_message(
+                            user,
+                            'You have up to 2 days to finish your game, after'
+                            ' which, your game will automatically end\n'
+                            'Here are the global game-system controls:\n'
+                            'Any message you type in the games channel ({}) will be interpreted'
+                            ' as input to the game **unless** your message starts with `$!`'
+                            ' (my commands)\n'
+                            '`$!invite <user>` : Use this command to invite users to the game.'
+                            ' Note that not all games will allow players to join'
+                            ' or may only allow players to join at specific times\n'
+                            '`$!leave` : Use this command to leave the game.'
+                            ' As the host, this will force the game to end\n'
+                            '`$!toggle-comments` : Use this command to toggle permissions in the games channel\n'
+                            'Right now, anyone can send messages in the channel'
+                            ' while you\'re playing. If you use `$!toggle-comments`,'
+                            ' nobody but you will be allowed to send messages.'
+                            ' Note: even when other users are allowed to send'
+                            ' messages, the game will only process messages'
+                            ' from users who are actually playing'.format(
+                                self.fetch_channel('games').name
+                            )
+                        )
+                        # Prevent game messages from showing up until after the above one
+                        await asyncio.sleep(1)
         if db['game']['user'] is not None:
             try:
                 print(db['game'])

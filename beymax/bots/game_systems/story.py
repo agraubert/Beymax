@@ -281,6 +281,7 @@ class StorySystem(GameSystem):
         await DBView.overwrite(story=self.state)
 
     async def send_join_message(self, user):
+        db = DBView.readonly_view('players')
         await self.bot.send_message(
             user,
             'Here are the controls for the Interactive Story system:\n'
