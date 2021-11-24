@@ -22,6 +22,8 @@ from datetime import datetime, timedelta
 # Release targets:
 # * Gamba
 # * Only send game description once
+#   * Also get subsystems to handle this as well
+# * Invite detection
 # * remove func qualname from tasks
 
 class Client(discord.Client):
