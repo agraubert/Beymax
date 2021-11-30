@@ -376,3 +376,12 @@ async def test_reminders(self, _, userID, channelID, messageID, text):
         text,
         reference=message.to_reference()
     )
+
+@Utility.add_command('_sudo', Arg('user', type=UserType(Utility), nargs='?', default=None, help="User to run command as. Defaults to $MENTION"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
+async def cmd_cmd(self, message, user, command, text):
+    message = await message.channel.send(
+        ' '.join([command] + text)
+    )
+    if user is not None:
+        message.author = user
+    self.dispatch(command, message)

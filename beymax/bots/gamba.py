@@ -289,7 +289,7 @@ async def cmd_resolve(self, message, option):
                     maxu = uid
                 if uid not in db['players']:
                     db['players'][uid] = {'balance': 10}
-                db['players'][uid]['balance'] != payout
+                db['players'][uid]['balance'] += payout
         # 3) Announce closure
         await message.channel.send(
             "This gamba poll has been resolved. " + (
