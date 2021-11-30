@@ -106,23 +106,25 @@ async def cmd_gamba(self, message, title, options):
 
 def format_poll(polldata, disconnected=False):
     options="\n".join(
-        "{num}: {opt}{votes}".format(
+        "{num}: {opt}{votes}{winner}".format(
             num=keycap_emoji(num+1),
             opt=opt,
             votes='' if disconnected or polldata['votes'][opt] == 0 else ' ({} token{})'.format(
                 polldata['votes'][opt],
                 's' if polldata['votes'][opt] != 1 else ''
-            )
+            ),
+            winner=' **Winning option**' if 'winner' in polldata and polldata['winner']==num else ''
         )
         for num, opt in enumerate(polldata['options'])
     )
     return (
         "{header}\n\n"
         "{options}\n\n"
-        "Vote with `$!bet <amount> <option>`"
+        "{vote}"
     ).format(
         header=polldata['header'],
         options=options,
+        vote="Vote with `$!bet <amount> <option>`" if 'winner' not in polldata else '(This poll has closed)'
     )
 
 @Gamba.add_command(
@@ -169,7 +171,7 @@ async def cmd_bet(self, message, amount, option):
         if isinstance(option, str):
             # match option text
             try:
-                option = polldata['options'].index(option)
+                option = [opt.strip() for opt in polldata['options']].index(option.strip())
             except ValueError:
                 return await message.channel.send(
                     "`{}` didn't match any options in the current poll".format(
@@ -198,7 +200,6 @@ async def cmd_bet(self, message, amount, option):
         db['players'][message.author.id]['balance'] -= amount
         db['gamba'][message.channel.id] = polldata
         await message.channel.send(
-            message.channel,
             "{}, your bet has been placed on option {}.".format(
                 getname(message.author),
                 keycap_emoji(option + 1)
@@ -247,7 +248,7 @@ async def cmd_resolve(self, message, option):
             # match option text
             try:
                 blank = len(option.strip()) == 0
-                option = polldata['options'].index(option)
+                option = [opt.strip() for opt in polldata['options']].index(option.strip())
                 if blank:
                     return await message.channel.send(
                         "A blank option value exists in this poll, so I cannot"
@@ -291,15 +292,25 @@ async def cmd_resolve(self, message, option):
                 db['players'][uid]['balance'] != payout
         # 3) Announce closure
         await message.channel.send(
-            "This gamba poll has been resolved. Anyone who bet on {} will be paid"
-            " their original bet plus a share of the {} token pot proportional to"
-            " their bet. Today's big winner is {}, taking home {} tokens".format(
-                keycap_emoji(option + 1),
-                pot,
-                self.get_user(maxu).mention,
-                maxp
+            "This gamba poll has been resolved. " + (
+                "Nobody bet on the winning option, {}.".format(keycap_emoji(option + 1))
+                if maxu is None
+                else (
+                    "Anyone who bet on {} will be paid"
+                    " their original bet plus a share of the {} token pot proportional to"
+                    " their bet. Today's big winner is {}, taking home {} tokens"
+                ).format(
+                    keycap_emoji(option + 1),
+                    pot,
+                    self.get_user(maxu).mention,
+                    maxp
+                )
             ),
             reference=existing.to_reference()
+        )
+        polldata['winner'] = option
+        await existing.edit(
+            content=format_poll(polldata)
         )
         # 4) cleanup
         del db['gamba'][message.channel.id]
