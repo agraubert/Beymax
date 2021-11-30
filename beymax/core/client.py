@@ -23,8 +23,9 @@ from datetime import datetime, timedelta
 # * Gamba
 # * Only send game description once
 #   * Also get subsystems to handle this as well
-# * Invite detection
+# * Invite detection: Allow Beymax to model the open invitations to determine who was invited by what invitation
 # * remove func qualname from tasks
+# * Simplify emoji handling and detection (add to core). Include emojification in interpolation
 
 class Client(discord.Client):
     """

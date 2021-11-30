@@ -5,6 +5,7 @@ from beymax.bots.party import Parties
 from beymax.bots.poll import Polls
 from beymax.bots.games import Games
 from beymax.bots.utility import Utility
+from beymax.bots.gamba import Gamba
 from beymax.args import Arg, UserType
 from beymax.utils import getname, DBView
 import discord
@@ -383,6 +384,7 @@ if __name__ == '__main__':
             Birthdays,
             Help,
             Parties,
-            Polls
+            Polls,
+            Gamba
         )
         beymax.run(r.read().strip())
