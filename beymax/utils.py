@@ -189,6 +189,7 @@ class DBView(object):
                     prev.update({
                         key: DATABASE['data'][key]
                         for key in self.scopes
+                        if key in DATABASE['data']
                     })
                     pickle.dump(prev, w)
             # Release locks in reverse order
@@ -198,6 +199,8 @@ class DBView(object):
     def __getitem__(self, key):
         if key not in DATABASE['data']:
             raise KeyError(key)
+        if key in self.scopes and not key in self:
+            raise KeyError("Value Deleted")
         val = DATABASE['data'][key]
         if not (self._entered and key in self.scopes):
             # If we're not scoped, ensure that dicts or lists are frozen
@@ -223,6 +226,22 @@ class DBView(object):
         # if key == 'players':
         #     import pdb; pdb.set_trace()
 
+    async def delete_scope(self, key):
+        if not (self._entered and key in self.scopes):
+            raise TypeError("Scope {} is currently frozen".format(key))
+
+        async with DATABASE['lock']:
+            del DATABASE['data'][key]
+            if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
+                with open('db.pkl', 'rb') as r:
+                    prev = pickle.load(r)
+            else:
+                prev = {}
+            with open('db.pkl', 'wb') as w:
+                del prev[key]
+                pickle.dump(prev, w)
+            self.scopes.remove(key)
+            self._dirty = True
 
     def __contains__(self, key):
         return key in DATABASE['data']

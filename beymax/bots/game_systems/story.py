@@ -82,7 +82,6 @@ class Player(object):
             # self.buffer.put(self.readline())
             try:
                 line = self.readline()
-                print("RAW:", line)
                 self.buffer.put(line)
             except OSError:
                 self.closed = True

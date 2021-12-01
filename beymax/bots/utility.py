@@ -322,30 +322,12 @@ async def cmd_flushdb(self, message, scopes):
             return
         if response.content.strip().lower() == 'yes':
             for scope in scopes:
-                db[scope] = {}
+                await db.delete_scope(scope)
         else:
             await self.send_message(
                 message.channel,
                 "Cancelled"
             )
-
-
-@Utility.add_command('_printdb', Arg('scopes', help='Optional list of DB scopes to view', nargs='*', default=None))
-async def cmd_printdb(self, message, scopes):
-    """
-    `$!_printdb [scopes...]` : Displays the current database state
-    If scopes are provided, then only show the requested scopes
-    """
-    async with DBView() as db:
-        if scopes is None or not len(scopes):
-            print(
-                {key:DBView.serializable(db[key]) for key in iter(db)}
-            )
-        else:
-            print(
-                {key:DBView.serializable(db[key]) for key in scopes if key in db}
-            )
-
 
 @Utility.add_command("remind", Arg('date', type=DateType, help="When should I remind you"))
 async def cmd_reminder(self, message, date):
@@ -377,11 +359,31 @@ async def test_reminders(self, _, userID, channelID, messageID, text):
         reference=message.to_reference()
     )
 
-@Utility.add_command('_sudo', Arg('user', type=UserType(Utility), nargs='?', default=None, help="User to run command as. Defaults to $MENTION"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
+@Utility.add_command('_sudo', Arg('user', type=UserType(Utility, nullable=True), nargs='?', default=None, help="User to run command as. Defaults to $MENTION"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
 async def cmd_cmd(self, message, user, command, text):
-    message = await message.channel.send(
-        ' '.join([command] + text)
+    async with DBView('core_sudo', core_sudo=[]) as db:
+        if message.author.id not in db['core_sudo']:
+            db['core_sudo'].append(message.author.id)
+            await self.send_message(
+                message.channel,
+                "{} This is your first time using $!_sudo. Please exercise extreme caution".format(
+                    message.author.mention
+                ),
+                skip_debounce=True
+            )
+    # sudo_message = await message.channel.send(
+    #     ' '.join([command] + text),
+    #     reference=message.to_reference()
+    # )
+    sudo_message = await self.send_rich_message(
+        message.channel,
+        content=' '.join([command] + text),
+        reference=message.to_reference(),
+        author=user
     )
+
     if user is not None:
-        message.author = user
-    self.dispatch(command, message)
+        sudo_message.author = user
+        self.dispatch('message', sudo_message)
+    else:
+        self.dispatch(command, sudo_message)

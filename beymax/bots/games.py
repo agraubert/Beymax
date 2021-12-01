@@ -476,10 +476,10 @@ async def start_game(self, evt):
                                 check=lambda m: m.author == user and m.channel == user.dm_channel,
                                 timeout=60,
                             )
+                            if response.content.lower().strip() == 'yes':
+                                del db['players'][user.id]['intro']
                         except asyncio.TimeoutError:
                             pass
-                        if response.content.lower().strip() == 'yes':
-                            del db['players'][user.id]['intro']
                     if 'intro' not in db['players'][user.id]:
                         db['players'][user.id]['intro'] = True
                         await self.send_message(

@@ -26,6 +26,9 @@ from datetime import datetime, timedelta
 # * Invite detection: Allow Beymax to model the open invitations to determine who was invited by what invitation
 # * remove func qualname from tasks
 # * Simplify emoji handling and detection (add to core). Include emojification in interpolation
+#   * Add $EMOJI opt-in interpolator, which substitutes to ''. If present also interpolate emoji.
+#   * When this behavior becomes standard, then $EMOJI will no longer be required (but still substitute for back-compatability)
+#   * Not much else to standardize. Most emoji handling is done in reactions
 
 class Client(discord.Client):
     """
@@ -575,7 +578,7 @@ class Client(discord.Client):
                 await self.trace()
         return last_msg
 
-    async def send_rich_message(self, destination, *, content=None, author=None, author_url=None, author_icon_url=None, title=None, description=None, colour=None, footer=None, image=None, thumbnail=None, __video=None, url=None):
+    async def send_rich_message(self, destination, *, content=None, author=None, author_url=None, author_icon_url=None, title=None, description=None, colour=None, footer=None, image=None, thumbnail=None, __video=None, url=None, reference=None):
         """
         Coroutine. Send a message with rich content.
         Arguments:
@@ -617,7 +620,7 @@ class Client(discord.Client):
             embed = embed.set_image(url=image)
         if thumbnail is not None:
             embed = embed.set_thumbnail(url=thumbnail)
-        return await destination.send(content=content, embed=embed)
+        return await destination.send(content=content, embed=embed, reference=reference)
 
 
     def get_user(self, reference, *guilds):
