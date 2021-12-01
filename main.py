@@ -34,27 +34,6 @@ If you have any trouble, feel free to reach out to us by opening an issue on our
 github repo https://github.com/agraubert/beymax
 """
 
-def select_status():
-    #return a randomly selected status message from the list
-    return random.sample(
-        [
-            'Surgeon Simulator',
-            'with himself',
-            'the waiting game',
-            'all of you for fools',
-            'Big Hero 6: The Game',
-            'Surgeon Simulator',
-            'a robot doctor, but only on TV',
-            'your loyal servant, for now',
-            'with the guild settings',
-            'with the Discord API',
-            'with your very lives',
-            'Metadata Salesman',
-            'with the STONK market'
-        ],
-        1
-    )[0]
-
 Extras = CommandSuite('Extras')
 MEMELOCK = asyncio.Lock()
 MEMES = None
@@ -186,12 +165,13 @@ async def greet_member(self, event, member): #greet new members
             interp=self.fetch_channel('story')
         )
 
-@Extras.add_command('kill-beymax', aliases=['satisfied'])
+@Extras.add_command('satisfied')
 async def cmd_shutdown(self, message):
     """
     `$!satisfied` : Shuts down beymax
     """
     await self.shutdown()
+
 
 @Extras.add_command('coinflip')
 async def cmd_flip(self, message):
@@ -200,30 +180,31 @@ async def cmd_flip(self, message):
         "Heads" if random.random() < 0.5 else "Tails"
     )
 
-@Extras.add_command('_greet', Arg('target', type=UserType(Extras), nargs='?', default=None))
-async def cmd_greet(self, message, target):
-    """
-    `$!_greet` : Manually triggers a greeting (I will greet you)
-    """
-    self.dispatch('member_join', target if target is not None else message.author)
 
 @Extras.add_task(3600) # 1 hour
 async def update_status(self, *args):
-    name = select_status()
-    print("CHANGING STATUS:", name)
+    name = random.sample(
+        [
+            'Surgeon Simulator',
+            'with himself',
+            'the waiting game',
+            'all of you for fools',
+            'Big Hero 6: The Game',
+            'Surgeon Simulator',
+            'a robot doctor, but only on TV',
+            'your loyal servant, for now',
+            'with the guild settings',
+            'with the Discord API',
+            'with your very lives',
+            'Metadata Salesman',
+            'with the STONK market'
+        ],
+        1
+    )[0]
     await self.change_presence(
         activity=discord.Game(name=name)
     )
 
-@Extras.add_command('_status', Arg('status', remainder=True, help="Manually set this status"))
-async def cmd_status(self, message, status):
-    if len(status):
-        name = ' '.join(status).strip()
-    else:
-        name = select_status()
-    await self.change_presence(
-        activity=discord.Game(name=name)
-    )
 
 def pick(self, message):
     return random.random() < 0.05

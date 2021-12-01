@@ -1,6 +1,6 @@
 from ..core import CommandSuite
 from ..args import Arg, ChannelType, UserType, DateType
-from ..utils import DBView
+from ..utils import DBView, getname
 from datetime import datetime, timedelta
 import json
 import discord
@@ -359,8 +359,17 @@ async def test_reminders(self, _, userID, channelID, messageID, text):
         reference=message.to_reference()
     )
 
-@Utility.add_command('_sudo', Arg('user', type=UserType(Utility, nullable=True), nargs='?', default=None, help="User to run command as. Defaults to $MENTION"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
+@Utility.add_command('_sudo', Arg('user', type=UserType(Utility, nullable=True), nargs='?', default=None, help="User to run command as. Defaults to $NICK"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
 async def cmd_cmd(self, message, user, command, text):
+    sudoers = self.config_get('sudoers', default=[])
+    if message.author.id not in sudoers:
+        return await self.send_message(
+            message.channel,
+            "{}, you are not in the sudoers configuration,"
+            " this incident will be reported.".format(
+                getname(message.author)
+            )
+        )
     async with DBView('core_sudo', core_sudo=[]) as db:
         if message.author.id not in db['core_sudo']:
             db['core_sudo'].append(message.author.id)
@@ -371,6 +380,8 @@ async def cmd_cmd(self, message, user, command, text):
                 ),
                 skip_debounce=True
             )
+    if user is None:
+        user = self.user
     # sudo_message = await message.channel.send(
     #     ' '.join([command] + text),
     #     reference=message.to_reference()
@@ -379,10 +390,12 @@ async def cmd_cmd(self, message, user, command, text):
         message.channel,
         content=' '.join([command] + text),
         reference=message.to_reference(),
-        author=user
+        author=user,
+        description="This message is sent on behalf of {}".format(getname(user)),
+        mention_author=False
     )
 
-    if user is not None:
+    if user is not self.user:
         sudo_message.author = user
         self.dispatch('message', sudo_message)
     else:

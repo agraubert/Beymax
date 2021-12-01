@@ -183,7 +183,6 @@ class Client(discord.Client):
 
             @self.subscribe(taskname)
             async def run_task(self, task):
-                print("Running", taskname, func.__qualname__)
                 # If the task set a temporary interval, check it here
                 if isinstance(self.tasks[taskname][0], tuple):
                     print("Task", taskname, "Reverting interval to", self.tasks[taskname][0][1])
@@ -578,7 +577,7 @@ class Client(discord.Client):
                 await self.trace()
         return last_msg
 
-    async def send_rich_message(self, destination, *, content=None, author=None, author_url=None, author_icon_url=None, title=None, description=None, colour=None, footer=None, image=None, thumbnail=None, __video=None, url=None, reference=None):
+    async def send_rich_message(self, destination, *, content=None, author=None, author_url=None, author_icon_url=None, title=None, description=None, colour=None, footer=None, image=None, thumbnail=None, __video=None, url=None, reference=None, mention_author=True):
         """
         Coroutine. Send a message with rich content.
         Arguments:
@@ -598,7 +597,7 @@ class Client(discord.Client):
         ~~video (optional): URL for video to embed~~
         url (optional): Large link to place in center of embed
         """
-        if isinstance(author, CoreBot):
+        if isinstance(author, Client):
             author = author.user
 
         def apply_kwargs(func, **kwargs):
@@ -620,7 +619,7 @@ class Client(discord.Client):
             embed = embed.set_image(url=image)
         if thumbnail is not None:
             embed = embed.set_thumbnail(url=thumbnail)
-        return await destination.send(content=content, embed=embed, reference=reference)
+        return await destination.send(content=content, embed=embed, reference=reference, mention_author=mention_author)
 
 
     def get_user(self, reference, *guilds):
