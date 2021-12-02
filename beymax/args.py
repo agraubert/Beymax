@@ -19,6 +19,13 @@ def ljoin(args, op='or'):
         output += ' %s ' % op
     return output + args[-1]
 
+class NulledArg(object):
+    def __init__(self, value):
+        self.value = value
+
+    def __bool__(self):
+        return False
+
 class EType(object):
     def __init__(self, client, by_name=True, by_id=True, nullable=False):
         self.client = client
@@ -37,7 +44,7 @@ class EType(object):
                 if hasattr(item, field) and str(getattr(item, field)) == str(arg):
                     return item
         if self.null:
-            return False
+            return NulledArg(arg)
 
 class GuildType(EType):
     def __call__(self, arg):

@@ -307,18 +307,43 @@ class Client(discord.Client):
             if str(event) not in self.event_listeners:
                 self.event_listeners[str(event)] = []
 
+            event_key = '{}::{}'.format(
+                event,
+                id(func)
+            )
+
             async def handle_event(*args, **kwargs):
-                if condition is None or condition(*args, **kwargs):
-                    if once:
-                        func.unsubscribe(event)
-                    return await func(*args, **kwargs)
+                try:
+                    if condition is None or condition(*args, **kwargs):
+                        if once:
+                            func.unsubscribe(event)
+                        return await func(*args, **kwargs)
+                except:
+                    await self.trace()
+                    raise
+
+            handle_event.event_key = event_key
 
             self.event_listeners[str(event)].append(handle_event)
             # func.unsubscribe will unsubscribe the function from the event
             # calling without args unsubscribes from the most recent event that this
             # function was subscribed to. An event can be specified to unsubscribe
             # from a specific event, if the function was subscribed to several
-            func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(handle_event)
+
+            def unsubscribe(evt=event):
+                key = '{}::{}'.format(evt, id(func))
+                if evt in self.event_listeners:
+                    for handler in self.event_listeners[evt]:
+                        if handler.event_key == key:
+                            self.event_listeners[evt] = [
+                                hdl
+                                for hdl in self.event_listeners[evt]
+                                if hdl.event_key != key
+                            ]
+                            return
+                print("WARNING:", func, handle_event, "not subscribed to", evt)
+            # func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(handle_event)
+            func.unsubscribe = unsubscribe
             return func
         return wrapper
 
@@ -529,6 +554,9 @@ class Client(discord.Client):
         Sends a pre-interpolated message
         Large messages are split according to the delimiter
         """
+        if isinstance(destination, discord.User) and destination.bot:
+            print("Aborting sending DM to a bot user")
+            return None
         body = content.split(delim)
         tmp = []
         last_msg = None
@@ -688,6 +716,7 @@ class Client(discord.Client):
             #User is not a member of any known guild
             #silently ignore
             return
+
         if message.author.id in self.ignored_users:
             print("Ignoring message from", message.author)
             return
@@ -921,9 +950,6 @@ async def first_ready(self, event):
                     self.channel_references[name] = channel
                 else:
                     print("Warning: Channel reference", name, "is not defined")
-        # Preload server ignores. Readonly, but default to list
-        async with DBView(ignores=[]) as db:
-            self.ignored_users = set(db['ignores'])
         self.permissions = await PermissionsFile.load(self, 'permissions.yml')
         asyncio.ensure_future(self.task_runner(), loop=self.loop)
         print("Startup complete")
@@ -931,6 +957,45 @@ async def first_ready(self, event):
     except:
         traceback.print_exc()
         sys.exit("Unhandled exception during startup")
+
+@APIEssentials.subscribe('guild_role_create')
+@APIEssentials.subscribe('guild_role_delete')
+@APIEssentials.subscribe('before:ready', once=True)
+async def update_ignore_roles(self, event, *args):
+    """
+    Updates Beymax's list of roles to ignore
+    """
+    references = self.config_get('ignore_role', default=[])
+    if not isinstance(references, list):
+        references = [references]
+    self.ignore_roles = {
+        role
+        for guild in self.guilds
+        for role in guild.roles
+        if role.name in references or role.id in references
+    }
+    print("Populated", len(self.ignore_roles), 'roles to ignore')
+    if len(references) > 0 and len(self.ignore_roles) == 0:
+        warnings.warn(
+            "No ignore roles matched. There is currently no way to blacklist users"
+        )
+    self.ignored_users = set()
+    for member in self.get_all_members():
+        if len(set(member.roles) & self.ignore_roles):
+            print("Ignoring user", member)
+            self.ignored_users.add(member.id)
+
+@APIEssentials.subscribe('after:member_update')
+async def update_ignore_users(self, event, before, after):
+    """
+    Updates Beymax's list of users to ignore
+    """
+    if len(set(after.roles) & self.ignore_roles):
+        print("Ignoring user", after)
+        self.ignored_users.add(after.id)
+    else:
+        print("Unignoring user", after)
+        self.ignored_users.remove(after.id)
 
 
 class MultiserverClient(Client):

@@ -1,5 +1,5 @@
 from ..core import CommandSuite
-from ..args import Arg, ChannelType, UserType, DateType
+from ..args import Arg, NulledArg, ChannelType, UserType, DateType
 from ..utils import DBView, getname
 from datetime import datetime, timedelta
 import json
@@ -42,7 +42,7 @@ async def cmd_announce(self, message, destination, content):
     """
     content = message.content.strip().replace(self.command_prefix+'_announce', '', 1).strip()
     # do this better with indexing
-    if destination is not None and destination is not False:
+    if destination is not None and not isinstance(destination, NulledArg):
         if content.startswith(destination.name):
             contant = content.replace(destination.name, '', 1)
         elif content.startswith(str(destination.id)):
@@ -50,8 +50,7 @@ async def cmd_announce(self, message, destination, content):
         elif content.startswith(destination.mention):
             content = content.replace(destination.mention, '', 1)
     await self.send_message(
-        destination if destination is not None and destination is not False else self.fetch_channel('general'),
-        # Don't use content here because we want to preserve whitespace
+        destination if destination is not None and not isinstance(destination, NulledArg) else self.fetch_channel('general'),
         content
     )
 
@@ -93,102 +92,6 @@ async def cmd_perms(self, message):
         '\n'.join(body)
     )
 
-@Utility.add_command('ignore', Arg('user', type=UserType(Utility, by_nick=False), help="Username or ID"))
-async def cmd_ignore(self, message, user):
-    """
-    `$!ignore <user id or user#tag>` : Ignore all commands by the given user
-    until the next time I'm restarted
-    Example: `$!ignore Username#1234` Ignores all commands from Username#1234
-    """
-    if user.id in self.ignored_users:
-        await self.send_message(
-            message.channel,
-            "This user is already ignored"
-        )
-        return
-    self.ignored_users.add(user.id)
-    await DBView.overwrite(ignores=list(self.ignored_users))
-    for guild in self.guilds:
-        if user is not None:
-            general = self.fetch_channel('general')
-            if general.guild != guild:
-                general = discord.utils.get(
-                    guild.channels,
-                    name='general',
-                    type=discord.ChannelType.text
-                )
-            if self.config_get('ignore_role') != None:
-                blacklist_role = self.config_get('ignore_role')
-                for role in guild.roles:
-                    if role.id == blacklist_role or role.name == blacklist_role:
-                        await self.add_roles(
-                            user,
-                            role
-                        )
-            try:
-                await self.send_message(
-                    general,
-                    "%s has asked me to ignore %s. %s can no longer issue any commands"
-                    " until they have been `$!pardon`-ed" % (
-                        str(message.author),
-                        str(user),
-                        getname(user)
-                    )
-                )
-            except:
-                pass
-    await self.send_message(
-        user,
-        "I have been asked to ignore you by %s. Please contact them"
-        " to petition this decision." % (str(message.author))
-    )
-
-@Utility.add_command('pardon', Arg('user', type=UserType(Utility, by_nick=False), help="Username or ID"))
-async def cmd_pardon(self, message, user):
-    """
-    `$!pardon <user id or user#tag>` : Pardons the user and allows them to issue
-    commands again.
-    Example: `$!pardon Username#1234` pardons Username#1234
-    """
-    if user.id not in self.ignored_users:
-        await self.send_message(
-            message.channel,
-            "This user is not currently ignored"
-        )
-        return
-    self.ignored_users.remove(user.id)
-    await DBView.overwrite(ignores=list(self.ignored_users))
-    for guild in self.guilds:
-        if user is not None:
-            general = self.fetch_channel('general')
-            if general.guild != guild:
-                general = discord.utils.get(
-                    guild.channels,
-                    name='general',
-                    type=discord.ChannelType.text
-                )
-            if self.config_get('ignore_role') != None:
-                blacklist_role = self.config_get('ignore_role')
-                for role in guild.roles:
-                    if role.id == blacklist_role or role.name == blacklist_role:
-                        await user.remove_roles(
-                            role
-                        )
-            try:
-                await self.send_message(
-                    general,
-                    "%s has pardoned %s" % (
-                        str(message.author),
-                        str(user)
-                    )
-                )
-            except:
-                pass
-    await self.send_message(
-        user,
-        "You have been pardoned by %s. I will resume responding to "
-        "your commands." % (str(message.author))
-    )
 
 @Utility.add_command('idof', Arg('query', remainder=True, help="Entity to search for"))
 async def cmd_idof(self, message, query):
@@ -359,8 +262,15 @@ async def test_reminders(self, _, userID, channelID, messageID, text):
         reference=message.to_reference()
     )
 
-@Utility.add_command('_sudo', Arg('user', type=UserType(Utility, nullable=True), nargs='?', default=None, help="User to run command as. Defaults to $NICK"), Arg('command', help="Command to run"), Arg('text', remainder=True, help="Command arguments"))
-async def cmd_cmd(self, message, user, command, text):
+@Utility.add_command(
+    '_sudo',
+    Arg('user', type=UserType(Utility), help="User to run command as"),
+    # Arg('command', help="Command to run"),
+    # Arg('text', remainder=True, help="Command arguments")
+    Arg('command', type='extra', help="Command to run")
+)
+async def cmd_cmd(self, message, user, command, extra):
+    print("Raw user match", type(user), user)
     sudoers = self.config_get('sudoers', default=[])
     if message.author.id not in sudoers:
         return await self.send_message(
@@ -380,23 +290,30 @@ async def cmd_cmd(self, message, user, command, text):
                 ),
                 skip_debounce=True
             )
-    if user is None:
-        user = self.user
+    # if isinstance(user, NulledArg):
+    #     extra = [command] + extra
+    #     command = user.value
+    #     print("Extracting null match:", user.value)
+    #     user = None
+    # if user is None:
+    #     user = self.user
     # sudo_message = await message.channel.send(
     #     ' '.join([command] + text),
     #     reference=message.to_reference()
     # )
     sudo_message = await self.send_rich_message(
         message.channel,
-        content=' '.join([command] + text),
+        content=' '.join([command] + extra),
         # reference=message.to_reference(),
         author=user,
         description="This message is sent on behalf of {}".format(getname(user)),
         # mention_author=False
     )
 
-    if user is not self.user:
+    if user.id != self.user.id:
         sudo_message.author = user
+        print("Dispatch message", sudo_message.author)
         self.dispatch('message', sudo_message)
     else:
+        print("Dispatch command:", sudo_message.author)
         self.dispatch(command, sudo_message)

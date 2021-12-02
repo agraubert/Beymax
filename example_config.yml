@@ -9,7 +9,8 @@
 ## This will also prevent your instance from joining other servers
 # primary_guild: your_server_id
 
-## Set ignore_role to the name or id of a role if you want that role to be applied when you !ignore someone
+## Set ignore_role to the name or id of a role if you want users with this role to be ignored entirely
+## this can also be a list of role names/ids
 # ignore_role: name_or_id_of_role
 
 ## Set bug_role to the name or id of a role you want mentioned whenever a user submits a !bug report
