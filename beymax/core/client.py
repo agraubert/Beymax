@@ -307,11 +307,6 @@ class Client(discord.Client):
             if str(event) not in self.event_listeners:
                 self.event_listeners[str(event)] = []
 
-            event_key = '{}::{}'.format(
-                event,
-                id(func)
-            )
-
             async def handle_event(*args, **kwargs):
                 try:
                     if condition is None or condition(*args, **kwargs):
@@ -322,7 +317,7 @@ class Client(discord.Client):
                     await self.trace()
                     raise
 
-            handle_event.event_key = event_key
+            handle_event.orig = id(func)
 
             self.event_listeners[str(event)].append(handle_event)
             # func.unsubscribe will unsubscribe the function from the event
@@ -331,17 +326,17 @@ class Client(discord.Client):
             # from a specific event, if the function was subscribed to several
 
             def unsubscribe(evt=event):
-                key = '{}::{}'.format(evt, id(func))
                 if evt in self.event_listeners:
                     for handler in self.event_listeners[evt]:
-                        if handler.event_key == key:
+                        if handler.orig == id(func):
                             self.event_listeners[evt] = [
                                 hdl
                                 for hdl in self.event_listeners[evt]
-                                if hdl.event_key != key
+                                if hdl.orig != id(func)
                             ]
                             return
                 print("WARNING:", func, handle_event, "not subscribed to", evt)
+
             # func.unsubscribe = lambda x=str(event):self.event_listeners[x].remove(handle_event)
             func.unsubscribe = unsubscribe
             return func
@@ -996,7 +991,6 @@ async def update_ignore_users(self, event, before, after):
     else:
         print("Unignoring user", after)
         self.ignored_users.remove(after.id)
-
 
 class MultiserverClient(Client):
     """
