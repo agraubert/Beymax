@@ -74,7 +74,7 @@ async def cmd_perms(self, message):
         body.append('`%s` : Granted **%s**' % (
             cmd,
             'by default' if rule.type is None else (
-                "by role `{}`".format(rule.data['name']) if rule.type is 'role'
+                "by role `{}`".format(rule.data['name']) if rule.type == 'role'
                 else (
                     'to you and {} others'.format(rule.data['priority'] - 1)
                     if rule.data['priority'] > 1
@@ -389,10 +389,10 @@ async def cmd_cmd(self, message, user, command, text):
     sudo_message = await self.send_rich_message(
         message.channel,
         content=' '.join([command] + text),
-        reference=message.to_reference(),
+        # reference=message.to_reference(),
         author=user,
         description="This message is sent on behalf of {}".format(getname(user)),
-        mention_author=False
+        # mention_author=False
     )
 
     if user is not self.user:

@@ -740,6 +740,7 @@ class Client(discord.Client):
                 await asyncio.wait(handles)
             taskdata = DBView.readonly_view('tasks', tasks={'tasks': {}})['tasks']['tasks']
             current = time.time()
+            # Wait the min of: time to get onto the next 30 second cycle, or time before next task scheduled
             wait_time = ceil(min(
                 30 + start_wait - time.monotonic(),
                 *(
