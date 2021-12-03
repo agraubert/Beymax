@@ -4,3 +4,4 @@ PyYAML
 agutil
 editdistance
 aiohttp
+emoji

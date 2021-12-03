@@ -327,6 +327,7 @@ class Interpolator(dict):
             NICK = NAME
         super().__init__(**{
             '$NAME': NAME,
+            '$EMOJIFY': '', # dummy
             '$MENTION': bot.user.mention,
             '$FULLNAME': '%s#%s' % ( bot.user.name, str(bot.user.discriminator)),
             '$ID': str(bot.user.id),

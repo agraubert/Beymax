@@ -16,19 +16,9 @@ import traceback
 import warnings
 import json
 from datetime import datetime, timedelta
+from emoji import emojize
 
 # mention_pattern = re.compile(r'<@.*?(\d+)>')
-
-# Release targets:
-# * Gamba
-# * Only send game description once
-#   * Also get subsystems to handle this as well
-# * Invite detection: Cancelled since it requires manage server permissions
-# * remove func qualname from tasks
-# * Simplify emoji handling and detection (add to core). Include emojification in interpolation
-#   * Add $EMOJI opt-in interpolator, which substitutes to ''. If present also interpolate emoji.
-#   * When this behavior becomes standard, then $EMOJI will no longer be required (but still substitute for back-compatability)
-#   * Not much else to standardize. Most emoji handling is done in reactions
 
 class Client(discord.Client):
     """
@@ -521,6 +511,8 @@ class Client(discord.Client):
         elif not isinstance(interp, dict):
             raise TypeError("Cannot infer interpolation settings from an object of type "+type(interp))
         try:
+            if '$EMOJIFY' in content:
+                content = emojize(content)
             for key in interp:
                 content = content.replace(key, interp[key])
         except:
