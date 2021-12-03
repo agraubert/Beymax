@@ -62,6 +62,7 @@ class JoinLeaveProhibited(GameError):
 
 class GameSystem(object):
     name = "Abstract Game System"
+    instructions = None
 
     # Attributes expected to be present on any system after initiialization:
     # name : The display name of the system

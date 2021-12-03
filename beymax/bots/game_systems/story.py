@@ -162,6 +162,22 @@ class Player(object):
 
 class StorySystem(GameSystem):
     name = 'Interactive Story'
+    instructions = (
+        'Here are the controls for the Interactive Story system:\n'
+        '`$` : Simply type `$` to enter a blank line to the game\n'
+        'That can be useful if the game is stuck or '
+        'if it ignored your last input\n'
+        'Some menus may ask you to type a space to continue.\n'
+        '`quit` : Quits the game in progress\n'
+        'This is also how you end the game if you finish it\n'
+        '`score` : View your score\n'
+        'Some games may have their own commands in addition to these'
+        ' ones that I handle personally\n'
+        'Lastly, if you want to make a comment in the channel'
+        ' without me forwarding your message to the game, '
+        'simply start the message with `$! `, for example:'
+        ' `$! Any ideas on how to unlock this door?`'
+    )
 
     def __init__(self, bot, game):
         super().__init__(bot, game)
@@ -279,26 +295,6 @@ class StorySystem(GameSystem):
     async def save_state(self):
         await DBView.overwrite(story=self.state)
 
-    async def send_join_message(self, user):
-        db = DBView.readonly_view('players')
-        await self.bot.send_message(
-            user,
-            'Here are the controls for the Interactive Story system:\n'
-            '`$` : Simply type `$` to enter a blank line to the game\n'
-            'That can be useful if the game is stuck or '
-            'if it ignored your last input\n'
-            'Some menus may ask you to type a space to continue.\n'
-            '`quit` : Quits the game in progress\n'
-            'This is also how you end the game if you finish it\n'
-            '`score` : View your score\n'
-            'Some games may have their own commands in addition to these'
-            ' ones that I handle personally\n'
-            'Lastly, if you want to make a comment in the channel'
-            ' without me forwarding your message to the game, '
-            'simply start the message with `$! `, for example:'
-            ' `$! Any ideas on how to unlock this door?`'
-        )
-
     async def on_start(self, user):
         self.state = {
             'transcript': [],
@@ -308,7 +304,6 @@ class StorySystem(GameSystem):
             'score': 0
         }
         await self.save_state()
-        await self.send_join_message(user)
         await self.bot.send_message(
             self.bot.fetch_channel('games'),
             self.player.readchunk(),
@@ -317,7 +312,6 @@ class StorySystem(GameSystem):
 
 
     async def on_join(self, user):
-        await self.send_join_message(user)
         self.state['players'].append(user.id)
         await self.save_state()
 

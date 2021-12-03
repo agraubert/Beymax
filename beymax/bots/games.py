@@ -179,6 +179,7 @@ async def cmd_join(self, message):
                     "The game has processed your request to join. "
                     "Use `$!leave` to leave the game"
                 )
+                self.dispatch('games_player_join', message.author, False)
 
 
 @Games.add_command('leave')
@@ -438,6 +439,61 @@ async def end_game(self, evt, hardness='soft'):
         "This game has ended. Thanks for playing! Anyone may now start a new game"
     )
 
+@Games.subscribe('games_player_join')
+async def send_instructions(self, _, user, start):
+    db = DBView('players')
+    key = 'intro_{}'.format(self._game_system.name)
+    if user.id in db['players'] and key in db['players'][user.id] and db['players'][user.id][key]:
+        await self.send_message(
+            user,
+            "{}. Would you like me "
+            " to give you the instructions again? (Yes/No)".format(
+                'Your game is about to start' if start else 'You are joining a game'
+            )
+        )
+        user = self.get_user(user.id) # Refresh object
+        try:
+            response = await self.wait_for(
+                'message',
+                check=lambda m: m.author == user and m.channel == user.dm_channel,
+                timeout=60,
+            )
+            if response.content.lower().strip() == 'yes':
+                async with db:
+                    del db['players'][user.id][key]
+        except asyncio.TimeoutError:
+            pass
+    if not (user.id in db['players'] and key in db['players'][user.id] and db['players'][user.id][key]):
+        await self.send_message(
+            user,
+            'You have up to 2 days to finish your game, after'
+            ' which, your game will automatically end\n'
+            'Here are the global game-system controls:\n'
+            'Any message you type in the games channel ({}) will be interpreted'
+            ' as input to the game **unless** your message starts with `$!`'
+            ' (my commands)\n'
+            '`$!invite <user>` : Use this command to invite users to the game.'
+            ' Note that not all games will allow players to join'
+            ' or may only allow players to join at specific times\n'
+            '`$!leave` : Use this command to leave the game.'
+            ' As the host, this will force the game to end\n'
+            '`$!toggle-comments` : Use this command to toggle permissions in the games channel\n'
+            'Right now, anyone can send messages in the channel'
+            ' while you\'re playing. If you use `$!toggle-comments`,'
+            ' nobody but you will be allowed to send messages.'
+            ' Note: even when other users are allowed to send'
+            ' messages, the game will only process messages'
+            ' from users who are actually playing\n'
+            '{}'.format(
+                self.fetch_channel('games').name,
+                self._game_system.instructions if self._game_system.instructions is not None else ''
+            )
+        )
+        async with db:
+            if user.id not in db['players']:
+                db['players'][user.id] = {'balance': 10}
+            db['players'][user.id][key] = True
+
 @Games.subscribe('startgame')
 async def start_game(self, evt):
     async with DBView('game', 'players', game={'user': None}) as db:
@@ -463,50 +519,7 @@ async def start_game(self, evt):
                             bid['game']
                         )
                     )
-                    if 'intro' in db['players'][user.id]:
-                        await self.send_message(
-                            user,
-                            "Your game is about to start. Would you like me "
-                            " to give you the instructions again? (Yes/No)"
-                        )
-                        user = self.get_user(user.id) # Refresh object
-                        try:
-                            response = await self.wait_for(
-                                'message',
-                                check=lambda m: m.author == user and m.channel == user.dm_channel,
-                                timeout=60,
-                            )
-                            if response.content.lower().strip() == 'yes':
-                                del db['players'][user.id]['intro']
-                        except asyncio.TimeoutError:
-                            pass
-                    if 'intro' not in db['players'][user.id]:
-                        db['players'][user.id]['intro'] = True
-                        await self.send_message(
-                            user,
-                            'You have up to 2 days to finish your game, after'
-                            ' which, your game will automatically end\n'
-                            'Here are the global game-system controls:\n'
-                            'Any message you type in the games channel ({}) will be interpreted'
-                            ' as input to the game **unless** your message starts with `$!`'
-                            ' (my commands)\n'
-                            '`$!invite <user>` : Use this command to invite users to the game.'
-                            ' Note that not all games will allow players to join'
-                            ' or may only allow players to join at specific times\n'
-                            '`$!leave` : Use this command to leave the game.'
-                            ' As the host, this will force the game to end\n'
-                            '`$!toggle-comments` : Use this command to toggle permissions in the games channel\n'
-                            'Right now, anyone can send messages in the channel'
-                            ' while you\'re playing. If you use `$!toggle-comments`,'
-                            ' nobody but you will be allowed to send messages.'
-                            ' Note: even when other users are allowed to send'
-                            ' messages, the game will only process messages'
-                            ' from users who are actually playing'.format(
-                                self.fetch_channel('games').name
-                            )
-                        )
-                        # Prevent game messages from showing up until after the above one
-                        await asyncio.sleep(1)
+                    await asyncio.sleep(1)
         if db['game']['user'] is not None:
             try:
                 print(db['game'])
@@ -517,6 +530,7 @@ async def start_game(self, evt):
                 await self._game_system.on_init()
                 await self._game_system.on_start(user)
                 await self._game_system.on_ready()
+                self.dispatch('games_player_join', user, True)
             except GameError:
                 await self.send_message(
                     self.fetch_channel('games'),
