@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 # * Gamba
 # * Only send game description once
 #   * Also get subsystems to handle this as well
-# * Invite detection: Allow Beymax to model the open invitations to determine who was invited by what invitation
+# * Invite detection: Cancelled since it requires manage server permissions
 # * remove func qualname from tasks
 # * Simplify emoji handling and detection (add to core). Include emojification in interpolation
 #   * Add $EMOJI opt-in interpolator, which substitutes to ''. If present also interpolate emoji.
@@ -49,7 +49,7 @@ class Client(discord.Client):
         self.event_preemption = {} # event name -> counter for preempting beymax-level events
         self.commands = {} # !cmd -> docstring. Functions take (self, message, content)
         self.ignored_users = set()
-        self.tasks = {} # taskname (auto generated) -> [interval(s), qualname] functions take (self)
+        self.tasks = {} # taskname (auto generated) -> (current exec interval, permanent exec interval)
         self.special = [] # list of (check, handler)
         self._dbg_event_queue = []
         self.debounced_channels = {}
@@ -179,14 +179,14 @@ class Client(discord.Client):
             taskname = 'task:'+func.__name__
             if taskname in self.tasks:
                 raise NameError("This task already exists! Change the name of the task function")
-            self.tasks[taskname] = (interval, func.__qualname__)
+            self.tasks[taskname] = (interval, interval) # next, permanent
 
             @self.subscribe(taskname)
             async def run_task(self, task):
                 # If the task set a temporary interval, check it here
-                if isinstance(self.tasks[taskname][0], tuple):
-                    print("Task", taskname, "Reverting interval to", self.tasks[taskname][0][1])
-                    self.tasks[taskname] = (self.tasks[taskname][0][1], func.__qualname__)
+                if self.tasks[taskname][0] != self.tasks[taskname][1]:
+                    print("Task", taskname, "Reverting interval to", self.tasks[taskname][1])
+                    self.tasks[taskname] = (self.tasks[taskname][1], self.tasks[taskname][1])
                 # Run task
                 await func(self)
                 # Update last executed time (Used for restoring task intervals after shutdown)
@@ -203,11 +203,10 @@ class Client(discord.Client):
             raise NameError("No such task", taskname)
         next_interval = max(1, next_interval)
         print("Task", taskname, "update task interval to", next_interval, "(persistent)" if permanent else "(temporary)")
-        previous, qualname = self.tasks[taskname]
-        previous = previous[1] if isinstance(previous, tuple) else previous
+        _, previous = self.tasks[taskname]
         self.tasks[taskname] = (
-            next_interval if permanent else (next_interval, previous),
-            qualname
+            next_interval,
+            next_interval if permanent else previous,
         )
 
     def add_special(self, check): #decorator. Sets the decorated function to run whenever the check is true
@@ -257,8 +256,6 @@ class Client(discord.Client):
                 'args': args,
                 'kwargs': kwargs
             })
-        # Check to see if check_future_dispatch needs to be rescheduled
-        interval = self.tasks['task:check_future_dispatch'][0]
         self.update_interval(
             'check_future_dispatch',
             # Update the next check_future_dispatch invocation to take place ASAP
@@ -751,14 +748,13 @@ class Client(discord.Client):
             # export to check times.
             taskdata = DBView.readonly_view('tasks', tasks={'tasks': {}})['tasks']['tasks']
             handles = []
-            for task, (interval, qualname) in self.tasks.items():
-                if isinstance(interval, tuple):
-                    interval = interval[0]
+            for task, (interval, _) in self.tasks.items():
                 last = 0
                 if task in taskdata:
                     last = taskdata[task]
                 if (current - last) >= interval:
                     handles += self.dispatch(task)
+                    print("Dispatch", task)
             start_wait = time.monotonic()
             if len(handles):
                 await asyncio.wait(handles)
@@ -768,10 +764,8 @@ class Client(discord.Client):
             wait_time = ceil(min(
                 30 + start_wait - time.monotonic(),
                 *(
-                    (taskdata[task] if task in taskdata else 0) + (
-                        interval[0] if isinstance(interval, tuple) else interval
-                    ) - current
-                    for task, (interval, qualname) in self.tasks.items()
+                    (taskdata[task] if task in taskdata else 0) + interval - current
+                    for task, (interval, _) in self.tasks.items()
                 )
             ))
 
