@@ -5,11 +5,12 @@
 #   dev: general
 #   bugs: general
 
-## Set the primary_server if you want to make role permissions available via PM
+## Set the primary_guild if you want to make role permissions available via PM
 ## This will also prevent your instance from joining other servers
-# primary_server: your_server_id
+# primary_guild: your_server_id
 
-## Set ignore_role to the name or id of a role if you want that role to be applied when you !ignore someone
+## Set ignore_role to the name or id of a role if you want users with this role to be ignored entirely
+## this can also be a list of role names/ids
 # ignore_role: name_or_id_of_role
 
 ## Set bug_role to the name or id of a role you want mentioned whenever a user submits a !bug report
@@ -37,3 +38,20 @@
 ## Set send_traces to True if you want Beymax to send stack traces to the bugs channel
 ## Anytime Beymax encounters an exception it will be posted to the bugs channel instead of just printed to Beymax's console
 # send_traces: True
+
+## Permission safety options:
+## Sets behavior for when users or roles change names so that a user/role name in
+## the permissions file matches a different discord entity than previously (or no longer match an entity)
+## "strict": Display a list of all mismatched/unmatched entities and quit.
+##           Administrator must manually update permissions file. Safest option
+## "previous": (Default) Ignore new entities. Permissions will apply to the same
+##             entities referenced in the permissions fingerprint taken from the
+##             last startup. This ensures consistency
+## "update": As long as all names match AN entity, automatically update the fingerprint.
+##           If any names are unmatched, fail. This is the least safe option, but
+##           matches previous beymax behavior
+# permissions_matching: previous
+
+## Z-machine executable path
+## Path to a z-machine executable for playing story games (default ./dfrotz)
+# zmachine: dfrotz

@@ -4,6 +4,12 @@ from datetime import datetime
 import re
 
 mention_pattern = re.compile(r'<@\D?(\d+)>')
+channel_mention_pattern = re.compile(r'<#(\d+)>')
+
+def get_client(obj):
+    if hasattr(obj, 'bot') and obj.bot is not None:
+        return obj.bot
+    return obj
 
 def ljoin(args, op='or'):
     output = ', '.join(args[:-1])
@@ -12,6 +18,13 @@ def ljoin(args, op='or'):
     if len(args) > 1:
         output += ' %s ' % op
     return output + args[-1]
+
+class NulledArg(object):
+    def __init__(self, value):
+        self.value = value
+
+    def __bool__(self):
+        return False
 
 class EType(object):
     def __init__(self, client, by_name=True, by_id=True, nullable=False):
@@ -28,36 +41,33 @@ class EType(object):
     def search_iter(self, iterable, arg):
         for field in self.fields:
             for item in iterable:
-                if hasattr(item, field) and getattr(item, field) == arg:
+                if hasattr(item, field) and str(getattr(item, field)) == str(arg):
                     return item
         if self.null:
-            return False
+            return NulledArg(arg)
 
-class ServerType(EType):
+class GuildType(EType):
     def __call__(self, arg):
-        server = self.search_iter(self.client.servers, arg)
-        if server is not None:
-            return server
+        guild = self.search_iter(get_client(self.client).guilds, arg)
+        if guild is not None:
+            return guild
         raise argparse.ArgumentTypeError(
-            "No server matching `%s` by %s" % (
+            "No guild matching `%s` by %s" % (
                 arg,
                 ljoin(self.fields)
             )
         )
 
-class ServerComponentType(EType):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class GuildComponentType(EType):
+    def guilds(self):
+        if get_client(self.client).primary_guild is not None:
+            yield get_client(self.client).primary_guild
+        yield from get_client(self.client).guilds
 
-    def servers(self):
-        if self.client.primary_server is not None:
-            yield self.client.primary_server
-        yield from self.client.servers
-
-class RoleType(ServerComponentType):
+class RoleType(GuildComponentType):
     def __call__(self, arg):
         role = self.search_iter(
-            [role for server in self.servers() for role in server.roles],
+            [role for guild in self.guilds() for role in guild.roles],
             arg
         )
         if role is not None:
@@ -69,10 +79,19 @@ class RoleType(ServerComponentType):
             )
         )
 
-class ChannelType(ServerComponentType):
+class ChannelType(GuildComponentType):
+    def __init__(self, client, by_name=True, by_id=True, nullable=False, mentions=True):
+        super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
+        self.mentions = mentions
+
     def __call__(self, arg):
+        if self.mentions:
+            result = channel_mention_pattern.match(arg)
+            if result:
+                arg = int(result.group(1))
+                print("Matched Mention")
         channel = self.search_iter(
-            [channel for server in self.servers() for channel in server.channels],
+            [channel for guild in self.guilds() for channel in guild.channels],
             arg
         )
         if channel is not None:
@@ -84,7 +103,7 @@ class ChannelType(ServerComponentType):
             )
         )
 
-class UserType(ServerComponentType):
+class UserType(GuildComponentType):
     def __init__(self, client, by_name=True, by_id=True, by_nick=True, nullable=False, mentions=True):
         super().__init__(client, by_name=by_name, by_id=by_id, nullable=nullable)
         self.nick = by_nick
@@ -96,10 +115,10 @@ class UserType(ServerComponentType):
         if self.mentions:
             result = mention_pattern.match(arg)
             if result:
-                arg = result.group(1)
+                arg = int(result.group(1))
                 print("Matched Mention")
         member = self.search_iter(
-            [member for server in self.servers() for member in server.members],
+            [member for guild in self.guilds() for member in guild.members],
             arg
         )
         if member is not None:
@@ -132,6 +151,9 @@ class PrebuiltException(Exception):
 
 Argtuple = namedtuple('Arg', ['args', 'kwargs'])
 
+
+# FIXME: Extra is useful, but adding it as separate arguments seems dumb
+# Everywhere I use extra, i'm concatenating arg + extra
 def Arg(*args, remainder=False, **kwargs):
     """
     Takes arguments and keyword arguments exactly like the argparse.ArgumentParser.add_argument
@@ -158,7 +180,7 @@ def Arg(*args, remainder=False, **kwargs):
     return Argtuple(args, kwargs)
 
 class Argspec(argparse.ArgumentParser):
-    def __init__(self, name, *args, **kwargs):
+    def __init__(self, name, *args, allow_redirection=True, **kwargs):
         super().__init__(name, add_help=False, **kwargs)
         for arg in args:
             if 'type' in arg.kwargs and arg.kwargs['type'] == 'extra':
@@ -189,15 +211,10 @@ class Argspec(argparse.ArgumentParser):
 
     def error(self, message):
         raise PrebuiltException(
-            self.format_usage().replace('usage: ', 'usage: `')+"`\n"+re.sub(r'[<>]','',message)
+            self.format_help().replace('usage: ', 'usage: `')+"`\n"+re.sub(r'[<>]','',message)
         )
 
     def __call__(self, *args, delimiter=None):
-        if delimiter is not None:
-            args = [
-                arg for arg in ' '.join(args).split(delimiter)
-                if len(arg)
-            ]
         try:
             return (True, super().parse_args(args))
         except PrebuiltException as e:
