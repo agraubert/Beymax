@@ -974,7 +974,7 @@ async def update_ignore_users(self, event, before, after):
     if len(set(after.roles) & self.ignore_roles):
         print("Ignoring user", after)
         self.ignored_users.add(after.id)
-    else:
+    elif after.id in self.ignored_users:
         print("Unignoring user", after)
         self.ignored_users.remove(after.id)
 
