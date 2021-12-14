@@ -457,7 +457,7 @@ class Client(discord.Client):
             msg = ''.join(msg)
         if send and self.config_get('send_traces'):
             await self.send_message(
-                self.fetch_channel('bugs') if channel is None else channel,
+                self.fetch_channel('dev') if channel is None else channel,
                 msg,
                 quote='```'
             )
