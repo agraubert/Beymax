@@ -3,7 +3,7 @@
 Welcome! We're glad you chose Beymax as the bot or bot framework for your server
 
 **Note:** Beymax was written to work on all platforms, but is only tested on OSX
-and Linux (Ubuntu 16.04). If you have any trouble setting up Beymax on any platform,
+and Linux (Ubuntu 18.04). If you have any trouble setting up Beymax on any platform,
 please don't hesitate to open an issue on our [Github](https://github.com/agraubert/Beymax)
 
 #### Terminology:
