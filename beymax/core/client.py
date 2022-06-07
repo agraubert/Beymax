@@ -44,8 +44,9 @@ class Client(discord.Client):
         self._dbg_event_queue = []
         self.debounced_channels = {}
         self.channel_lock = asyncio.Lock()
-        if os.path.exists('config.yml'):
-            with open('config.yml') as reader:
+        config_path = os.environ.get('BEYMAX_CONFIG_PATH', 'config.yml')
+        if os.path.exists(config_path):
+            with open(config_path) as reader:
                 self.configuration = yaml.load(reader, Loader=yaml.SafeLoader)
         else:
             self.configuration = {}
@@ -931,7 +932,7 @@ async def first_ready(self, event):
                     self.channel_references[name] = channel
                 else:
                     print("Warning: Channel reference", name, "is not defined")
-        self.permissions = await PermissionsFile.load(self, 'permissions.yml')
+        self.permissions = await PermissionsFile.load(self, os.environ.get('BEYMAX_PERMISSIONS_PATH', 'permissions.yml'))
         asyncio.ensure_future(self.task_runner(), loop=self.loop)
         print("Startup complete")
 

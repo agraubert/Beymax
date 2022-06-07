@@ -53,5 +53,5 @@
 # permissions_matching: previous
 
 ## Z-machine executable path
-## Path to a z-machine executable for playing story games (default ./dfrotz)
+## Path to a z-machine executable for playing story games (default dfrotz is in $PATH)
 # zmachine: dfrotz

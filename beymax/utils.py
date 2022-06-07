@@ -15,6 +15,9 @@ DATABASE = {
 
 TIMESTAMP_FORMAT = "%m/%d/%Y - %H:%M:%S"
 
+# Move this to the database provider settings when that change is made
+DB_PATH = os.environ.get('BEYMAX_FIXME_DB_PKL_PATH', 'db.pkl')
+
 # def parse_id_keys(obj):
 #     if isinstance(obj, dict):
 #         try:
@@ -106,8 +109,8 @@ class DBView(object):
         Useful for database checks outside of coroutines.
         Does not guarantee consistency
         """
-        if read_persistent and os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-            with open('db.pkl', 'rb') as r:
+        if read_persistent and os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+            with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                 fallback = pickle.load(r)
         else:
             fallback = {}
@@ -155,8 +158,8 @@ class DBView(object):
                         db[key] = value
         async with DATABASE['lock']:
             if DATABASE['data'] is None:
-                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-                    with open('db.pkl', 'rb') as r:
+                if os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+                    with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                         DATABASE['data'] = pickle.load(r)
                 else:
                     DATABASE['data'] = {}
@@ -180,12 +183,12 @@ class DBView(object):
                 # even if other scopes have changed
                 # This avoids accidentally leaking changes that will later be aborted
                 # by another view
-                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-                    with open('db.pkl', 'rb') as r:
+                if os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+                    with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                         prev = pickle.load(r)
                 else:
                     prev = {}
-                with open('db.pkl', 'wb') as w:
+                with open('BEYMAX_FIXME_DB_PKL_PATH', 'wb') as w:
                     prev.update({
                         key: DATABASE['data'][key]
                         for key in self.scopes
@@ -232,12 +235,12 @@ class DBView(object):
 
         async with DATABASE['lock']:
             del DATABASE['data'][key]
-            if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-                with open('db.pkl', 'rb') as r:
+            if os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+                with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                     prev = pickle.load(r)
             else:
                 prev = {}
-            with open('db.pkl', 'wb') as w:
+            with open('BEYMAX_FIXME_DB_PKL_PATH', 'wb') as w:
                 del prev[key]
                 pickle.dump(prev, w)
             self.scopes.remove(key)
@@ -262,8 +265,8 @@ class DBView(object):
                 # Reload our scopes from disk
                 # Remember, we have exclusive write access so we're only discarding
                 # our own changes
-                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-                    with open('db.pkl', 'rb') as r:
+                if os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+                    with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                         prev = pickle.load(r)
                 else:
                     prev = {}
@@ -282,8 +285,8 @@ class VolatileDBView(DBView):
                         db[key] = value
         async with DATABASE['lock']:
             if DATABASE['data'] is None:
-                if os.path.isfile('db.pkl') and os.path.getsize('db.pkl') > 0:
-                    with open('db.pkl', 'rb') as r:
+                if os.path.isfile('BEYMAX_FIXME_DB_PKL_PATH') and os.path.getsize('BEYMAX_FIXME_DB_PKL_PATH') > 0:
+                    with open('BEYMAX_FIXME_DB_PKL_PATH', 'rb') as r:
                         DATABASE['data'] = pickle.load(r)
                 else:
                     DATABASE['data'] = {}

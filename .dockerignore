@@ -1,0 +1,7 @@
+__pycache__/
+.devenv/
+.git/
+dist/
+*.yml
+*.pkl
+token.txt

@@ -12,6 +12,7 @@ import discord
 import asyncio
 import random
 import aiohttp
+import os
 from editdistance import eval as leven
 random.seed()
 
@@ -356,16 +357,22 @@ async def cmd_meme(self, message, meme_name, top, bottom):
 
 
 if __name__ == '__main__':
-    with open("token.txt") as r:
-        beymax = Client()
-        beymax.enableSuites(
-            Games,
-            Extras,
-            Utility,
-            Birthdays,
-            Help,
-            Parties,
-            Polls,
-            Gamba
-        )
-        beymax.run(r.read().strip())
+    if 'BEYMAX_OAUTH_TOKEN' in os.environ:
+        token = os.environ['BEYMAX_OAUTH_TOKEN']
+    elif os.path.isfile('token.txt'):
+        with open('token.txt') as r:
+            token = r.read().strip()
+    else:
+        exit("No token found")
+    beymax = Client()
+    beymax.enableSuites(
+        Games,
+        Extras,
+        Utility,
+        Birthdays,
+        Help,
+        Parties,
+        Polls,
+        Gamba
+    )
+    beymax.run(token)

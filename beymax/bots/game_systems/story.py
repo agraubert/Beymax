@@ -59,9 +59,9 @@ class Player(object):
         self.score = 0
         self.closed = False
         self.proc = subprocess.Popen(
-            '%s games/%s.z5' % (os.path.abspath(frotz), game),
+            [frotz, 'games/{}.z5'.format(game)],
             universal_newlines=False,
-            shell=True,
+            # shell=True,
             stdout=self.stdoutWrite,
             stdin=self.stdinRead
         )
