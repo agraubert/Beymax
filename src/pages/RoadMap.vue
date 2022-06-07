@@ -52,6 +52,7 @@ export default {
 					{name: "Dockerization", description: "Get Beymax to run in a Docker container. This makes deployment easier and paves the way for future sharding", status: "In progress. Estimated "+timeformat("2022-06-15")},
 					{name: "Research and Replanning", description: "Research the sharded-paradigm for discord bots. Evaluate the pattern of a controller node vs other bot implementations", status: "In progress. Estimated "+timeformat("2022-07-01")},
 					{name: "Controller Node", description: "Add a controller interface to the API and provide the current internal control logic and a new separate docker container as controller options. This centralizes responsibility for certain bot tasks such as registering commands", status: "Planned. Estimated "+timeformat("2022-10-01")},
+					{name: "Automations", description: "Get automations running to: rebuild the docker image on any code change; build developer docs on code changes to core components; build end-user docs on code changes to bots", status: "Planned"},
 					{name: "Better Database", description: "Add a database interface to the API and provide the current implementation plus a SQLite/MySQL implementation", status: "Planned"},
 					{name: "Modern Commands", description: "Migrate to the modern client command system. Also work with command buttons etc", status: "Planned"},
 					{name: "Modern Permissions", description: "Switch to the modern discord permissions system, allowing server admins to manage command permissions from their server settings", status: "Planned"},
