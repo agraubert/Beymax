@@ -109,3 +109,4 @@ ENV/
 .mypy_cache/
 blacklist_games/*
 .devenv/
+node_modules/
