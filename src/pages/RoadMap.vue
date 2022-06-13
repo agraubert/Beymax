@@ -49,7 +49,7 @@ export default {
 		return {
 			milestones: _.map(
 				[
-					{name: "Dockerization", description: "Get Beymax to run in a Docker container. This makes deployment easier and paves the way for future sharding", status: "In progress. Estimated "+timeformat("2022-06-15")},
+					{name: "Dockerization", description: "Get Beymax to run in a Docker container. This makes deployment easier and paves the way for future sharding", status: "Completed "+timeformat("2022-06-13"), complete: true},
 					{name: "Research and Replanning", description: "Research the sharded-paradigm for discord bots. Evaluate the pattern of a controller node vs other bot implementations", status: "In progress. Estimated "+timeformat("2022-07-01")},
 					{name: "Controller Node", description: "Add a controller interface to the API and provide the current internal control logic and a new separate docker container as controller options. This centralizes responsibility for certain bot tasks such as registering commands", status: "Planned. Estimated "+timeformat("2022-10-01")},
 					{name: "Automations", description: "Get automations running to: rebuild the docker image on any code change; build developer docs on code changes to core components; build end-user docs on code changes to bots", status: "Planned"},
