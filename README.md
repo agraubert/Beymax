@@ -2,6 +2,8 @@
 
 Not to be confused with _[Baymax](https://en.wikipedia.org/wiki/Baymax)_
 
+## This project has moved to [GitLab](https://gitlab.graubert.com/agraubert/Beymax)
+
 ---
 
 A custom Discord bot to handle various utilities
